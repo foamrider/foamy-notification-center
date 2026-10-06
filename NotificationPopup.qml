@@ -44,7 +44,7 @@ PanelWindow {
   required property QtObject bar
   property var owner: null
   // Private presentation hooks; retain the upstream focus and dismissal lifecycle.
-  property real cornerRadius: Style.space(14)
+  property real cornerRadius: Style.cornerRadius * 2
   property color surfaceColor: Color.popups.background
   property int margin: Style.gapsOut
   property int padding: Style.spacing.popupPadding

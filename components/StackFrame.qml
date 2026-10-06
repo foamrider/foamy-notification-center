@@ -11,7 +11,7 @@ Canvas {
   property color foreground: Color.foreground
   readonly property color outline: Util.alpha(foreground, 0.18)
   readonly property color urgent: Color.urgent
-  readonly property real corner: Style.space(10)
+  readonly property real corner: Math.min(Style.cornerRadius * 2, width / 2, height / 2)
   readonly property real leading: critical ? Style.space(3) : 1
 
   onWidthChanged: requestPaint()

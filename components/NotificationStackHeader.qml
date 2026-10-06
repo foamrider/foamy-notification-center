@@ -43,7 +43,7 @@ Item {
     color: "transparent"
     border.width: root.hasCursor && !root.dismissHasCursor ? 1 : 0
     border.color: Color.accent
-    radius: Style.space(6)
+    radius: Style.cornerRadius * 2
   }
   MouseArea {
     id: headingMouse

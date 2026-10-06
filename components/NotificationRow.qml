@@ -42,7 +42,7 @@ Item {
     y: root.cardHeight - Style.space(6)
     width: parent.width - Style.space(28)
     height: Style.space(16)
-    radius: Style.space(8)
+    radius: Style.cornerRadius * 2
     color: Color.popups.background
     border.width: 1
     border.color: Util.alpha(root.foreground, 0.18)
@@ -53,7 +53,7 @@ Item {
     y: root.cardHeight - Style.space(8)
     width: parent.width - Style.space(14)
     height: Style.space(13)
-    radius: Style.space(8)
+    radius: Style.cornerRadius * 2
     color: Qt.tint(Color.popups.background, Util.alpha(root.foreground, 0.04))
     border.width: 1
     border.color: Util.alpha(root.foreground, 0.18)
@@ -83,7 +83,7 @@ Item {
       color: "transparent"
       border.width: root.hasCursor && !root.dismissHasCursor ? 1 : 0
       border.color: Color.accent
-      radius: Style.space(4)
+      radius: Style.cornerRadius * 2
     }
     MouseArea {
       anchors.fill: parent
@@ -154,7 +154,7 @@ Item {
       id: previewMask
       width: previewImage.width
       height: previewImage.height
-      radius: Style.space(8)
+      radius: Style.cornerRadius * 2
       color: "black"
       visible: false
       layer.enabled: true
