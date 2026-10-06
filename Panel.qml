@@ -437,6 +437,9 @@ Panel {
             anchors.fill: parent
             property color surface: Color.popups.background
             property color accent: Color.accent
+            // Inset the header curve so it meets the inside of the popup border.
+            readonly property real cornerRadius: Math.max(0, Math.min(width / 2, height, popup.cornerRadius - Border.top(popup.borderSpec)))
+            onCornerRadiusChanged: requestPaint()
             onSurfaceChanged: requestPaint()
             onAccentChanged: requestPaint()
             onWidthChanged: requestPaint()
@@ -444,15 +447,15 @@ Panel {
             onPaint: {
               var ctx = getContext("2d")
               ctx.reset()
-              var r = Style.space(13)
+              var r = cornerRadius
               ctx.beginPath()
               ctx.moveTo(r, 0)
               ctx.lineTo(width - r, 0)
-              ctx.quadraticCurveTo(width, 0, width, r)
+              ctx.arcTo(width, 0, width, r, r)
               ctx.lineTo(width, height)
               ctx.lineTo(0, height)
               ctx.lineTo(0, r)
-              ctx.quadraticCurveTo(0, 0, r, 0)
+              ctx.arcTo(0, 0, r, 0, r)
               ctx.closePath()
               var wash = ctx.createLinearGradient(0, 0, width, height)
               wash.addColorStop(0, Qt.tint(surface, Qt.alpha(accent, 0.12)))
