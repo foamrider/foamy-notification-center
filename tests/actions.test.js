@@ -13,7 +13,7 @@ const activate = panel.slice(start, panel.indexOf("\n  }", start) + 4)
 
 function view(mode = "Auto") {
   const state = vm.createContext({
-    clickAction: mode, Model, store: null, omarchyPath: "/omarchy", focusProc: {},
+    clickAction: mode, Model, store: { focusNotification(row) { state.focusProc.running = true; state.focusProc.row = row } }, omarchyPath: "/omarchy", focusProc: {},
     actions: [], images: [], removed: [], closed: 0,
     Util: { execArgv(argv) { state.actions.push(argv) } },
     Quickshell: { execDetached(argv) { state.images.push(argv) } },
@@ -119,8 +119,8 @@ test("old commands are ignored before migration, including shell, URL and malfor
     const state = view()
     state.activate({ key: "100-1", app: "Browser", execArgv, exec: "command" })
     assert.equal(state.actions.length + state.images.length, 0)
-    assert.deepEqual(Array.from(state.focusProc.command), ["/omarchy/bin/omarchy-hyprland-focus-app", "Browser"])
-    assert.deepEqual(Array.from(state.removed), ["100-1"])
+    assert.equal(state.focusProc.row.app, "Browser")
+    assert.equal(state.removed.length, 0)
   }
 })
 
@@ -154,10 +154,52 @@ test("only absolute raster paths can reach the fixed opener; click settings stil
   }
 })
 
-test('Foamy integration delegates browser focus without replaying archived commands or dismissing early',()=>{
+test('Center delegates default action and browser focus without replaying archived commands or dismissing early',()=>{
  const state=view(),calls=[]
- state.store={foamyFocusAvailable:true,focusNotification(row){calls.push(row)}}
+ state.store={focusNotification(row){calls.push(row)}}
  const row={key:'100-1',app:'Vivaldi',body:'teams.microsoft.com',execArgv:'["unsafe"]'}
  state.activate(row)
  assert.equal(calls[0],row);assert.equal(state.removed.length,0);assert.equal(state.closed,0);assert.equal(state.actions.length,0)
+})
+
+const serviceSource = fs.readFileSync(path.join(__dirname, "../Service.qml"), "utf8")
+function focusService() {
+ const state=vm.createContext({focusProc:{running:false},focusEntry:null,focusError:"",invokingDefault:false,
+  omarchyPath:"/omarchy",removed:[],completed:0,console,
+  remove(key){state.removed.push(key)},focusCompleted(){state.completed++}})
+ state.root=state
+ for(const name of ["focusNotification","focusSendingApp","finishFocus"]) {
+  const start=serviceSource.indexOf(`  function ${name}(`)
+  vm.runInContext(serviceSource.slice(start,serviceSource.indexOf("\n  }",start)+4),state)
+ }
+ return state
+}
+test("live actions skip focus; missing, stock and older daemons use stock focus",()=>{
+ for(const output of ["unavailable","Target not found.","Function not found.",""]) {
+  const state=focusService();state.focusNotification({key:"100-1",app:"Vivaldi"})
+  assert.deepEqual(Array.from(state.focusProc.command),["omarchy-shell","foamy.notifications","invokeDefault","100-1"])
+  state.focusProc.running=false;state.finishFocus(0,0,output)
+  assert.deepEqual(Array.from(state.focusProc.command),["/omarchy/bin/omarchy-hyprland-focus-app","Vivaldi"])
+  assert.equal(state.removed.length,0)
+  state.focusProc.running=false;state.finishFocus(0,0,"")
+  assert.deepEqual(Array.from(state.removed),["100-1"]);assert.equal(state.completed,1)
+ }
+ const state=focusService();state.focusNotification({key:"100-1",app:"Vivaldi"})
+ state.focusProc.running=false;state.finishFocus(0,0,"invoked")
+ assert.equal(state.invokingDefault,true);assert.equal(state.removed.length,0);assert.equal(state.completed,1)
+})
+test("focus failure and busy action retain history; focus-only skips the callback",()=>{
+ const state=focusService();state.focusNotification({key:"100-1",app:"Vivaldi"},false)
+ assert.equal(state.invokingDefault,false)
+ state.focusProc.running=false;state.finishFocus(1,0,"")
+ assert.equal(state.removed.length,0);assert.ok(state.focusError)
+ state.focusNotification({key:"100-1",app:"Vivaldi"})
+ state.focusProc.running=false;state.finishFocus(0,0,"busy")
+ assert.equal(state.removed.length,0);assert.equal(state.focusEntry,null);assert.ok(state.focusError)
+})
+test("invalid app identity cannot become a stock focus regex",()=>{
+ const state=focusService();state.focusNotification({key:"100-1",app:".*"},false)
+ assert.equal(state.focusProc.running,false);assert.ok(state.focusError)
+ state.focusNotification({key:"100-1",app:"org.example.App"},false)
+ assert.equal(state.focusProc.command[1],"org\\.example\\.App")
 })

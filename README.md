@@ -47,11 +47,11 @@ Keeps up to 1,000 notifications for 30 days by default. Silenced notifications
 remain in history; stock Omarchy exceptions still apply.
 
 The default `clickAction: "Auto"` opens only an absolute PNG, JPEG, GIF, or WebP
-path extracted from the notification action; otherwise it focuses the sending
-app. Sender commands (`exec` and `execArgv`) are never replayed or kept in the
+path extracted from the notification action; otherwise it tries the live default
+action through Foamy Notifications, then falls back to focusing the sending app. Sender commands (`exec` and `execArgv`) are never replayed or kept in the
 archive. Existing archived commands are removed on the next sync.
-Set `clickAction` to `"Focus the app"` to skip pictures, or `"Nothing"` to disable
-notification body clicks. App callbacks and URL actions cannot be replayed.
+Set `clickAction` to `"Focus the app"` to skip pictures and live actions, or `"Nothing"` to disable
+notification body clicks. Expired app callbacks and URL actions cannot be replayed.
 
 When used with Foamy Notifications, activating a popup removes it from this center
 and clears its unread state. Dismissing the popup with × or right-click keeps it
@@ -70,11 +70,12 @@ cases. Changing the enabled plugin in `shell.json` reconnects the source watcher
 opening the panel also requests a fresh list. Reads which overlap newer events
 are retried, and duplicate filesystem events skip retention work.
 
-When Foamy Notifications is installed, app focusing uses its helper and current
-`browserMappings`, so browser messages select the same web-app window as popups.
-Ambiguous or unavailable windows leave the center entry available with an error.
-Without that plugin, the existing stock focus helper remains the fallback. This
-integration does not execute archived sender commands or restore dead callbacks.
+When Foamy Notifications is running, Auto clicks without pictures request the exact live
+notification's default action, letting the browser or app open its own destination.
+Expired or restored notifications, older Foamy versions, and stock Omarchy
+Notifications fall back to the stock app-focus helper. No browser mappings are
+required for center clicks. Failed focus keeps the entry available with an error.
+The center never extracts links from message text or replays archived commands.
 
 Text-only replacements reuse retained images and previews. Each plugin still owns
 its own image lifetime and cleanup: the center's longer retention does not depend

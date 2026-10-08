@@ -58,43 +58,67 @@ Item {
     "NC_PREVIEWS": root.showPreview ? "1" : "0"
   })
 
-  readonly property string foamyDirectory: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/omarchy/plugins/foamy.notifications"
-  property bool foamyFocusAvailable: false
   property string focusError: ""
   property var focusEntry: null
+  property bool invokingDefault: false
   signal focusCompleted()
-  FileView {
-    path: root.foamyDirectory + "/manifest.json"
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
-    onLoaded: {
-      try { root.foamyFocusAvailable = JSON.parse(text()).id === "foamy.notifications" }
-      catch (e) { root.foamyFocusAvailable = false }
-    }
-    onLoadFailed: root.foamyFocusAvailable = false
-  }
-  function focusNotification(row) {
+
+  function focusNotification(row, useDefault) {
     if (focusProc.running || !row || !/^[0-9]+-[0-9]+$/.test(String(row.key))) return
     focusError = ""
     focusEntry = row
-    focusProc.stdinEnabled = true
+    if (useDefault === false) { focusSendingApp(); return }
+    invokingDefault = true
+    // Probe the running daemon, not an installed plugin that may be disabled.
+    focusProc.command = ["omarchy-shell", "foamy.notifications", "invokeDefault", String(row.key)]
     focusProc.running = true
   }
+
+  function focusSendingApp() {
+    invokingDefault = false
+    // The stock helper treats names as regexes; allow only literal app names.
+    if (!/^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/.test(focusEntry.app)) {
+      focusError = "Could not identify the sending app."
+      focusEntry = null
+      return
+    }
+    var directory = root.omarchyPath || Quickshell.env("OMARCHY_PATH")
+    focusProc.command = [directory + "/bin/omarchy-hyprland-focus-app", focusEntry.app.replace(/\./g, "\\.")]
+    focusProc.running = true
+  }
+
+  function finishFocus(exitCode, exitStatus, output) {
+    var succeeded = exitCode === 0 && exitStatus === 0
+    if (invokingDefault) {
+      var result = String(output || "").trim()
+      if (succeeded && result === "busy") {
+        focusError = "This notification is already being opened. Try again."
+        focusEntry = null
+        return
+      }
+      if (!succeeded || result !== "invoked") {
+        // Stock/older daemons and expired callbacks all use the stock fallback.
+        focusSendingApp()
+        return
+      }
+      // The daemon owns durable handling of its callback and acknowledges removal.
+      root.focusCompleted()
+      focusEntry = null
+      return
+    }
+    if (succeeded) { root.remove(focusEntry.key); root.focusCompleted() }
+    else {
+      focusError = "Could not focus the sending app. Open the app and try again."
+      console.warn("Notification focus failed:", exitCode, exitStatus)
+    }
+    focusEntry = null
+  }
+
   Process {
     id: focusProc
-    command: ["python3", root.foamyDirectory + "/bin/notification-helper.py", "focus-configured"]
-    stdinEnabled: true
-    onStarted: {
-      write(JSON.stringify({app:root.focusEntry.app,desktopEntry:root.focusEntry.desktopEntry || "",body:root.focusEntry.body || ""}))
-      stdinEnabled = false
-    }
-    stderr: StdioCollector { id: focusErrors }
-    onExited: function(exitCode, exitStatus) {
-      if (exitCode === 0 && exitStatus === 0) { root.remove(root.focusEntry.key); root.focusCompleted() }
-      else { root.focusError = "Could not identify the window. Check browserMappings and try again."; console.warn("Notification focus failed:", focusErrors.text) }
-      root.focusEntry = null
-    }
+    stdout: StdioCollector { id: focusOutput }
+    stderr: StdioCollector {}
+    onExited: function(exitCode, exitStatus) { root.finishFocus(exitCode, exitStatus, focusOutput.text) }
   }
 
   signal entryAdded(var entry)
@@ -400,7 +424,6 @@ Item {
       return JSON.stringify({
         entries: root.entries.length,
         listLoads: root.listLoadCount,
-        foamyFocusAvailable: root.foamyFocusAvailable,
         focusError: root.focusError,
         loadError: root.loadError,
         newest: root.entries.length > 0 ? root.entries[0].summary : "",

@@ -84,7 +84,7 @@
           "Nothing"
         ],
         "defaultValue": "Auto",
-        "description": "Auto opens the picture a notification pointed at, using only an absolute PNG, JPEG, GIF, or WebP path, and otherwise focuses the sending app. Sender commands and URL actions are never replayed from history. Focus the app skips pictures; Nothing disables body clicks."
+        "description": "Auto opens the picture a notification pointed at, using only an absolute PNG, JPEG, GIF, or WebP path, and otherwise asks Foamy Notifications for the live default action, falling back to focusing the sending app when unavailable. Archived sender commands are never replayed. Focus the app skips pictures and live actions; Nothing disables body clicks."
       },
       {
         "key": "showBody",

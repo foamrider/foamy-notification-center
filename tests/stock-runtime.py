@@ -14,11 +14,16 @@ import Quickshell.Io
 import "stock" as Stock
 import "center" as Center
 ShellRoot {Stock.Service {id:stock} Center.Service {id:center}
- IpcHandler {target:"review";function mark():void{center.markSeen()} function toggle():void{center.toggleDnd()} }
+ IpcHandler {target:"review";function mark():void{center.markSeen()} function toggle():void{center.toggleDnd()} function focus():void{center.focusNotification(center.entries[0])} }
 }''')
 bin=base/'bin';bin.mkdir();cli=bin/'omarchy-shell';cli.write_text('#!/bin/sh\nexec qs ipc -n -p '+str(app)+' call "$@"\n');cli.chmod(0o755)
+# The real stock focus helper talks only to this isolated window fixture.
+clients=base/'clients.json';clients.write_text('[]')
+dispatches=base/'dispatches'
+(bin/'hyprctl').write_text("#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nif sys.argv[1]=='clients':print(Path("+repr(str(clients))+").read_text())\nelse:Path("+repr(str(dispatches))+").write_text('focused')\n")
+(bin/'hyprctl').chmod(0o755)
 state=base/'custom-state' if custom else home/'.local/state'
-env=dict(os.environ,HOME=str(home),XDG_CONFIG_HOME=str(home/'.config'),XDG_STATE_HOME=str(state),XDG_RUNTIME_DIR=str(runtime),PATH=str(bin)+':'+os.environ['PATH'],QT_QPA_PLATFORM='offscreen',QT_QUICK_BACKEND='software',QT_QPA_PLATFORMTHEME='basic')
+env=dict(os.environ,HOME=str(home),XDG_CONFIG_HOME=str(home/'.config'),XDG_STATE_HOME=str(state),XDG_RUNTIME_DIR=str(runtime),PATH=str(bin)+':'+os.environ['PATH'],OMARCHY_PATH='/usr/share/omarchy',QT_QPA_PLATFORM='offscreen',QT_QUICK_BACKEND='software',QT_QPA_PLATFORMTHEME='basic')
 for k in ['DISPLAY','WAYLAND_DISPLAY','HYPRLAND_INSTANCE_SIGNATURE']:env.pop(k,None)
 log=(base/'log').open('w');proc=subprocess.Popen(['qs','-p',str(app),'--no-color'],env=env,stdout=log,stderr=log,start_new_session=True)
 def ipc(t,*args):return subprocess.check_output(['qs','ipc','-n','-p',str(app),'call',t,*args],env=env,text=True,timeout=3).strip()
@@ -46,6 +51,10 @@ try:
  ipc('review','toggle');wait(lambda:not status()['doNotDisturb'])
  ipc('foamy.notification-center.test','clear');wait(lambda:status()['entries']==0)
  send('After clear');wait(lambda:status()['entries']==1)
- print('PASS stock: delivery, in-place replacement, dismissal history, read state, DND both ways, silenced history, clear and subsequent arrival; Foamy Notifications absent')
+ ipc('review','focus');wait(lambda:bool(status()['focusError']));assert status()['entries']==1
+ clients.write_text(json.dumps([{'class':'Stock Review','address':'0x123'}]))
+ ipc('review','focus');wait(lambda:status()['entries']==0);assert dispatches.read_text()=='focused'
+ assert not status()['focusError']
+ print('PASS stock default-action fallback, failed focus retention and retry; stock: delivery, in-place replacement, dismissal history, read state, DND both ways, silenced history, clear and subsequent arrival; Foamy Notifications absent')
 finally:
  os.killpg(proc.pid,signal.SIGTERM);proc.wait(timeout=3);log.close();print('Evidence:',base)

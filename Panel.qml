@@ -129,7 +129,6 @@ Panel {
     Qt.callLater(function() { if (root.opened) keyCatcher.forceActiveFocus() })
   }
 
-  Process { id: focusProc }
   Connections {
     target: root.store
     function onFocusCompleted() { root.close() }
@@ -216,23 +215,7 @@ Panel {
       root.close()
       return
     }
-    if (store && store.foamyFocusAvailable) {
-      store.focusNotification(row)
-      return
-    }
-    // The app name is on the notification too, so it is the sender's to choose,
-    // and the focus helper matches it as a regular expression: an app calling
-    // itself ".*" would focus whichever window that hit first. Only something
-    // shaped like a name gets through.
-    if (!/^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/.test(row.app)) return
-    // Chat apps rarely register an action and simply expect a click to bring
-    // their window up. This is the helper the notification service uses for
-    // the same fallback, so a click here lands where a click on the toast
-    // would have.
-    focusProc.command = [root.omarchyPath + "/bin/omarchy-hyprland-focus-app", row.app]
-    focusProc.running = true
-    root.remove(row.key)
-    root.close()
+    if (store) store.focusNotification(row, clickAction === "Auto")
   }
 
   // ---------------------------------------------------------------- lifecycle
