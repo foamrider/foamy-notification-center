@@ -195,10 +195,16 @@ Item {
         root.removalError = "Could not dismiss notifications. Try again."
         console.warn("Notification dismissal failed:", removeErrors.text)
         root.load()
-      }
+      } else root.releaseNotificationActions(root.activeRemovalKeys)
       root.activeRemovalKeys = []
       root.startRemoval()
     }
+  }
+
+  function releaseNotificationActions(keys) {
+    // Stock and older daemons have no retained actions; cleanup is optional IPC.
+    for (var i = 0; i < keys.length; i += 100)
+      Quickshell.execDetached(["omarchy-shell", "-q", "foamy.notifications", "releaseHistory", keys.slice(i, i + 100).join(",")])
   }
 
   // Ordinary plugins use the public IPC commands, not the bar-only service proxy.
@@ -247,7 +253,9 @@ Item {
   function clearAll() {
     entries = []
     entriesReset()
-    Quickshell.execDetached(root.storeCommand(["clear"]))
+    // Release callbacks only after durable clearing, without catching newer arrivals.
+    Quickshell.execDetached(["bash", "-c", '"$1" clear && omarchy-shell -q foamy.notifications releaseHistoryBefore "$2"',
+      "--", root.script, String(Date.now())])
   }
 
   function absorb(line) {

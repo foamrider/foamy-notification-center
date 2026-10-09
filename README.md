@@ -51,7 +51,7 @@ path extracted from the notification action; otherwise it tries the live default
 action through Foamy Notifications, then falls back to focusing the sending app. Sender commands (`exec` and `execArgv`) are never replayed or kept in the
 archive. Existing archived commands are removed on the next sync.
 Set `clickAction` to `"Focus the app"` to skip pictures and live actions, or `"Nothing"` to disable
-notification body clicks. Expired app callbacks and URL actions cannot be replayed.
+notification body clicks. Closed app callbacks and URL actions cannot be replayed.
 
 When used with Foamy Notifications, activating a popup removes it from this center
 and clears its unread state. Dismissing the popup with × or right-click keeps it
@@ -72,8 +72,13 @@ are retried, and duplicate filesystem events skip retention work.
 
 When Foamy Notifications is running, Auto clicks without pictures request the exact live
 notification's default action, letting the browser or app open its own destination.
-Expired or restored notifications, older Foamy versions, and stock Omarchy
-Notifications fall back to the stock app-focus helper. No browser mappings are
+Foamy keeps live browser callbacks available when popups expire, are hidden, or
+are silenced. Clicking those history entries can still open the original destination.
+Callbacks are limited to the newest 100 retained actions in the current shell
+session. Sender closure, history dismissal or clearing, disabling the center,
+and eviction release them. A browser or shell restart cannot restore old callbacks.
+Unavailable callbacks, older Foamy versions, and stock Omarchy Notifications
+fall back to the stock app-focus helper. No browser mappings are
 required for center clicks. Failed focus keeps the entry available with an error.
 The center never extracts links from message text or replays archived commands.
 

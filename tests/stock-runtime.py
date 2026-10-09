@@ -16,7 +16,7 @@ import "center" as Center
 ShellRoot {Stock.Service {id:stock} Center.Service {id:center}
  IpcHandler {target:"review";function mark():void{center.markSeen()} function toggle():void{center.toggleDnd()} function focus():void{center.focusNotification(center.entries[0])} }
 }''')
-bin=base/'bin';bin.mkdir();cli=bin/'omarchy-shell';cli.write_text('#!/bin/sh\nexec qs ipc -n -p '+str(app)+' call "$@"\n');cli.chmod(0o755)
+bin=base/'bin';bin.mkdir();cli=bin/'omarchy-shell';cli.write_text('#!/bin/sh\n[ "$1" = "-q" ] && shift\nexec qs ipc -n -p '+str(app)+' call "$@"\n');cli.chmod(0o755)
 # The real stock focus helper talks only to this isolated window fixture.
 clients=base/'clients.json';clients.write_text('[]')
 dispatches=base/'dispatches'

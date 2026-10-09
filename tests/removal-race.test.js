@@ -93,3 +93,19 @@ test("failed dismissal releases only failed tombstones and reloads for retry", (
   state.remove(failed.key)
   assert.deepEqual(Array.from(state.removeProc.command), ["remove", failed.key])
 })
+
+test("callback cleanup runs only after durable dismissal and batches exact keys", () => {
+ const state=service(),calls=[]
+ state.Quickshell.execDetached=argv=>calls.push(Array.from(argv))
+ const start=source.indexOf("  function releaseNotificationActions(")
+ vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ const keys=Array.from({length:101},(_,i)=>`${i+1}-1`)
+ state.releaseNotificationActions(keys)
+ assert.equal(calls.length,2)
+ assert.equal(calls[0][4].split(',').length,100)
+ assert.deepEqual(calls[1],["omarchy-shell","-q","foamy.notifications","releaseHistory","101-1"])
+ state.activeRemovalKeys=['100-1'];state.removeErrors={text:''};state.exitCode=0;state.exitStatus=0
+ const handler=source.indexOf("    onExited: function(exitCode, exitStatus) {",source.indexOf("    id: removeProc"))
+ vm.runInContext(source.slice(source.indexOf("{",handler)+1,source.indexOf("\n    }",handler)),state)
+ assert.equal(calls[2][4],"100-1")
+})
