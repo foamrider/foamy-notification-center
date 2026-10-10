@@ -257,6 +257,37 @@ ShellRoot {
         compare(panel.settingsError, "")
         compare(control("popups-availability").text, "Utvidelsen er ikke installert")
       }
+      function test_06_clipboard_parent_keys_and_feedback() {
+        panel.startSearch()
+        var search = control("notificationSearch")
+        tryCompare(search, "inputActiveFocus", true)
+        keyClick(Qt.Key_A)
+        compare(panel.filter, "a")
+        keyClick(Qt.Key_Down)
+        tryCompare(search, "inputActiveFocus", false)
+        search.focusInput()
+        keyClick(Qt.Key_Return)
+        tryCompare(search, "inputActiveFocus", false)
+        search.focusInput()
+        search.pasteError = "Clipboard text is too large or contains invalid characters."
+        wait(100)
+        capture(search.parent.parent.parent, "search-paste-error")
+        keyClick(Qt.Key_Escape)
+        compare(panel.searching, false)
+        compare(search.pasteError, "")
+        compare(panel.filter, "")
+        panel.openSettings()
+        tryCompare(panel, "popupSettingsLoading", false)
+        var field = control("center-maxItems")
+        field.pasteError = "Could not paste clipboard text. Copy plain text and try again."
+        compare(panel.settingsError, field.pasteError)
+        field.focusInput()
+        keyClick(Qt.Key_A, Qt.ControlModifier)
+        keyClick(Qt.Key_7)
+        compare(panel.settingsError, "")
+        keyClick(Qt.Key_Escape)
+        compare(field.text, String(panel.settings.maxItems || 1000))
+      }
       onCompletedChanged: if (completed) { console.log("SETTINGS_UI", qtest_results.passCount, "passed", qtest_results.failCount, "failed"); root.finished = true }
     }
   }
@@ -272,4 +303,4 @@ except subprocess.TimeoutExpired:
     output = process.communicate(timeout=3)[0]
 print(output)
 print("Settings captures:", app)
-assert process.returncode == 0 and "SETTINGS_UI 5 passed 0 failed" in output
+assert process.returncode == 0 and "SETTINGS_UI 6 passed 0 failed" in output

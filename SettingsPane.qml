@@ -24,6 +24,7 @@ Item {
   signal save(string scope, string key, var value)
   signal back()
   signal clearError()
+  signal pasteFailed(string message)
   function tr(label) { return Translations.text(label, language) }
   function focusBack() { backButton.forceActiveFocus() }
   function resetScroll() { settingsScroll.contentY = 0 }
@@ -129,6 +130,7 @@ Item {
               opacity: enabled ? 1 : 0.55
               onSave: function(value) { root.save(scope, field.key, value) }
               onClearError: root.clearError()
+              onPasteFailed: function(message) { root.pasteFailed(message) }
             }
           }
         }

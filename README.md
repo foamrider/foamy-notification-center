@@ -6,7 +6,7 @@ Notification history with app stacks, search, and do not disturb.
 
 ## Install
 
-Requires Omarchy Quattro with stock notifications or Foamy Notifications enabled, `jq`, and
+Requires Omarchy Quattro with stock notifications or Foamy Notifications enabled, `jq`, `wl-paste`, and GNU `timeout`, plus
 `inotify-tools`. Website favicon lookup uses the system Python 3 runtime.
 
 Picture previews also require `file` and ImageMagick 7 (`magick`). PNG, JPEG,
@@ -74,6 +74,10 @@ Website identity comes only from a browser’s leading HTTP(S) URL/link or a bar
 hostname on its own first line. Links inside the message and sender avatars do
 not identify the site. Grouping does not change click targets or distinguish
 browser profiles/accounts. These settings are independent of Foamy Notifications.
+
+Search and numeric settings use bounded clipboard reads (16 KiB, two seconds).
+Failed paste leaves the field unchanged and displays an error. Keyboard paste,
+the context menu, and primary-selection paste use the same limits.
 
 Favicons are read asynchronously from standard Linux Vivaldi, Chrome, Chromium,
 Brave, Edge and Opera profile caches. Firefox, custom profile locations and missing

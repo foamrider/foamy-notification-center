@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls as Controls
 import QtQuick.Layouts
 import qs.Ui
 import qs.Commons
@@ -17,6 +16,7 @@ Column {
   readonly property var current: Preferences.value(scope, settings, field.key)
   signal save(var value)
   signal clearError()
+  signal pasteFailed(string message)
   function tr(label) { return Translations.text(label, language) }
   Loader {
     width: parent.width
@@ -77,13 +77,12 @@ Column {
           font.family: "sans-serif"
           font.pixelSize: Style.space(13)
         }
-        Controls.TextField {
+        SafeTextField {
           id: input
           objectName: root.scope + "-" + root.field.key
           Layout.preferredWidth: Style.space(68)
           implicitHeight: Style.space(34)
           text: String(root.current)
-          selectByMouse: true
           color: Color.popups.text
           font.family: "sans-serif"
           font.pixelSize: Style.space(12)
@@ -92,9 +91,11 @@ Column {
           background: Rectangle {
             radius: Style.cornerRadius * 2
             color: Qt.alpha(Color.popups.text, 0.055)
-            border.width: input.activeFocus ? 1 : 0
+            border.width: input.inputActiveFocus ? 1 : 0
             border.color: Color.accent
           }
+          translate: root.tr
+          onPasteErrorChanged: if (pasteError !== "") root.pasteFailed(pasteError)
           onTextEdited: root.clearError()
           onEditingFinished: {
             if (!root.visible || !root.enabled) return
@@ -102,10 +103,16 @@ Column {
             if (next !== root.current) root.save(next)
           }
           // Cancel the editor without saving an unfinished value on Escape.
-          Keys.onEscapePressed: { text = Qt.binding(function() { return String(root.current) }); root.forceActiveFocus(); }
+          onKeyPressed: function(event) {
+            if (event.key === Qt.Key_Escape) {
+              event.accepted = true
+              text = Qt.binding(function() { return String(root.current) })
+              root.forceActiveFocus()
+            }
+          }
           HoverHandler { id: numberHover }
           PanelToolTip {
-            visible: numberHover.hovered || input.activeFocus
+            visible: numberHover.hovered || input.inputActiveFocus
             text: root.field.min + "–" + root.field.max
             fontFamily: "sans-serif"
           }

@@ -266,7 +266,7 @@ Panel {
   function endSearch() {
     searching = false
     filter = ""
-    if (search) search.text = ""
+    if (search) { search.text = ""; search.pasteError = "" }
     Qt.callLater(function() { if (root.opened && keyCatcher) keyCatcher.forceActiveFocus() })
   }
 
@@ -386,7 +386,7 @@ Panel {
       editingSettings = false
       searching = false
       filter = ""
-      if (search) search.text = ""
+      if (search) { search.text = ""; search.pasteError = "" }
       return
     }
     now = Date.now()
@@ -578,7 +578,7 @@ Panel {
       anchors.fill: parent
       // While the search field has the focus it owns every key, including the
       // ones this would otherwise read as navigation.
-      blocked: search.activeFocus || root.editingSettings || moreMenu.visible
+      blocked: search.inputActiveFocus || root.editingSettings || moreMenu.visible
       onCloseRequested: root.searching ? root.endSearch() : root.close()
       onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
       onActivateRequested: root.activateCursor(false)
@@ -751,7 +751,7 @@ Panel {
             height: Style.space(32)
             radius: Style.cornerRadius * 2
             color: root.searching ? Qt.alpha(root.foreground, 0.055) : "transparent"
-            border.width: search.activeFocus ? 1 : 0
+            border.width: search.inputActiveFocus ? 1 : 0
             border.color: Color.accent
             // Clipping this rounded surface cuts off its antialiased focus outline.
             antialiasing: true
@@ -764,8 +764,9 @@ Panel {
               foreground: root.searching ? Color.accent : Qt.alpha(root.foreground, 0.65)
               onClicked: root.startSearch()
             }
-            Controls.TextField {
+            SafeTextField {
               id: search
+              objectName: "notificationSearch"
               x: Style.space(32)
               width: Math.max(0, parent.width - Style.space(64))
               height: parent.height
@@ -781,14 +782,18 @@ Panel {
               padding: 0
               background: Item {}
               onTextChanged: root.filter = text
-              Keys.onEscapePressed: root.endSearch()
-              // Keep the query while handing keyboard navigation to its results.
-              Keys.onDownPressed: {
-                keyCatcher.forceActiveFocus()
-                root.cursorIndex = -1
-                root.moveCursor(0, 1)
+              translate: root.tr
+              onKeyPressed: function(event) {
+                if (event.key === Qt.Key_Escape) { event.accepted = true; root.endSearch() }
+                else if (event.key === Qt.Key_Down) {
+                  event.accepted = true
+                  keyCatcher.forceActiveFocus()
+                  root.cursorIndex = -1
+                  root.moveCursor(0, 1)
+                }
               }
-              Keys.onReturnPressed: {
+              // Keep the query while handing keyboard navigation to its results.
+              onAccepted: {
                 keyCatcher.forceActiveFocus()
                 root.cursorIndex = -1
                 root.moveCursor(0, 1)
@@ -810,7 +815,7 @@ Panel {
           x: Style.space(14)
           width: parent.width - Style.space(28)
           textFormat: Text.PlainText
-          text: root.store ? root.tr(root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : ""
+          text: search.pasteError || (root.store ? root.tr(root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
           visible: !root.editingSettings && text !== ""
           color: Color.urgent
           font.family: root.fontFamily
@@ -967,6 +972,7 @@ Panel {
           onSave: function(scope, key, value) { root.savePreference(scope, key, value) }
           onBack: root.closeSettings()
           onClearError: root.settingsError = ""
+          onPasteFailed: function(message) { root.settingsError = message }
         }
 
       }
