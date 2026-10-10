@@ -42,7 +42,9 @@ function relativeTime(timestamp, now) {
   return Math.floor(minutes / 1440) + "d ago"
 }
 
-function groupsFor(entries, filter) {
+function groupsFor(entries, filter, browserGrouping, identity) {
+  identity = identity || (typeof require === "function" ? require("./BrowserIdentity.js") : null)
+  browserGrouping = ["browser", "hostname", "none"].indexOf(browserGrouping) >= 0 ? browserGrouping : "browser"
   var needle = String(filter || "").toLowerCase()
   var byApp = Object.create(null)
   var seen = Object.create(null)
@@ -58,12 +60,20 @@ function groupsFor(entries, filter) {
     seen[entry.key] = true
     var app = String(entry.app || "Unknown app")
     if (needle && [app, entry.summary || "", entry.body || ""].join(" ").toLowerCase().indexOf(needle) < 0) continue
-    var group = byApp[app]
+    var browser = identity && identity.browser(entry)
+    var host = identity ? identity.hostname(entry) : ""
+    var key = app
+    if (browserGrouping !== "browser") {
+      key = JSON.stringify(browser ? ["browser", app, browserGrouping, browserGrouping === "none" ? entry.key : host] : ["app", app])
+    }
+    var group = byApp[key]
     if (!group) {
-      group = { key: app, app: app, appIcon: "", glyph: "", timestamp: Number(entry.timestamp || 0), critical: false, entries: [] }
-      byApp[app] = group
+      group = { key: key, app: app, label: browserGrouping === "hostname" && host ? host : app, hostname: host, iconEntry: entry, appIcon: "", glyph: "", timestamp: Number(entry.timestamp || 0), critical: false, entries: [] }
+      byApp[key] = group
       groups.push(group)
     }
+    // A browser-wide stack with several websites has no single website favicon.
+    if (group.hostname !== host) { group.hostname = ""; group.iconEntry = null }
     // Archived image fields can be avatars; only appIcon identifies the app.
     if (!group.appIcon && entry.appIcon) group.appIcon = String(entry.appIcon)
     if (!group.glyph && entry.glyph) group.glyph = String(entry.glyph)
@@ -73,8 +83,8 @@ function groupsFor(entries, filter) {
   return groups
 }
 
-function stackRows(entries, expanded, filter) {
-  var groups = groupsFor(entries, filter)
+function stackRows(entries, expanded, filter, browserGrouping, identity) {
+  var groups = groupsFor(entries, filter, browserGrouping, identity)
   var rows = []
   for (var i = 0; i < groups.length; i++) {
     var group = groups[i]

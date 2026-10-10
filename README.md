@@ -7,7 +7,7 @@ Notification history with app stacks, search, and do not disturb.
 ## Install
 
 Requires Omarchy Quattro with stock notifications or Foamy Notifications enabled, `jq`, and
-`inotify-tools`.
+`inotify-tools`. Website favicon lookup uses the system Python 3 runtime.
 
 Picture previews also require `file` and ImageMagick 7 (`magick`). PNG, JPEG,
 GIF, and WebP previews are converted to a single PNG of at most 720 × 720 pixels.
@@ -32,6 +32,36 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
 
 Set `language` on the widget entry in `shell.json`: `system` (default), `en`,
 or `nb`. Other system languages fall back to English.
+
+Set `useBrowserFavicons` on the widget entry to `true` (default) to show a
+website’s locally cached favicon, with the app icon and then the glyph as
+fallbacks. Set `browserGrouping` to `"browser"` (default), `"hostname"`, or
+`"none"`. Hostname mode gives each identified website its own stack and heading;
+none leaves each browser notification separate. Native apps keep their stacks.
+Missing website identities remain under the browser. A browser-wide stack with
+several websites keeps the browser icon because it has no single website identity.
+
+For example, on the `foamy.notification-center` widget entry:
+
+```json
+"useBrowserFavicons": true,
+"browserGrouping": "hostname"
+```
+
+Website identity comes only from a browser’s leading HTTP(S) URL/link or a bare
+hostname on its own first line. Links inside the message and sender avatars do
+not identify the site. Grouping does not change click targets or distinguish
+browser profiles/accounts. These settings are independent of Foamy Notifications.
+
+Favicons are read asynchronously from standard Linux Vivaldi, Chrome, Chromium,
+Brave, Edge and Opera profile caches. Firefox, custom profile locations and missing
+icons fall back to the app icon. This also works with stock Omarchy notifications
+when the sender’s website origin is present in the archived body. No website
+requests or additional Python packages are used. PNG copies use the shared private cache
+at `$XDG_CACHE_HOME/foamy/browser-favicons` (normally `~/.cache/foamy/browser-favicons`),
+limited to 256 icons of at most 64 KiB and 256 × 256 pixels. Successful lookups
+refresh after one day; missing icons can retry after five minutes on a display
+model change. Lookups cover only the first 128 groups in the display.
 
 Set `compact` on the widget entry in `shell.json` to `true` for a slim app
 header and tighter message spacing. The default, `false`, keeps the roomier
@@ -117,6 +147,9 @@ Card animations can be checked with `python3 tests/motion.py` (isolated Qt) or
 Stock compatibility can be checked without touching personal history:
 
 ```sh
+node --test tests/*.test.js
+python3 -m unittest discover -s tests -p '*_test.py' -v
+python3 tests/browser-ui.py
 python3 tests/stock-runtime.py
 python3 tests/stock-runtime.py --custom
 ```

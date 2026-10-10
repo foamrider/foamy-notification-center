@@ -31,7 +31,9 @@
       "clickAction": "Auto",
       "showBody": true,
       "showPreview": true,
-      "compact": false
+      "compact": false,
+      "useBrowserFavicons": true,
+      "browserGrouping": "browser"
     },
     "schema": [
       {
@@ -40,6 +42,25 @@
         "label": "Compact notifications",
         "defaultValue": false,
         "description": "Use a slim app header and tighter message spacing. Text and picture sizes stay unchanged."
+      },
+      {
+        "key": "useBrowserFavicons",
+        "type": "boolean",
+        "label": "Use website favicons",
+        "defaultValue": true,
+        "description": "Use the local browser favicon cache for identified websites. Missing icons fall back to the app icon. No website requests."
+      },
+      {
+        "key": "browserGrouping",
+        "type": "enum",
+        "label": "Group browser notifications by",
+        "options": [
+          "browser",
+          "hostname",
+          "none"
+        ],
+        "defaultValue": "browser",
+        "description": "browser keeps one stack per browser; hostname separates websites; none shows each browser notification separately. Missing website identities stay under the browser."
       },
       {
         "key": "badge",

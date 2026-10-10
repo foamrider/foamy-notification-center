@@ -9,6 +9,7 @@ import qs.Ui
 
 import "." as Plugin
 import "Model.js" as Model
+import "BrowserIdentity.js" as BrowserIdentity
 import "Translations.js" as Translations
 import "components"
 
@@ -60,6 +61,10 @@ Panel {
   readonly property int maxItems: setting("maxItems", 1000)
   readonly property string clickAction: setting("clickAction", "Auto")
   readonly property bool compact: setting("compact", false)
+  readonly property bool useBrowserFavicons: setting("useBrowserFavicons", true)
+  readonly property string browserGrouping: setting("browserGrouping", "browser")
+  onBrowserGroupingChanged: { expandedGroups = ({}); rebuild() }
+  onUseBrowserFaviconsChanged: rebuild()
   readonly property bool showBody: setting("showBody", true)
   readonly property bool showPreview: setting("showPreview", true)
 
@@ -98,6 +103,7 @@ Panel {
     target: root.store
     function onEntryAdded(entry) { root.handleEntryAdded(entry) }
     function onEntriesReset() { root.rebuild() }
+    function onBrowserIconsUpdated() { root.rebuild() }
   }
 
   // -------------------------------------------------------------------- state
@@ -180,9 +186,14 @@ Panel {
     if (!root.opened && forOpening !== true) { rowsDirty = true; return }
     rowsDirty = false
     var focused = cursorIndex >= 0 && cursorIndex < rows.length ? rows[cursorIndex].id : ""
-    var next = Model.stackRows(entries, expandedGroups, filter)
+    var next = Model.stackRows(entries, expandedGroups, filter, browserGrouping, BrowserIdentity)
     var index = next.findIndex(function(row) { return row.id === focused })
+    var headers = next.filter(function(row) { return row.kind === "header" })
+    headers.forEach(function(row) {
+      row.group.favicon = root.useBrowserFavicons && store ? store.faviconSource(row.group.iconEntry) : ""
+    })
     rows = next
+    if (useBrowserFavicons && store) store.warmBrowserIcons(headers.map(function(row) { return row.group.iconEntry }).filter(Boolean))
     cursorIndex = index >= 0 ? index : Math.min(cursorIndex, rows.length - 1)
   }
 

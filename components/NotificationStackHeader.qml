@@ -61,16 +61,29 @@ Item {
     height: width
     Image {
       id: appIcon
+      objectName: "notificationAppIcon"
       anchors.fill: parent
       source: root.iconSource
       sourceSize.width: width * 2
       sourceSize.height: height * 2
       fillMode: Image.PreserveAspectFit
       asynchronous: true
+      visible: status === Image.Ready && faviconIcon.status !== Image.Ready
+    }
+    Image {
+      id: faviconIcon
+      objectName: "notificationFavicon"
+      anchors.fill: parent
+      source: String(root.group.favicon || "").indexOf("file://") === 0 ? root.group.favicon : ""
+      sourceSize.width: width * 2
+      sourceSize.height: height * 2
+      fillMode: Image.PreserveAspectFit
+      asynchronous: true
+      visible: status === Image.Ready
     }
     Text {
       anchors.centerIn: parent
-      visible: root.iconSource === "" || appIcon.status === Image.Error
+      visible: appIcon.status !== Image.Ready && faviconIcon.status !== Image.Ready
       textFormat: Text.PlainText
       text: root.group.glyph || root.group.app.charAt(0).toUpperCase()
       color: root.foreground
@@ -86,7 +99,7 @@ Item {
     anchors.rightMargin: Style.space(9)
     anchors.verticalCenter: parent.verticalCenter
     textFormat: Text.PlainText
-    text: root.group.app === "Unknown app" ? Translations.text("Unknown app", root.language) : root.group.app
+    text: root.group.app === "Unknown app" ? Translations.text("Unknown app", root.language) : (root.group.label || root.group.app)
     elide: Text.ElideRight
     color: root.foreground
     font.family: root.fontFamily

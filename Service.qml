@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import "." as Plugin
 import "Model.js" as Model
+import "components"
 
 // The archive, mounted once for the shell.
 //
@@ -27,6 +28,11 @@ Item {
   property int maxItems: 1000
   property bool showPreview: true
   property int pageSize: 500
+
+  BrowserIcons { id: browserIcons; onUpdated: root.browserIconsUpdated() }
+  signal browserIconsUpdated()
+  function faviconSource(row) { return row ? browserIcons.source(row) : "" }
+  function warmBrowserIcons(rows) { browserIcons.warm(rows) }
 
   property var entries: []
   // Keep removals authoritative while watcher events and older reads drain.
