@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls as Controls
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -11,6 +12,7 @@ import "." as Plugin
 import "Model.js" as Model
 import "BrowserIdentity.js" as BrowserIdentity
 import "Translations.js" as Translations
+import "Preferences.js" as Preferences
 import "components"
 
 // A notification center for Omarchy: everything you were sent, still there
@@ -34,6 +36,7 @@ import "components"
 // editors and patches that mangle private-use codepoints.
 Panel {
   id: root
+  objectName: "notificationCenterPanel"
 
   function open() {
     preparePopup()
@@ -75,6 +78,129 @@ Panel {
 
   readonly property bool dnd: store ? store.doNotDisturb : false
   function toggleDnd() { if (store) store.toggleDnd() }
+
+  property bool editingSettings: false
+  property string settingsError: ""
+  property var popupSettings: ({})
+  property bool popupSettingsAvailable: false
+  property bool popupSettingsLoading: false
+  readonly property bool popupPluginInstalled: {
+    var registry = bar && "pluginRegistry" in bar ? bar.pluginRegistry : null
+    // Use the host's manifest registry so a stale settings entry cannot imply installation.
+    return registry && registry.installedPlugins
+      ? !!registry.installedPlugins["foamy.notifications"] : popupSettingsAvailable
+  }
+  property var pendingPreferences: ({})
+  property var preferenceActive: null
+  readonly property string preferencesHelper: decodeURIComponent(Qt.resolvedUrl("bin/notification-preferences.py").toString().replace(/^file:\/\//, ""))
+
+  function openSettings() {
+    moreMenu.close()
+    endSearch()
+    editingSettings = true
+    settingsError = ""
+    reloadPopupPreferences()
+    settingsPane.resetScroll()
+    Qt.callLater(function() { if (root.opened) settingsPane.focusBack() })
+  }
+  function closeSettings() {
+    editingSettings = false
+    Qt.callLater(function() { if (root.opened) moreButton.forceActiveFocus() })
+  }
+  function reloadPopupPreferences() {
+    if (!editingSettings || popupSettingsLoading || preferenceActive !== null) return
+    popupSettingsLoading = true
+    preferencesRead.running = true
+  }
+  function applyPopupPreferences(raw) {
+    var result = JSON.parse(raw)
+    if (!result || result.ok !== true || typeof result.available !== "boolean" || !result.settings || typeof result.settings !== "object") throw Error("Invalid settings response")
+    if (result.available) Preferences.popupFields.forEach(function(field) {
+      if (!Preferences.valid("popups", field.key, result.settings[field.key])) throw Error("Invalid popup setting")
+    })
+    popupSettingsAvailable = result.available
+    popupSettings = result.settings
+  }
+  function savePreference(scope, key, value) {
+    if (!Preferences.valid(scope, key, value)) { settingsError = tr("Invalid setting."); return }
+    settingsError = ""
+    // Serialize edits across the widget and service; collapse queued edits to the same key.
+    pendingPreferences[scope + ":" + key] = {scope:scope,key:key,value:value}
+    flushPreferences()
+  }
+  function flushPreferences() {
+    if (preferenceActive !== null || popupSettingsLoading) return
+    var keys = Object.keys(pendingPreferences)
+    if (!keys.length) return
+    var next = pendingPreferences[keys[0]]
+    delete pendingPreferences[keys[0]]
+    preferenceActive = next
+    preferencesSave.command = Preferences.saveCommand(next.scope, next.key, next.value, preferencesHelper)
+    preferencesSave.running = true
+  }
+  function finishPreference(code, status, output) {
+    var active = preferenceActive
+    if (!active) return
+    try {
+      if (code !== 0 || status !== 0) throw Error("Settings command failed")
+      if (active.scope === "popups") applyPopupPreferences(output)
+      else if (output.trim() !== "ok") throw Error("Widget settings command failed")
+    } catch (error) {
+      settingsError = tr("Could not save settings. Try again.")
+      console.warn("Foamy Notification Center: settings save failed for", active.scope, active.key)
+    }
+    preferenceActive = null
+    Qt.callLater(function() { root.flushPreferences(); root.reloadPopupPreferences() })
+  }
+  Process {
+    id: preferencesSave
+    stdout: StdioCollector { id: preferenceOutput; waitForEnd: true }
+    onExited: function(code, status) { root.finishPreference(code, status, preferenceOutput.text) }
+  }
+  Timer {
+    interval: 5000
+    running: root.preferenceActive !== null
+    onTriggered: {
+      if (preferencesSave.running) preferencesSave.signal(9)
+      else root.finishPreference(1, 0, "")
+    }
+  }
+  Process {
+    id: preferencesRead
+    command: ["python3", root.preferencesHelper, "read"]
+    stdout: StdioCollector { id: preferenceReadOutput; waitForEnd: true }
+    onExited: function(code, status) {
+      try {
+        if (code !== 0 || status !== 0) throw Error("Settings read failed: " + code + "/" + status)
+        root.applyPopupPreferences(preferenceReadOutput.text)
+      } catch (error) {
+        root.popupSettingsAvailable = false
+        root.settingsError = root.tr("Could not read Foamy Notifications settings. Reopen Settings to retry.")
+        console.warn("Foamy Notification Center: popup settings read failed", String(error))
+      }
+      root.popupSettingsLoading = false
+      Qt.callLater(root.flushPreferences)
+    }
+  }
+  Timer {
+    interval: 5000
+    running: root.popupSettingsLoading
+    onTriggered: {
+      if (preferencesRead.running) preferencesRead.signal(9)
+      else {
+        root.popupSettingsLoading = false
+        root.popupSettingsAvailable = false
+        root.settingsError = root.tr("Could not read Foamy Notifications settings. Reopen Settings to retry.")
+        Qt.callLater(root.flushPreferences)
+      }
+    }
+  }
+  FileView {
+    path: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/omarchy/shell.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: { reload(); root.reloadPopupPreferences() }
+  }
 
   // ------------------------------------------------------------- the store
   //
@@ -254,6 +380,8 @@ Panel {
 
   onOpenedChanged: {
     if (!opened) {
+      moreMenu.close()
+      editingSettings = false
       searching = false
       filter = ""
       if (search) search.text = ""
@@ -401,6 +529,7 @@ Panel {
   }
   NotificationPopup {
     id: popup
+    objectName: "notificationCenterPopup"
     // Anchored to a point past the right edge of the screen rather than to the
     // bell. KeyboardPanel clamps its card inside the screen, so an anchor out
     // there always resolves to hard against the right edge, whatever the bar
@@ -412,7 +541,7 @@ Panel {
     bar: root.bar
     owner: root
     open: root.opened
-    focusTarget: keyCatcher
+    focusTarget: root.editingSettings ? settingsPane : keyCatcher
     padding: 0
     borderSpec: Border.flat(Qt.alpha(Color.popups.text, 0.15), 1)
     contentWidth: popup.fittedContentWidth(Style.space(root.panelWidth))
@@ -447,7 +576,7 @@ Panel {
       anchors.fill: parent
       // While the search field has the focus it owns every key, including the
       // ones this would otherwise read as navigation.
-      blocked: search.activeFocus
+      blocked: search.activeFocus || root.editingSettings || moreMenu.visible
       onCloseRequested: root.searching ? root.endSearch() : root.close()
       onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
       onActivateRequested: root.activateCursor(false)
@@ -469,6 +598,7 @@ Panel {
 
         Item {
           id: header
+          visible: !root.editingSettings
           width: parent.width
           height: Style.space(58)
 
@@ -553,19 +683,60 @@ Panel {
             spacing: Style.space(4)
 
             NotificationAction {
-              iconName: root.dnd ? "bellOff" : "bell"
-              tooltipText: root.dnd ? root.tr("Allow notifications") : root.tr("Silence notifications")
-              foreground: root.dnd ? Color.accent : Qt.alpha(root.foreground, 0.65)
-              enabled: !!root.store && !root.store.dndBusy
-              onClicked: root.toggleDnd()
-            }
-            NotificationAction {
+              objectName: "clearAllNotifications"
               iconName: "trash"
               tooltipText: root.tr("Clear all notifications")
               foreground: Qt.alpha(root.foreground, 0.65)
               hoverForeground: Color.urgent
               enabled: root.entries.length > 0
               onClicked: root.clearAll()
+            }
+            NotificationAction {
+              id: moreButton
+              objectName: "notificationMore"
+              iconName: "more"
+              tooltipText: root.tr("More options")
+              foreground: Qt.alpha(root.foreground, 0.65)
+              onClicked: moreMenu.visible ? moreMenu.close() : moreMenu.open()
+            }
+          }
+
+          Controls.Menu {
+            id: moreMenu
+            objectName: "notificationOverflowMenu"
+            x: Math.max(0, header.width - width - Style.space(12))
+            y: header.height - Style.space(6)
+            width: Math.min(Style.space(248), header.width - Style.space(24))
+            padding: Style.space(5)
+            closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
+            onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) moreButton.forceActiveFocus() })
+            background: BorderSurface { color: Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: Style.cornerRadius * 2 }
+            Controls.MenuItem {
+              id: muteItem
+              objectName: "notificationMute"
+              text: root.dnd ? root.tr("Allow notifications") : root.tr("Silence notifications")
+              enabled: !!root.store && !root.store.dndBusy
+              implicitHeight: Style.space(42)
+              contentItem: RowLayout {
+                spacing: Style.space(10)
+                NotificationAction { iconName: root.dnd ? "bellOff" : "bell"; size: Style.space(24); foreground: root.dnd ? Color.accent : root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
+                Text { text: muteItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: Style.font.caption; color: root.foreground; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+              }
+              background: Rectangle { color: muteItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: Style.cornerRadius * 2 }
+              onTriggered: root.toggleDnd()
+            }
+            Controls.MenuItem {
+              id: settingsItem
+              objectName: "notificationSettings"
+              text: root.tr("Settings")
+              implicitHeight: Style.space(42)
+              contentItem: RowLayout {
+                spacing: Style.space(10)
+                NotificationAction { iconName: "settings"; size: Style.space(24); foreground: root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
+                Text { text: settingsItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: Style.font.caption; color: root.foreground; Layout.fillWidth: true }
+              }
+              background: Rectangle { color: settingsItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: Style.cornerRadius * 2 }
+              onTriggered: root.openSettings()
             }
           }
 
@@ -638,7 +809,7 @@ Panel {
           width: parent.width - Style.space(28)
           textFormat: Text.PlainText
           text: root.store ? root.tr(root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : ""
-          visible: text !== ""
+          visible: !root.editingSettings && text !== ""
           color: Color.urgent
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
@@ -651,7 +822,7 @@ Panel {
           id: listLoader
           width: parent.width
           active: true
-          visible: root.rows.length > 0 || (item && item.contentHeight > 0)
+          visible: !root.editingSettings && (root.rows.length > 0 || (item && item.contentHeight > 0))
           // Keep the lightweight list; detach its model to release delegates after fade-out.
           sourceComponent: Component {
             NotificationList {
@@ -763,7 +934,7 @@ Panel {
           textFormat: Text.PlainText
           x: Style.space(14)
           width: parent.width - Style.space(28)
-          visible: root.rows.length === 0 && (!list || list.contentHeight <= 0)
+          visible: !root.editingSettings && root.rows.length === 0 && (!list || list.contentHeight <= 0)
           horizontalAlignment: Text.AlignHCenter
           topPadding: Style.space(22)
           bottomPadding: Style.space(22)
@@ -775,6 +946,25 @@ Panel {
           font.pixelSize: Style.font.caption
           color: root.foreground
           opacity: 0.55
+        }
+
+        SettingsPane {
+          id: settingsPane
+          objectName: "notificationSettingsPane"
+          width: parent.width
+          height: Math.min(implicitHeight, Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - Style.space(10)))
+          visible: root.editingSettings
+          settings: root.settings
+          popupSettings: root.popupSettings
+          popupInstalled: root.popupPluginInstalled
+          popupAvailable: root.popupPluginInstalled && root.popupSettingsAvailable
+          loading: root.popupSettingsLoading
+          saving: root.preferenceActive !== null
+          error: root.settingsError
+          language: root.language
+          onSave: function(scope, key, value) { root.savePreference(scope, key, value) }
+          onBack: root.closeSettings()
+          onClearError: root.settingsError = ""
         }
 
       }

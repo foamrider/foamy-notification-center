@@ -28,7 +28,29 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
   including the visible card in a collapsed stack.
 - Hover to dismiss a stack or individual notification. The trash clears the panel.
 - Click search or press `/` to filter. Press Escape to close search.
-- Click the silence button, or right-click the bar icon, to toggle do not disturb.
+- Open **More options (⋯)** to silence/allow notifications or open **Settings**.
+  Right-clicking the bar icon also toggles do not disturb.
+- Clear all stays next to search. Stack dismissal uses the X icon,
+  shown on hover or keyboard selection.
+
+Settings use the same controls as Foamy Bolt and Audio. The **Notification
+Center** section changes this widget's browser grouping, favicons, compact view,
+pictures, retention (days), and maximum archive count. **Foamy Notifications**
+changes the enabled popup service's duplicate grouping, favicons, compact view,
+pictures, and normal duration (seconds). Hostname/browser stacks belong only to
+the center; popups group exact duplicates with matching actions.
+
+Changes save immediately to each plugin's own `shell.json` entry. Popup settings
+are hidden when Foamy Notifications is unavailable. Its section instead shows
+a muted "Plugin not installed" or "Plugin not enabled" message, using the host's
+installed-plugin registry when available. Opening this panel does not enable it.
+Invalid values and save/read failures are shown in the panel.
+The popup settings helper validates values, preserves unrelated configuration
+and configuration symlinks (including Stow), serializes its own edits, and refuses
+to overwrite a concurrent file change detected before replacement. It does not
+change notification history or the enabled plugin list. The center uses Omarchy's
+existing widget settings IPC. Back or Escape returns from Settings; dropdowns
+and numeric editors consume Escape first to cancel their edit.
 
 Set `language` on the widget entry in `shell.json`: `system` (default), `en`,
 or `nb`. Other system languages fall back to English.
@@ -158,8 +180,10 @@ Stock compatibility can be checked without touching personal history:
 node --test tests/*.test.js
 python3 -m unittest discover -s tests -p '*_test.py' -v
 python3 tests/browser-ui.py
+python3 tests/settings-ui.py
 python3 tests/stock-runtime.py
 python3 tests/stock-runtime.py --custom
 ```
 
 These checks use a private D-Bus session and temporary home directory.
+The settings panel check requires a running Wayland session.

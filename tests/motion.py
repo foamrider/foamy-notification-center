@@ -7,7 +7,7 @@ base=Path(tempfile.mkdtemp(prefix='foamy-center-motion-'));app=base/'app';app.mk
 (app/'Ui').symlink_to('/usr/share/omarchy/shell/Ui',target_is_directory=True)
 (app/'components').symlink_to(source/'components',target_is_directory=True)
 for name in ['Model.js','Translations.js']:(app/name).symlink_to(source/name)
-s=(source/'Panel.qml').read_text();a=s.index('          delegate: Item {');b=s.index('\n        }\n\n        // --------------------------------------------------------- empty',a)
+s=(source/'Panel.qml').read_text();a=s.index('          delegate: Item {');b=s.index('\n            }\n          }\n        }\n\n        // --------------------------------------------------------- empty',a)
 delegate=s[a:b]
 (app/'shell.qml').write_text('''import QtQuick
 import QtTest
@@ -24,6 +24,7 @@ ShellRoot {
  property color foreground:Color.popups.text
  property string fontFamily:Style.font.family
  property bool keyboardNavigation:false
+ property bool popupContentActive:true
  property int cursorIndex:-1
  property bool cursorDismiss:false
  property bool showBody:true

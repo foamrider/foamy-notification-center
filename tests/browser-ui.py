@@ -111,7 +111,11 @@ MODEL_CHECK
 '''.replace('WIDGET', widget).replace('MODEL_IMPORT', model_import).replace('MODEL_PROPERTIES', model_properties).replace('IDENTITY_ENTRY', identity_entry).replace('MODEL_CHECK', model_check))
 runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)
-env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / '.config'), XDG_CACHE_HOME=str(home / '.cache'), XDG_STATE_HOME=str(home / '.local/state'), XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen', QT_QUICK_BACKEND='software', QT_QPA_PLATFORMTHEME='basic', QT_STYLE_OVERRIDE='Fusion')
+# A temporary HOME must not invoke Python through a user's runtime-manager shim.
+cli = base / 'bin'
+cli.mkdir()
+(cli / 'python3').symlink_to(sys.executable)
+env = dict(os.environ, HOME=str(home), PATH=str(cli) + ':' + os.environ['PATH'], XDG_CONFIG_HOME=str(home / '.config'), XDG_CACHE_HOME=str(home / '.cache'), XDG_STATE_HOME=str(home / '.local/state'), XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen', QT_QUICK_BACKEND='software', QT_QPA_PLATFORMTHEME='basic', QT_STYLE_OVERRIDE='Fusion')
 for key in ['DISPLAY', 'WAYLAND_DISPLAY', 'HYPRLAND_INSTANCE_SIGNATURE']:
     env.pop(key, None)
 process = subprocess.Popen(['dbus-run-session', '--', 'quickshell', '-p', str(app), '--no-color'], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
