@@ -45,6 +45,7 @@ Item {
     try {
       var parsed = JSON.parse(output)
       if (typeof parsed.source === "string" && parsed.source.indexOf("file://") === 0) result = parsed.source
+      if (parsed.status === "cache-unavailable") console.warn("Favicon lookup: local cache unavailable; using the app icon")
     } catch (e) { console.warn("Invalid favicon lookup response; using the app icon") }
     var next = Object.assign({}, icons)
     // Limit both successful and failed lookups; misses are retried after five minutes.

@@ -63,6 +63,14 @@ limited to 256 icons of at most 64 KiB and 256 × 256 pixels. Successful lookups
 refresh after one day; missing icons can retry after five minutes on a display
 model change. Lookups cover only the first 128 groups in the display.
 
+Browser databases are opened read-only. If a rollback database is locked, the
+helper can read an in-memory copy of at most 32 MiB. It rejects active
+journals, WAL sidecars, changed files and copies that fail SQLite's integrity
+check. Copying and querying share a two-second deadline. No database copies are
+written to disk; the helper never writes to the browser database or removes its
+locks. A cache that cannot be read safely keeps the app icon and reports
+`cache-unavailable`.
+
 Set `compact` on the widget entry in `shell.json` to `true` for a slim app
 header and tighter message spacing. The default, `false`, keeps the roomier
 cards. Text and picture sizes stay unchanged. This setting is independent of

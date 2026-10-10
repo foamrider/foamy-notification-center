@@ -32,6 +32,12 @@ with closing(sqlite3.connect(database)) as db:
     db.execute('INSERT INTO favicon_bitmaps VALUES (1, ?, 32, 32, 100)', (png(),))
     db.commit()
 
+# Keep the browser's exclusive cache lock throughout the actual QML/helper flow.
+browser = sqlite3.connect(database)
+browser.execute('PRAGMA locking_mode=EXCLUSIVE')
+browser.execute('BEGIN EXCLUSIVE')
+browser.commit()
+
 widget = '''NotificationStackHeader {
       id: card; x: 20; y: 20; width: 420
       compact: false
@@ -114,6 +120,8 @@ try:
 except subprocess.TimeoutExpired:
     os.killpg(process.pid, signal.SIGTERM)
     output = process.communicate(timeout=3)[0]
+finally:
+    browser.close()
 print(output)
 print('Browser captures:', app)
 assert process.returncode == 0 and 'BROWSER_UI 3 passed 0 failed' in output
