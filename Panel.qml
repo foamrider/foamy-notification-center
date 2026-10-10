@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls as Controls
@@ -32,6 +33,14 @@ import "components"
 // editors and patches that mangle private-use codepoints.
 Panel {
   id: root
+
+  function open() {
+    preparePopup()
+    // Build and lay out the list before mapping so the first frame has its final height.
+    if (rowsDirty) rebuild(true)
+    if (list) list.forceLayout()
+    controller.show()
+  }
 
   moduleName: "foamy.notification-center"
   ipcTarget: "foamy.notification-center"
@@ -119,14 +128,14 @@ Panel {
 
   function startSearch() {
     searching = true
-    Qt.callLater(function() { if (root.searching) search.forceActiveFocus() })
+    Qt.callLater(function() { if (root.opened && root.searching && search) search.forceActiveFocus() })
   }
 
   function endSearch() {
     searching = false
     filter = ""
-    search.text = ""
-    Qt.callLater(function() { if (root.opened) keyCatcher.forceActiveFocus() })
+    if (search) search.text = ""
+    Qt.callLater(function() { if (root.opened && keyCatcher) keyCatcher.forceActiveFocus() })
   }
 
   Connections {
@@ -146,20 +155,30 @@ Panel {
     if (!entry || !entry.key) return
     if (root.opened && store) store.markSeen()
     rebuild()
-    if (root.opened && list.atYBeginning) Qt.callLater(function() {
-      if (root.opened) list.positionViewAtBeginning()
+    if (root.opened && list && list.atYBeginning) Qt.callLater(function() {
+      if (root.opened && list) list.positionViewAtBeginning()
     })
   }
 
   // ----------------------------------------------------------------- the list
 
+  readonly property NotificationList list: listLoader.item
+  readonly property real listAvailableHeight: {
+    var chrome = header.height + (removalError.visible ? removalError.implicitHeight : 0)
+      + content.spacing * (1 + Number(removalError.visible)) + Style.space(10)
+    return Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - chrome)
+  }
+  property bool rowsDirty: true
   property var rows: []
   property var expandedGroups: ({})
   property int cursorIndex: -1
   property bool cursorDismiss: false
   property bool keyboardNavigation: false
 
-  function rebuild() {
+  function rebuild(forOpening) {
+    // The archive and unread count stay live; display groups are needed only while open.
+    if (!root.opened && forOpening !== true) { rowsDirty = true; return }
+    rowsDirty = false
     var focused = cursorIndex >= 0 && cursorIndex < rows.length ? rows[cursorIndex].id : ""
     var next = Model.stackRows(entries, expandedGroups, filter)
     var index = next.findIndex(function(row) { return row.id === focused })
@@ -226,7 +245,7 @@ Panel {
     if (!opened) {
       searching = false
       filter = ""
-      search.text = ""
+      if (search) search.text = ""
       return
     }
     now = Date.now()
@@ -236,6 +255,7 @@ Panel {
     if (store) store.load()
     readMark = lastSeen
     if (store) store.markSeen()
+    if (rowsDirty) rebuild()
   }
 
   // --------------------------------------------------------------------- bar
@@ -342,6 +362,32 @@ Panel {
 
   // ------------------------------------------------------------------- panel
 
+  // Keep the controller alive; release only the view after close animations finish.
+  property bool popupContentActive: false
+  function preparePopup() {
+    popupUnload.stop()
+    popupContentActive = true
+  }
+  Connections {
+    target: root
+    function onOpenedChanged() {
+      if (root.opened) root.preparePopup()
+      else popupUnload.restart()
+    }
+  }
+  Timer {
+    id: popupUnload
+    interval: 1000
+    onTriggered: {
+      if (!root.opened && !popup.visible) {
+        root.popupContentActive = false
+        root.rows = []
+        root.expandedGroups = ({})
+        root.cursorIndex = -1
+        root.rowsDirty = true
+      }
+    }
+  }
   NotificationPopup {
     id: popup
     // Anchored to a point past the right edge of the screen rather than to the
@@ -385,7 +431,6 @@ Panel {
         return Math.max(120, screenH - (Number(root.bar.barSize) + gap + margin))
       return availableCardHeight
     }
-
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
@@ -591,101 +636,111 @@ Panel {
 
         // ---------------------------------------------------------- list
 
-        NotificationList {
-          id: list
+        Loader {
+          id: listLoader
           width: parent.width
-          wheelStep: Style.space(96)
-          scrollbarWidth: Style.space(6)
-          scrollbarInset: Style.space(2)
-          // The flattened model keeps expanded stacks within the same virtualized list.
-          readonly property int cap: {
-            var chrome = header.height + (removalError.visible ? removalError.implicitHeight : 0)
-                       + content.spacing * (1 + Number(removalError.visible))
-                       + Style.space(10)
-            var available = Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - chrome)
-            return root.listHeight > 0 ? Math.min(Style.space(root.listHeight), available) : available
-          }
+          active: true
+          visible: root.rows.length > 0 || (item && item.contentHeight > 0)
+          // Keep the lightweight list; detach its model to release delegates after fade-out.
+          sourceComponent: Component {
+            NotificationList {
+              id: list
+              width: parent.width
+              // Construct only visible rows when restoring the detached model.
+              cacheBuffer: 0
+              wheelStep: Style.space(96)
+              scrollbarWidth: Style.space(6)
+              scrollbarInset: Style.space(2)
+              // The flattened model keeps expanded stacks within the same virtualized list.
+              readonly property int cap: root.listHeight > 0
+                ? Math.min(Style.space(root.listHeight), root.listAvailableHeight) : root.listAvailableHeight
 
-          height: Math.min(contentHeight, cap)
-          visible: root.rows.length > 0 || contentHeight > 0
-          rows: root.rows
-          entranceDistance: Style.space(8)
-          spacing: 0
+              implicitHeight: Math.min(Math.max(contentHeight, root.rows.length > 0 ? Style.space(100) : 0), cap)
+              visible: root.rows.length > 0 || contentHeight > 0
+              rows: root.rows
+              contentActive: root.popupContentActive
+              animateChanges: root.opened
+              entranceDistance: Style.space(8)
+              spacing: 0
 
-          delegate: Item {
-            id: delegateRoot
-            required property string rowId
-            // Qt can deliver removal after the source map has already advanced.
-            property var retainedData: null
-            property var modelData: list.rowsById[rowId] || retainedData
-            onModelDataChanged: if (modelData) retainedData = modelData
-            required property int index
-            property real entranceOffset: 0
-            property bool retired: false
-            enabled: !retired
-            transform: Translate { y: delegateRoot.entranceOffset }
-            ListView.delayRemove: exitMotion.running
-            ListView.onRemove: {
-              // Freeze departing content until Qt finishes its removal transition.
-              modelData = modelData
-              retired = true
-              exitMotion.start()
-            }
-            SequentialAnimation {
-              id: exitMotion
-              NumberAnimation { target: delegateRoot; property: "opacity"; to: 0; duration: 120; easing.type: Easing.OutCubic }
-              // Let ListView lay out the shrinking space, including its scroll extent.
-              NumberAnimation { target: delegateRoot; property: "height"; to: 0; duration: 140; easing.type: Easing.OutCubic }
-            }
-            width: list.width
-            height: rowLoader.implicitHeight
+              delegate: Item {
+                id: delegateRoot
+                required property string rowId
+                // Qt can deliver removal after the source map has already advanced.
+                property var retainedData: null
+                property var modelData: list.rowsById[rowId] || retainedData
+                onModelDataChanged: if (modelData) retainedData = modelData
+                required property int index
+                property real entranceOffset: 0
+                property bool retired: false
+                enabled: !retired
+                transform: Translate { y: delegateRoot.entranceOffset }
+                ListView.delayRemove: root.popupContentActive && exitMotion.running
+                ListView.onRemove: {
+                  // An invisible window does not advance row exit animations.
+                  if (!root.popupContentActive) return
+                  // Freeze departing content until Qt finishes its removal transition.
+                  modelData = modelData
+                  retired = true
+                  exitMotion.start()
+                }
+                SequentialAnimation {
+                  id: exitMotion
+                  NumberAnimation { target: delegateRoot; property: "opacity"; to: 0; duration: 120; easing.type: Easing.OutCubic }
+                  // Let ListView lay out the shrinking space, including its scroll extent.
+                  NumberAnimation { target: delegateRoot; property: "height"; to: 0; duration: 140; easing.type: Easing.OutCubic }
+                }
+                width: list.width
+                height: rowLoader.implicitHeight
 
-            Loader {
-              id: rowLoader
-              // ListView positions delegates; inset their content instead of the delegate itself.
-              x: Style.space(14)
-              width: parent.width - Style.space(28)
-              sourceComponent: delegateRoot.modelData.kind === "header" ? headerDelegate : messageDelegate
-            }
-            Component {
-              id: headerDelegate
-              NotificationStackHeader {
-                compact: root.compact
-                group: delegateRoot.modelData.group
-                expanded: delegateRoot.modelData.expanded
-                language: root.language
-                now: root.now
-                readMark: root.readMark
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
-                dismissHasCursor: hasCursor && root.cursorDismiss
-                onPointerUsed: root.keyboardNavigation = false
-                onToggleRequested: root.toggleGroup(group.key)
-                onRemoveRequested: root.removeGroup(group)
-              }
-            }
-            Component {
-              id: messageDelegate
-              NotificationRow {
-                compact: root.compact
-                entry: delegateRoot.modelData.entry
-                first: delegateRoot.modelData.first
-                last: delegateRoot.modelData.last
-                layered: delegateRoot.modelData.layered
-                expanded: delegateRoot.modelData.expanded
-                groupCritical: delegateRoot.modelData.group.critical
-                language: root.language
-                now: root.now
-                showBody: root.showBody
-                showPreview: root.showPreview
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
-                dismissHasCursor: hasCursor && root.cursorDismiss
-                onPointerUsed: root.keyboardNavigation = false
-                onClicked: root.activate(entry)
-                onRemoveRequested: root.remove(entry.key)
+                Loader {
+                  id: rowLoader
+                  // ListView positions delegates; inset their content instead of the delegate itself.
+                  x: Style.space(14)
+                  width: parent.width - Style.space(28)
+                  sourceComponent: delegateRoot.modelData.kind === "header" ? headerDelegate : messageDelegate
+                }
+                Component {
+                  id: headerDelegate
+                  NotificationStackHeader {
+                    compact: root.compact
+                    group: delegateRoot.modelData.group
+                    expanded: delegateRoot.modelData.expanded
+                    language: root.language
+                    now: root.now
+                    readMark: root.readMark
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
+                    dismissHasCursor: hasCursor && root.cursorDismiss
+                    onPointerUsed: root.keyboardNavigation = false
+                    onToggleRequested: root.toggleGroup(group.key)
+                    onRemoveRequested: root.removeGroup(group)
+                  }
+                }
+                Component {
+                  id: messageDelegate
+                  NotificationRow {
+                    compact: root.compact
+                    entry: delegateRoot.modelData.entry
+                    first: delegateRoot.modelData.first
+                    last: delegateRoot.modelData.last
+                    layered: delegateRoot.modelData.layered
+                    expanded: delegateRoot.modelData.expanded
+                    groupCritical: delegateRoot.modelData.group.critical
+                    language: root.language
+                    now: root.now
+                    showBody: root.showBody
+                    showPreview: root.showPreview
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
+                    dismissHasCursor: hasCursor && root.cursorDismiss
+                    onPointerUsed: root.keyboardNavigation = false
+                    onClicked: root.activate(entry)
+                    onRemoveRequested: root.remove(entry.key)
+                  }
+                }
               }
             }
           }
@@ -697,7 +752,7 @@ Panel {
           textFormat: Text.PlainText
           x: Style.space(14)
           width: parent.width - Style.space(28)
-          visible: root.rows.length === 0 && list.contentHeight <= 0
+          visible: root.rows.length === 0 && (!list || list.contentHeight <= 0)
           horizontalAlignment: Text.AlignHCenter
           topPadding: Style.space(22)
           bottomPadding: Style.space(22)
@@ -714,4 +769,5 @@ Panel {
       }
     }
   }
+
 }
