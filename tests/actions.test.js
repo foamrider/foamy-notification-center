@@ -165,7 +165,7 @@ test('Center delegates default action and browser focus without replaying archiv
 const serviceSource = fs.readFileSync(path.join(__dirname, "../Service.qml"), "utf8")
 function focusService() {
  const state=vm.createContext({focusProc:{running:false},focusEntry:null,focusError:"",invokingDefault:false,
-  omarchyPath:"/omarchy",removed:[],completed:0,console,
+  Qt:{resolvedUrl(){return "file:///plugin/bin/focus-notification-app"}},omarchyPath:"/omarchy",removed:[],completed:0,console,
   remove(key){state.removed.push(key)},focusCompleted(){state.completed++}})
  state.root=state
  for(const name of ["focusNotification","focusSendingApp","finishFocus"]) {
@@ -179,7 +179,7 @@ test("live actions skip focus; missing, stock and older daemons use stock focus"
   const state=focusService();state.focusNotification({key:"100-1",app:"Vivaldi"})
   assert.deepEqual(Array.from(state.focusProc.command),["omarchy-shell","foamy.notifications","invokeDefault","100-1"])
   state.focusProc.running=false;state.finishFocus(0,0,output)
-  assert.deepEqual(Array.from(state.focusProc.command),["/omarchy/bin/omarchy-hyprland-focus-app","Vivaldi"])
+  assert.deepEqual(Array.from(state.focusProc.command),["bash","/plugin/bin/focus-notification-app","/omarchy","Vivaldi"])
   assert.equal(state.removed.length,0)
   state.focusProc.running=false;state.finishFocus(0,0,"")
   assert.deepEqual(Array.from(state.removed),["100-1"]);assert.equal(state.completed,1)
@@ -201,5 +201,28 @@ test("invalid app identity cannot become a stock focus regex",()=>{
  const state=focusService();state.focusNotification({key:"100-1",app:".*"},false)
  assert.equal(state.focusProc.running,false);assert.ok(state.focusError)
  state.focusNotification({key:"100-1",app:"org.example.App"},false)
- assert.equal(state.focusProc.command[1],"org\\.example\\.App")
+ assert.equal(state.focusProc.command[3],"org\\.example\\.App")
 })
+
+ test("no window silently retains history and clears stale focus feedback",()=>{
+ const state=focusService();state.focusError="old error"
+ state.focusNotification({key:"100-1",app:"Background"},false)
+ state.focusProc.running=false;state.finishFocus(3,0,"")
+ assert.equal(state.focusError,"");assert.equal(state.focusEntry,null)
+ assert.equal(state.removed.length,0);assert.equal(state.completed,0)
+ })
+ test("focus helper distinguishes absent windows from failed queries and focus",t=>{
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),"notification-focus-"))
+ t.after(()=>fs.rmSync(temp,{recursive:true,force:true}))
+ fs.mkdirSync(path.join(temp,"bin"))
+ fs.writeFileSync(path.join(temp,"hyprctl"),'#!/bin/bash\n[[ ${QUERY_FAIL:-0} == 0 ]] || exit 1\nprintf "%s" "$CLIENTS"\n',{mode:0o755})
+ fs.writeFileSync(path.join(temp,"bin/omarchy-hyprland-focus-app"),'#!/bin/bash\nexit "${FOCUS_CODE:-0}"\n',{mode:0o755})
+ const helper=path.join(__dirname,"../bin/focus-notification-app")
+ const run=(clients,extra={})=>spawnSync("bash",[helper,temp,"Background"],{env:{...process.env,PATH:temp+":"+process.env.PATH,CLIENTS:clients,...extra},encoding:"utf8"}).status
+ assert.equal(run("[]"),3)
+ assert.equal(run("bad JSON"),5)
+ assert.equal(run("[]",{QUERY_FAIL:"1"}),1)
+ const clients=JSON.stringify([{class:"Background",address:"0x1"}])
+ assert.equal(run(clients),0)
+ assert.equal(run(clients,{FOCUS_CODE:"1"}),1)
+ })

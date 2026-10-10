@@ -379,6 +379,8 @@ Panel {
   Component.onCompleted: pushSettings()
 
   onOpenedChanged: {
+    // Action feedback belongs to this panel visit, not the persistent archive.
+    if (store) store.focusError = ""
     if (!opened) {
       moreMenu.close()
       editingSettings = false

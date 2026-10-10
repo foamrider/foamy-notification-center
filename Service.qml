@@ -89,7 +89,8 @@ Item {
       return
     }
     var directory = root.omarchyPath || Quickshell.env("OMARCHY_PATH")
-    focusProc.command = [directory + "/bin/omarchy-hyprland-focus-app", focusEntry.app.replace(/\./g, "\\.")]
+    var helper = decodeURIComponent(Qt.resolvedUrl("bin/focus-notification-app").toString().replace(/^file:\/\//, ""))
+    focusProc.command = ["bash", helper, directory, focusEntry.app.replace(/\./g, "\\.")]
     focusProc.running = true
   }
 
@@ -113,7 +114,10 @@ Item {
       return
     }
     if (succeeded) { root.remove(focusEntry.key); root.focusCompleted() }
-    else {
+    else if (exitCode === 3 && exitStatus === 0) {
+      // Background senders often have no window; retain history without an error.
+      focusError = ""
+    } else {
       focusError = "Could not focus the sending app. Open the app and try again."
       console.warn("Notification focus failed:", exitCode, exitStatus)
     }

@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+
+# Reserve exit 3 for an expected missing window; preserve query and focus failures.
+clients=$(hyprctl clients -j)
+address=$(jq -er --arg pattern "$2" '
+  def matches($value): ($value // "") | test($pattern; "i");
+  if type != "array" then error("Invalid Hyprland clients") else
+    first(
+      (.[] | select(matches(.class))),
+      (.[] | select(.initialClass == "org.omarchy.agent" and matches(.initialTitle)))
+    ).address // ""
+  end' <<< "$clients")
+[[ -n $address ]] || exit 3
+exec "$1/bin/omarchy-hyprland-focus-app" "$2"
