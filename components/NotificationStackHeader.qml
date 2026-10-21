@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "../Translations.js" as Translations
 
@@ -14,7 +15,7 @@ Item {
   property double now: 0
   property string language: "en"
   property double readMark: 0
-  property color foreground: Color.foreground
+  property color foreground: Commons.Color.foreground
   property string fontFamily: Style.font.family
   signal toggleRequested()
   signal removeRequested()
@@ -36,13 +37,13 @@ Item {
     first: true
     critical: root.group.critical
     foreground: root.foreground
-    fill: Qt.tint(Color.popups.background, Util.alpha(root.foreground, 0.055))
+    fill: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, 0.055))
   }
   Rectangle {
     anchors.fill: headingMouse
     color: "transparent"
     border.width: root.hasCursor && !root.dismissHasCursor ? 1 : 0
-    border.color: Color.accent
+    border.color: Commons.Color.accent
     radius: Style.cornerRadius * 2
   }
   MouseArea {
@@ -117,7 +118,7 @@ Item {
       width: Style.space(4)
       height: width
       radius: width / 2
-      color: Color.accent
+      color: Commons.Color.accent
     }
     Text {
       textFormat: Text.PlainText

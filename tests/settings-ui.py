@@ -42,6 +42,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import "plugin" as Plugin
 ShellRoot {
   id: root
@@ -54,7 +55,7 @@ ShellRoot {
     property var installedPlugins: ({"foamy.notifications":{id:"foamy.notifications"}})
   }
   Component.onCompleted: {
-    Color.background = "#24273a"; Color.foreground = "#cad3f5"; Color.accent = "#8aadf4"
+    Commons.Color.background = "#24273a"; Commons.Color.foreground = "#cad3f5"; Commons.Color.accent = "#8aadf4"
   }
   IpcHandler {
     target: "notifications"
@@ -91,7 +92,7 @@ ShellRoot {
     anchors { top: true; left: true; right: true }
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "foamy-settings-test-bar"
-    color: Color.background
+    color: Commons.Color.background
     Item {
       id: bar
       width: parent.width
@@ -100,8 +101,8 @@ ShellRoot {
       property var pluginRegistry: registry
       property int barSize: 32
       property string fontFamily: "sans-serif"
-      property color barForeground: Color.foreground
-      property color urgent: Color.urgent
+      property color barForeground: Commons.Color.foreground
+      property color urgent: Commons.Color.urgent
       property bool vertical: false
       property bool hideLabels: false
       property bool foregroundAnimationEnabled: false
@@ -157,9 +158,15 @@ ShellRoot {
         waitForRendering(pane)
         var card = pane.parent.parent.parent.parent
         capture(card, "settings-wide-dark")
+        var silenceCritical = control("popups-dndSilenceCritical")
+        compare(silenceCritical.checked, false)
+        silenceCritical.forceActiveFocus(); keyClick(Qt.Key_Space)
+        tryVerify(function() { return panel.preferenceActive === null && panel.popupSettings.dndSilenceCritical === true })
+        compare(root.config.plugins[0].dndSilenceCritical, true)
+        compare(root.config.bar.layout.right[0].dndSilenceCritical, undefined)
         var compact = control("popups-compact")
         compact.clicked()
-        tryVerify(function() { return panel.preferenceActive === null })
+        tryVerify(function() { return panel.preferenceActive === null && panel.popupSettings.compact === false })
         compare(panel.popupSettings.compact, false)
         tryVerify(function() { return root.config.plugins[0].compact === false })
         compare(root.config.bar.layout.right[0].compact, undefined)
@@ -178,9 +185,9 @@ ShellRoot {
         tryVerify(function() { return panel.popupSettings.normalTimeoutSec === 15 })
         compare(root.config.other, "preserved")
         panel.settings = Object.assign({}, panel.settings, {panelWidth:320})
-        wait(200); compare(pane.width, 318)
+        wait(200); compare(pane.width, panel.panelWidth - 2)
         capture(card, "settings-narrow-dark")
-        Color.background = "#eff1f5"; Color.foreground = "#4c4f69"; Color.accent = "#1e66f5"
+        Commons.Color.background = "#eff1f5"; Commons.Color.foreground = "#4c4f69"; Commons.Color.accent = "#1e66f5"
         wait(200); capture(card, "settings-narrow-light")
         panel.settings = Qt.binding(function() { return root.config.bar.layout.right[0] })
         var back = control("settingsBack")
@@ -208,6 +215,7 @@ ShellRoot {
         compare(grouping.value, "hostname")
         capture(control("notificationSettingsPane").parent.parent.parent.parent, "settings-save-error")
         root.failSave = false
+        tryVerify(function() { return !panel.popupSettingsLoading && panel.preferenceActive === null })
         grouping.open(); tryCompare(grouping, "popupOpen", true); keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
         tryCompare(grouping, "popupOpen", false)
         tryCompare(panel, "browserGrouping", "none")

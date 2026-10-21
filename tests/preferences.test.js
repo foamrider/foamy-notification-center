@@ -26,3 +26,13 @@ test('X history removal is a translated popup setting with a strict boolean', ()
   assert.deepEqual(P.saveCommand('popups','closeButtonRemovesHistory',true,'/helper'), ['python3','/helper','save','closeButtonRemovesHistory','true'])
   assert.equal(T.text(P.field('popups','closeButtonRemovesHistory').label,'nb'),'X fjerner fra historikken')
 })
+
+
+test('critical DND silencing belongs to popup settings with a translated boolean control',()=>{
+ assert.equal(P.value('popups',{},'dndSilenceCritical'),false)
+ assert.equal(P.valid('popups','dndSilenceCritical',true),true)
+ assert.equal(P.valid('popups','dndSilenceCritical','true'),false)
+ assert.equal(P.valid('center','dndSilenceCritical',true),false)
+ assert.deepEqual(P.saveCommand('popups','dndSilenceCritical',true,'/helper'),['python3','/helper','save','dndSilenceCritical','true'])
+ assert.equal(T.text(P.field('popups','dndSilenceCritical').label,'nb'),'Ikke forstyrr demper også kritiske varsler')
+})

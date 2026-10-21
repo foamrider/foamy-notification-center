@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 
 // Separate list rows share one card outline while remaining independently virtualized.
 Canvas {
@@ -7,10 +8,10 @@ Canvas {
   property bool first: false
   property bool last: false
   property bool critical: false
-  property color fill: Color.popups.background
-  property color foreground: Color.foreground
+  property color fill: Commons.Color.popups.background
+  property color foreground: Commons.Color.foreground
   readonly property color outline: Util.alpha(foreground, 0.18)
-  readonly property color urgent: Color.urgent
+  readonly property color urgent: Commons.Color.urgent
   readonly property real corner: Math.min(Style.cornerRadius * 2, width / 2, height / 2)
   readonly property real leading: critical ? Style.space(3) : 1
 

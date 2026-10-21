@@ -19,6 +19,7 @@ var norwegian = {
   "Maximum notifications": "Maks antall varsler",
   "Group duplicate notifications": "Grupper like varsler",
   "X removes from history": "X fjerner fra historikken",
+  "Do Not Disturb also silences critical alerts": "Ikke forstyrr demper også kritiske varsler",
   "Normal notification duration (seconds)": "Visningstid for vanlige varsler (sekunder)",
   "Browser": "Nettleser",
   "Hostname": "Vertsnavn",

@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Ui
 import qs.Commons
+import qs.Commons as Commons
 import "../Preferences.js" as Preferences
 import "../Translations.js" as Translations
 
@@ -39,24 +40,57 @@ Column {
     active: root.field.type === "boolean"
     visible: active
     sourceComponent: Component {
-      Toggle {
+      BorderSurface {
+        id: toggle
         objectName: root.scope + "-" + root.field.key
+        property string label: root.tr(root.field.label)
+        property bool checked: root.current === true
+        signal clicked()
         width: parent.width
-        implicitHeight: Style.space(36)
+        // Settings labels must remain readable when translations wrap on narrow panels.
+        implicitHeight: Math.max(Style.space(36), toggleContent.implicitHeight + Style.space(16))
         color: "transparent"
-        borderSpec: activeFocus ? Border.flat(Color.accent, 1) : Border.none()
+        borderSpec: activeFocus ? Border.flat(Commons.Color.accent, 1) : Border.none()
         radius: Style.cornerRadius * 2
-        foreground: Color.popups.text
-        fontFamily: "sans-serif"
-        titleSize: Style.space(13)
-        label: root.tr(root.field.label)
-        checked: root.current === true
+        activeFocusOnTab: true
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
+        Keys.onSpacePressed: clicked()
         Accessible.role: Accessible.CheckBox
         Accessible.name: label
         Accessible.checkable: true
         Accessible.checked: checked
         Accessible.onToggleAction: if (enabled) root.save(!checked)
         onClicked: root.save(!checked)
+        RowLayout {
+          id: toggleContent
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          anchors.leftMargin: toggle.borderLeft + Style.spacing.rowPaddingX
+          anchors.rightMargin: toggle.borderRight + Style.spacing.rowPaddingX
+          spacing: Style.spacing.rowPaddingX
+          Text {
+            Layout.fillWidth: true
+            text: toggle.label
+            textFormat: Text.PlainText
+            wrapMode: Text.WordWrap
+            color: Commons.Color.popups.text
+            font.family: "sans-serif"
+            font.pixelSize: Style.space(13)
+            font.bold: true
+          }
+          ToggleSwitch {
+            checked: toggle.checked
+            interactive: false
+            foreground: Commons.Color.popups.text
+          }
+        }
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          onClicked: toggle.clicked()
+        }
       }
     }
   }
@@ -73,7 +107,7 @@ Column {
           text: root.tr(root.field.label)
           textFormat: Text.PlainText
           wrapMode: Text.WordWrap
-          color: Color.popups.text
+          color: Commons.Color.popups.text
           font.family: "sans-serif"
           font.pixelSize: Style.space(13)
         }
@@ -83,16 +117,16 @@ Column {
           Layout.preferredWidth: Style.space(68)
           implicitHeight: Style.space(34)
           text: String(root.current)
-          color: Color.popups.text
+          color: Commons.Color.popups.text
           font.family: "sans-serif"
           font.pixelSize: Style.space(12)
           padding: Style.space(7)
           Accessible.name: root.tr(root.field.label)
           background: Rectangle {
             radius: Style.cornerRadius * 2
-            color: Qt.alpha(Color.popups.text, 0.055)
+            color: Qt.alpha(Commons.Color.popups.text, 0.055)
             border.width: input.inputActiveFocus ? 1 : 0
-            border.color: Color.accent
+            border.color: Commons.Color.accent
           }
           translate: root.tr
           onPasteErrorChanged: if (pasteError !== "") root.pasteFailed(pasteError)

@@ -61,6 +61,20 @@ class PreferencesTest(unittest.TestCase):
                 preferences.save(self.path, "closeButtonRemovesHistory", value)
         self.assertEqual(self.source.read_bytes(), before)
 
+    def test_dnd_critical_option_preserves_other_settings_and_rejects_invalid_values(self):
+        self.assertFalse(preferences.settings(self.config, self.config["plugins"][1])["settings"]["dndSilenceCritical"])
+        for value in [True, False]:
+            result = preferences.save(self.path, "dndSilenceCritical", value)
+            expected = json.loads(json.dumps(self.config))
+            expected["plugins"][1]["dndSilenceCritical"] = value
+            self.assertEqual(json.loads(self.source.read_text()), expected)
+            self.assertEqual(result["settings"]["dndSilenceCritical"], value)
+        before = self.source.read_bytes()
+        for value in [1, "true", None]:
+            with self.assertRaises(ValueError):
+                preferences.save(self.path, "dndSilenceCritical", value)
+        self.assertEqual(self.source.read_bytes(), before)
+
     def test_invalid_values_and_unknown_keys_do_not_write(self):
         before = self.source.read_bytes()
         for key, value in [("normalTimeoutSec", 0), ("normalTimeoutSec", True), ("normalTimeoutSec", 121), ("normalTimeoutSec", 1.5), ("compact", 1), ("compact", "false"), ("browserGrouping", "hostname")]:

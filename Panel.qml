@@ -6,6 +6,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 import "." as Plugin
@@ -51,8 +52,8 @@ Panel {
 
   readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH")
 
-  readonly property color foreground: Color.popups.text
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
+  readonly property color foreground: Commons.Color.popups.text
+  readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   // ----------------------------------------------------------------- settings
@@ -421,7 +422,7 @@ Panel {
     // it. Accent instead of the inherited urgent, because unread mail is not
     // an emergency.
     active: root.badge === "Highlight" && root.unread > 0
-    activeColor: Color.accent
+    activeColor: Commons.Color.accent
     tooltipText: {
       if (root.dnd) return root.unread > 0
         ? root.tr("Silenced · %1 new", root.unread) : root.tr("Notifications silenced")
@@ -465,7 +466,7 @@ Panel {
     width: Style.space(6)
     height: width
     radius: width / 2
-    color: root.hasCriticalUnread ? root.urgent : Color.accent
+    color: root.hasCriticalUnread ? root.urgent : Commons.Color.accent
   }
 
   Rectangle {
@@ -478,7 +479,7 @@ Panel {
     width: Math.max(countText.implicitWidth + Style.space(6), Style.space(12))
     height: Style.space(12)
     radius: height / 2
-    color: Color.accent
+    color: Commons.Color.accent
 
     Text {
       textFormat: Text.PlainText
@@ -490,7 +491,7 @@ Panel {
       font.family: root.fontFamily
       font.pixelSize: Math.max(8, Style.font.caption - Style.space(3))
       font.bold: true
-      color: Color.background
+      color: Commons.Color.background
     }
   }
 
@@ -538,7 +539,7 @@ Panel {
     open: root.opened
     focusTarget: root.editingSettings ? settingsPane : keyCatcher
     padding: 0
-    borderSpec: Border.flat(Qt.alpha(Color.popups.text, 0.15), 1)
+    borderSpec: Border.flat(Qt.alpha(Commons.Color.popups.text, 0.15), 1)
     contentWidth: popup.fittedContentWidth(Style.space(root.panelWidth))
     // fittedContentHeight() clamps against availableCardHeight, which collapses
     // to its 120px minimum under a screen-sized bar window (see
@@ -599,8 +600,8 @@ Panel {
 
           Canvas {
             anchors.fill: parent
-            property color surface: Color.popups.background
-            property color accent: Color.accent
+            property color surface: Commons.Color.popups.background
+            property color accent: Commons.Color.accent
             // Inset the header curve so it meets the inside of the popup border.
             readonly property real cornerRadius: Math.max(0, Math.min(width / 2, height, popup.cornerRadius - Border.top(popup.borderSpec)))
             onCornerRadiusChanged: requestPaint()
@@ -682,7 +683,7 @@ Panel {
               iconName: "trash"
               tooltipText: root.tr("Clear all notifications")
               foreground: Qt.alpha(root.foreground, 0.65)
-              hoverForeground: Color.urgent
+              hoverForeground: Commons.Color.urgent
               enabled: root.entries.length > 0
               onClicked: root.clearAll()
             }
@@ -705,7 +706,7 @@ Panel {
             padding: Style.space(5)
             closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
             onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) moreButton.forceActiveFocus() })
-            background: BorderSurface { color: Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: Style.cornerRadius * 2 }
+            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: Style.cornerRadius * 2 }
             Controls.MenuItem {
               id: muteItem
               objectName: "notificationMute"
@@ -714,7 +715,7 @@ Panel {
               implicitHeight: Style.space(42)
               contentItem: RowLayout {
                 spacing: Style.space(10)
-                NotificationAction { iconName: root.dnd ? "bellOff" : "bell"; size: Style.space(24); foreground: root.dnd ? Color.accent : root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
+                NotificationAction { iconName: root.dnd ? "bellOff" : "bell"; size: Style.space(24); foreground: root.dnd ? Commons.Color.accent : root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
                 Text { text: muteItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: Style.font.caption; color: root.foreground; Layout.fillWidth: true; wrapMode: Text.WordWrap }
               }
               background: Rectangle { color: muteItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: Style.cornerRadius * 2 }
@@ -745,7 +746,7 @@ Panel {
             radius: Style.cornerRadius * 2
             color: root.searching ? Qt.alpha(root.foreground, 0.055) : "transparent"
             border.width: search.inputActiveFocus ? 1 : 0
-            border.color: Color.accent
+            border.color: Commons.Color.accent
             // Clipping this rounded surface cuts off its antialiased focus outline.
             antialiasing: true
             border.pixelAligned: false
@@ -754,7 +755,7 @@ Panel {
             NotificationAction {
               iconName: "search"
               tooltipText: root.tr("Search notifications  ( / )")
-              foreground: root.searching ? Color.accent : Qt.alpha(root.foreground, 0.65)
+              foreground: root.searching ? Commons.Color.accent : Qt.alpha(root.foreground, 0.65)
               onClicked: root.startSearch()
             }
             SafeTextField {
@@ -768,7 +769,7 @@ Panel {
               placeholderText: root.tr("Search")
               color: root.foreground
               placeholderTextColor: Qt.alpha(root.foreground, 0.45)
-              selectionColor: Qt.alpha(Color.accent, 0.3)
+              selectionColor: Qt.alpha(Commons.Color.accent, 0.3)
               selectedTextColor: root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
@@ -810,7 +811,7 @@ Panel {
           textFormat: Text.PlainText
           text: search.pasteError || (root.store ? root.tr(root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
           visible: !root.editingSettings && text !== ""
-          color: Color.urgent
+          color: Commons.Color.urgent
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           wrapMode: Text.WordWrap

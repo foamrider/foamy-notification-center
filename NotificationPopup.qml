@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 // Foamy presentation hooks for the notification center; keep lifecycle fixes in
@@ -45,12 +46,12 @@ PanelWindow {
   property var owner: null
   // Private presentation hooks; retain the upstream focus and dismissal lifecycle.
   property real cornerRadius: Style.cornerRadius * 2
-  property color surfaceColor: Color.popups.background
+  property color surfaceColor: Commons.Color.popups.background
   property int margin: Style.gapsOut
   property int padding: Style.spacing.popupPadding
   property int contentWidth: Style.space(280)
   property int contentHeight: Style.space(200)
-  property var borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border, Math.max(1, Style.space(2)))
+  property var borderSpec: Border.surfaceSpec("popups", "border", Commons.Color.popups.border, Math.max(1, Style.space(2)))
   property bool centerOnBar: false
   property bool open: false
   property int gap: Style.gapsOut  // distance between bar edge and panel

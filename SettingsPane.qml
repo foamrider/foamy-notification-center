@@ -4,6 +4,7 @@ import QtQuick.Controls as Controls
 import QtQuick.Layouts
 import qs.Ui
 import qs.Commons
+import qs.Commons as Commons
 import "Preferences.js" as Preferences
 import "Translations.js" as Translations
 import "components"
@@ -18,7 +19,7 @@ Item {
   property bool loading: false
   property bool saving: false
   property string error: ""
-  readonly property color secondary: Qt.tint(Color.popups.background, Qt.alpha(Color.popups.text, 0.7))
+  readonly property color secondary: Qt.tint(Commons.Color.popups.background, Qt.alpha(Commons.Color.popups.text, 0.7))
   readonly property int padding: Style.space(20)
   implicitHeight: settingsHeader.height + settingsBody.implicitHeight
   signal save(string scope, string key, var value)
@@ -92,7 +93,7 @@ Item {
         text: root.error
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Color.urgent
+        color: Commons.Color.urgent
         font.family: "sans-serif"
         font.pixelSize: Style.space(12)
         Accessible.role: Accessible.AlertMessage
@@ -112,7 +113,7 @@ Item {
             text: root.tr(root.loading ? "Reading settings…" : root.popupInstalled ? "Plugin not enabled" : "Plugin not installed")
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
-            color: Qt.tint(Color.popups.background, Qt.alpha(Color.popups.text, 0.55))
+            color: Qt.tint(Commons.Color.popups.background, Qt.alpha(Commons.Color.popups.text, 0.55))
             font.family: "sans-serif"
             font.pixelSize: Style.space(12)
           }

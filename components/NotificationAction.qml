@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 Rectangle {
@@ -8,7 +9,7 @@ Rectangle {
   property real size: Style.space(32)
   property real iconSize: Style.space(16)
   property string tooltipText: ""
-  property color foreground: Color.popups.text
+  property color foreground: Commons.Color.popups.text
   property color hoverForeground: foreground
   property bool hasCursor: false
   property bool focusable: true
@@ -21,7 +22,7 @@ Rectangle {
   color: highlighted ? Qt.alpha(hoverForeground, 0.08) : "transparent"
   opacity: enabled ? 1 : 0.4
   border.width: activeFocus ? 1 : 0
-  border.color: Color.accent
+  border.color: Commons.Color.accent
   activeFocusOnTab: focusable
   Accessible.role: Accessible.Button
   Accessible.name: tooltipText

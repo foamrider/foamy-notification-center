@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "../Translations.js" as Translations
 
@@ -19,7 +20,7 @@ Item {
   property bool showPreview: true
   property double now: 0
   property string language: "en"
-  property color foreground: Color.foreground
+  property color foreground: Commons.Color.foreground
   property string fontFamily: Style.font.family
   signal clicked()
   signal removeRequested()
@@ -43,7 +44,7 @@ Item {
     width: parent.width - Style.space(28)
     height: Style.space(16)
     radius: Style.cornerRadius * 2
-    color: Color.popups.background
+    color: Commons.Color.popups.background
     border.width: 1
     border.color: Util.alpha(root.foreground, 0.18)
   }
@@ -54,7 +55,7 @@ Item {
     width: parent.width - Style.space(14)
     height: Style.space(13)
     radius: Style.cornerRadius * 2
-    color: Qt.tint(Color.popups.background, Util.alpha(root.foreground, 0.04))
+    color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, 0.04))
     border.width: 1
     border.color: Util.alpha(root.foreground, 0.18)
   }
@@ -68,7 +69,7 @@ Item {
       last: root.last
       critical: root.groupCritical
       foreground: root.foreground
-      fill: root.critical ? Qt.tint(Color.popups.background, Util.alpha(Color.urgent, 0.09)) : Color.popups.background
+      fill: root.critical ? Qt.tint(Commons.Color.popups.background, Util.alpha(Commons.Color.urgent, 0.09)) : Commons.Color.popups.background
     }
     Rectangle {
       visible: !root.first
@@ -82,7 +83,7 @@ Item {
       anchors.margins: Style.space(3)
       color: "transparent"
       border.width: root.hasCursor && !root.dismissHasCursor ? 1 : 0
-      border.color: Color.accent
+      border.color: Commons.Color.accent
       radius: Style.cornerRadius * 2
     }
     MouseArea {

@@ -48,6 +48,10 @@ changes the enabled popup service's duplicate grouping, favicons, compact view,
 pictures, normal duration (seconds), and **X removes from history**. That option
 is off by default; when enabled, the popup's X button removes its whole duplicate
 group from history. Right-click still hides the popup and keeps its history.
+**Do Not Disturb also silences critical alerts** is off by default. Enable it
+to send new critical alerts, including Omarchy crash alerts, directly to history
+while DND is active. Transient alerts are not stored. Normal Omarchy action
+feedback and delivery outside DND are unchanged.
 Hostname/browser stacks belong only to
 the center; popups group exact duplicates with matching actions.
 
