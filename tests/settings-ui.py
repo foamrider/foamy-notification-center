@@ -158,6 +158,8 @@ ShellRoot {
           verify(direction ? control("settingsBack").x > pane.width / 2 : control("settingsBack").x < pane.width / 2);
           capture(pane, direction ? "rtl-settings" : "ltr-settings");
           panel.closeSettings(); wait(100);
+          panel.moveCursor(direction ? -1 : 1, 0); compare(panel.cursorDismiss, true);
+          panel.moveCursor(direction ? 1 : -1, 0); compare(panel.cursorDismiss, false);
           panel.startSearch(); wait(200);
           var search = control("notificationSearch");
           verify(search.width > 100, "Search must have usable width in both directions");

@@ -226,6 +226,7 @@ node --test tests/*.test.js
 python3 -m unittest discover -s tests -p '*_test.py' -v
 python3 tests/browser-ui.py
 python3 tests/settings-ui.py
+python3 tests/rtl-rows.py
 python3 tests/stock-runtime.py
 python3 tests/stock-runtime.py --custom
 ```

@@ -361,7 +361,7 @@ Ui.Panel {
       cursorDismiss = false
     } else {
       if (cursorIndex < 0) cursorIndex = 0
-      cursorDismiss = dx > 0
+      cursorDismiss = FoamyI18n.rightToLeft ? dx < 0 : dx > 0
     }
     list.positionViewAtIndex(cursorIndex, ListView.Contain)
   }
