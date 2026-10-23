@@ -787,7 +787,7 @@ Ui.Panel {
             anchors.right: actions.left
             anchors.rightMargin: Style.space(4)
             anchors.verticalCenter: parent.verticalCenter
-            width: root.searching ? actions.x - Style.space(20) : Style.space(32)
+            width: root.searching ? Math.max(0, parent.width - actions.width - Style.space(32)) : Style.space(32)
             height: Style.space(32)
             radius: Style.cornerRadius * 2
             color: root.searching ? Qt.alpha(root.foreground, 0.055) : "transparent"
@@ -799,6 +799,7 @@ Ui.Panel {
             Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
             NotificationAction {
+              anchors.left: parent.left
               iconName: "search"
               tooltipText: root.tr("Search notifications  ( / )")
               foreground: root.searching ? Commons.Color.accent : Qt.alpha(root.foreground, 0.65)
