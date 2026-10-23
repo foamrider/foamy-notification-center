@@ -719,8 +719,10 @@ Ui.Panel {
 
           Controls.Menu {
             id: moreMenu
+            contentItem.LayoutMirroring.enabled: FoamyI18n.rightToLeft
+            contentItem.LayoutMirroring.childrenInherit: true
             objectName: "notificationOverflowMenu"
-            x: Math.max(0, header.width - width - Style.space(12))
+            x: FoamyI18n.rightToLeft ? Style.space(12) : Math.max(0, header.width - width - Style.space(12))
             y: header.height - Style.space(6)
             width: Math.min(Style.space(248), header.width - Style.space(24))
             padding: Style.space(5)
@@ -763,6 +765,8 @@ Ui.Panel {
 
           Controls.Menu {
             id: snoozeMenu
+            contentItem.LayoutMirroring.enabled: FoamyI18n.rightToLeft
+            contentItem.LayoutMirroring.childrenInherit: true
             objectName: "notificationSnoozeMenu"
             x: moreMenu.x
             y: moreMenu.y
