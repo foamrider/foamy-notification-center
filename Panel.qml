@@ -8,6 +8,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
+import qs.Ui as Ui
 
 import "." as Plugin
 import "Model.js" as Model
@@ -34,8 +35,10 @@ import "components"
 //
 // Glyphs are \u escapes rather than literal characters, so the source survives
 // editors and patches that mangle private-use codepoints.
-Panel {
+Ui.Panel {
   id: root
+  LayoutMirroring.enabled: FoamyI18n.rightToLeft
+  LayoutMirroring.childrenInherit: true
   objectName: "notificationCenterPanel"
 
   function open() {
@@ -503,7 +506,7 @@ Panel {
       anchors.centerIn: parent
       // Past ninety-nine the number has stopped being information and the
       // badge is only saying "a lot", which it can say in three characters.
-      text: root.unread > 99 ? "99+" : String(root.unread)
+      text: root.unread > 99 ? FoamyI18n.number(99) + "+" : FoamyI18n.number(root.unread)
       font.family: root.fontFamily
       font.pixelSize: Math.max(8, Style.font.caption - Style.space(3))
       font.bold: true
@@ -656,7 +659,8 @@ Panel {
             id: title
             anchors.left: parent.left
             anchors.leftMargin: Style.space(16)
-            width: Math.max(0, searchControl.x - x - Style.space(8))
+            anchors.right: searchControl.left
+            anchors.rightMargin: Style.space(8)
             opacity: root.searching ? 0 : 1
             visible: opacity > 0
             Behavior on opacity { NumberAnimation { duration: 100 } }

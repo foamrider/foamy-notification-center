@@ -46,6 +46,14 @@ import qs.Commons as Commons
 import "plugin" as Plugin
 ShellRoot {
   id: root
+  QtObject {
+    id: translator
+    property string language: "en"
+    property string formatLocale: "en-US"
+    property bool rightToLeft: false
+    function t(key, fallback) { return fallback }
+    function number(value) { return String(value) }
+  }
   property var config: ({})
   property bool failSave: false
   property bool finished: false
@@ -139,6 +147,20 @@ ShellRoot {
       }
       function init() { panel.open(); tryCompare(panel, "opened", true); wait(200) }
       function cleanup() { panel.close(); wait(200) }
+      function test_00_direction() {
+        Plugin.FoamyI18n.backend = translator;
+        for (var direction = 0; direction < 2; direction++) {
+          translator.rightToLeft = !!direction;
+          translator.language = direction ? "ar" : "en";
+          panel.openSettings(); wait(150);
+          var pane = control("notificationSettingsPane");
+          compare(pane.LayoutMirroring.enabled, !!direction);
+          verify(direction ? control("settingsBack").x > pane.width / 2 : control("settingsBack").x < pane.width / 2);
+          capture(pane, direction ? "rtl-settings" : "ltr-settings");
+          panel.closeSettings(); wait(100);
+        }
+        Plugin.FoamyI18n.backend = null;
+      }
       function test_00_snooze_menu() {
         control("notificationMore").clicked()
         var menu=control("notificationSnoozeMenu")
@@ -265,7 +287,7 @@ ShellRoot {
         verify(!panel.popupSettingsAvailable)
         var pane = control("notificationSettingsPane"), scroll = control("settingsScroll")
         compare(findChild(pane, "popups-compact"), null)
-        compare(control("popups-availability").text, "Utvidelsen er ikke aktivert")
+        compare(control("popups-availability").text, "Plugin not enabled")
         wait(200)
         capture(pane.parent.parent.parent.parent, "settings-disabled")
         pane.height = 320
@@ -288,7 +310,7 @@ ShellRoot {
         var pane = control("notificationSettingsPane")
         pane.height = pane.implicitHeight
         compare(findChild(pane, "popups-compact"), null)
-        compare(control("popups-availability").text, "Utvidelsen er ikke installert")
+        compare(control("popups-availability").text, "Plugin not installed")
         verify(control("center-maxItems").enabled)
         wait(200); capture(pane.parent.parent.parent.parent, "settings-uninstalled")
         delete next.plugins
@@ -297,7 +319,7 @@ ShellRoot {
         tryCompare(panel, "popupSettingsLoading", false)
         verify(!panel.popupSettingsAvailable)
         compare(panel.settingsError, "")
-        compare(control("popups-availability").text, "Utvidelsen er ikke installert")
+        compare(control("popups-availability").text, "Plugin not installed")
       }
       function test_06_clipboard_parent_keys_and_feedback() {
         panel.startSearch()
@@ -367,4 +389,4 @@ except subprocess.TimeoutExpired:
     output = process.communicate(timeout=3)[0]
 print(output)
 print("Settings captures:", app)
-assert process.returncode == 0 and "SETTINGS_UI 8 passed 0 failed" in output
+assert process.returncode == 0 and "SETTINGS_UI 9 passed 0 failed" in output

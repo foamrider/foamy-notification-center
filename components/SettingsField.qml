@@ -1,5 +1,5 @@
-import ".." as PluginLanguage
 pragma ComponentBehavior: Bound
+import ".." as PluginLanguage
 import QtQuick
 import QtQuick.Layouts
 import qs.Ui

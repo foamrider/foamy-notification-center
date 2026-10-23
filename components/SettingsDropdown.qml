@@ -77,6 +77,8 @@ Item {
 
     Text {
       textFormat: Text.PlainText
+      width: parent.width
+      horizontalAlignment: Text.AlignLeft
       visible: root.showLabel && root.label !== ""
       text: root.label
       color: Qt.darker(root.foreground, 1.4)

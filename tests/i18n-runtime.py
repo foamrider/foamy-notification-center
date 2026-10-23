@@ -46,9 +46,10 @@ ShellRoot {
       if (translator.t("English only") !== "English only" || translator.t("Unknown label") !== "Unknown label") { Qt.exit(2); return }
       if (translator.t("Name %1 {name}", ["$& %2"]) !== "Name $& %2 {name}") { Qt.exit(3); return }
       if (translator.t("Name {name}", {name: "$& {name}"}) !== "Name $& {name}") { Qt.exit(4); return }
-      if (step === 0) choice.setText("da")
+      if (translator.rightToLeft !== (NATIVE && step === 1)) { Qt.exit(5); return }
+      if (step === 0) choice.setText("ar")
       else if (step === 1) choice.setText("en")
-      else { console.log("I18N_RUNTIME_PASS", NATIVE ? "4.5 live no/da/en" : "4.0 English fallback"); Qt.quit() }
+      else { console.log("I18N_RUNTIME_PASS", NATIVE ? "4.5 live no/ar/en" : "4.0 English fallback"); Qt.quit() }
       step++
     }
   }
@@ -65,4 +66,4 @@ ShellRoot {
     output = result.stdout + result.stderr
     if result.returncode or 'I18N_RUNTIME_PASS' not in output or any(e in output for e in ['ReferenceError', 'TypeError', 'Unable to assign']):
         raise AssertionError(output)
-    print(source.name, '4.5 live no/da/en' if native else '4.0 English fallback', 'passed')
+    print(source.name, '4.5 live no/ar/en' if native else '4.0 English fallback', 'passed')

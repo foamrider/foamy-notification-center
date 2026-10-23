@@ -14,3 +14,6 @@ assert.equal(I.text('Unknown %1 {name}', 'no', ['$& %2']), '$& %2 {name}'.replac
 assert.equal(I.text('constructor', 'no'), 'constructor');
 const ui = fs.readFileSync(path.join(__dirname, '../FoamyI18n.qml'), 'utf8');
 assert.ok(ui.includes('Qt.createQmlObject'), '4.0 must not statically require a 4.5 QML type');
+
+assert.equal(I.text('Count %1', 'ar', 1234), 'Count ' + new Intl.NumberFormat('ar').format(1234));
+assert.equal(I.text('Name %1', 'ar', '1234 $& %2'), 'Name 1234 $& %2');

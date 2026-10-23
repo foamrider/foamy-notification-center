@@ -11,7 +11,7 @@ const en = require('../i18n/en.json');
 const no = require('../i18n/no.json');
 function text(key, language, values) {
   const catalog = language === 'no' || language === 'nb' ? no : en;
-  scope.backend = {t(label, fallback) { return Object.hasOwn(catalog, label) ? catalog[label] : fallback; }};
+  scope.backend = {number(value) { return new Intl.NumberFormat(language === "nb" ? "no" : language).format(value); }, t(label, fallback) { return Object.hasOwn(catalog, label) ? catalog[label] : fallback; }};
   return scope.t(key, values);
 }
 module.exports = {text, no, en, norwegian: no, nb: no};
