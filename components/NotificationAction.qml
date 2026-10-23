@@ -1,3 +1,4 @@
+import ".." as PluginLanguage
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -32,6 +33,7 @@ Rectangle {
   Keys.onSpacePressed: if (enabled) clicked()
 
   Image {
+    mirror: root.iconName === "back" && PluginLanguage.FoamyI18n.rightToLeft
     anchors.centerIn: parent
     width: root.iconSize
     height: width

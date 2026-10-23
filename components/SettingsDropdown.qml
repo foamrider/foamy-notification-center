@@ -1,3 +1,4 @@
+import ".." as PluginLanguage
 // Adapted from Omarchy Quattro Ui/Dropdown.qml; see LICENSE-OMARCHY.
 import QtQuick
 import QtQuick.Controls
@@ -77,6 +78,8 @@ Item {
 
     Text {
       textFormat: Text.PlainText
+      width: parent.width
+      horizontalAlignment: Text.AlignLeft
       visible: root.showLabel && root.label !== ""
       text: root.label
       color: Qt.darker(root.foreground, 1.4)
@@ -176,6 +179,8 @@ Item {
 
         contentItem: ListView {
           id: optionList
+          LayoutMirroring.enabled: PluginLanguage.FoamyI18n.rightToLeft
+          LayoutMirroring.childrenInherit: true
           spacing: Style.spacing.labelGap
 
           Keys.priority: Keys.BeforeItem
@@ -221,6 +226,7 @@ Item {
               : "transparent"
 
             Text {
+              horizontalAlignment: Text.AlignLeft
               textFormat: Text.PlainText
               anchors.left: parent.left
               anchors.right: parent.right

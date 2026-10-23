@@ -6,11 +6,12 @@ import qs.Ui
 import qs.Commons
 import qs.Commons as Commons
 import "Preferences.js" as Preferences
-import "Translations.js" as Translations
 import "components"
 
 Item {
   id: root
+  LayoutMirroring.enabled: FoamyI18n.rightToLeft
+  LayoutMirroring.childrenInherit: true
   required property var settings
   required property var popupSettings
   required property string language
@@ -26,7 +27,7 @@ Item {
   signal back()
   signal clearError()
   signal pasteFailed(string message)
-  function tr(label) { return Translations.text(label, language) }
+  function tr(label) { return FoamyI18n.t(label) }
   function focusBack() { backButton.forceActiveFocus() }
   function resetScroll() { settingsScroll.contentY = 0 }
   Keys.onEscapePressed: root.back()
@@ -62,7 +63,7 @@ Item {
         tooltipText: root.tr("Back")
         onClicked: root.back()
       }
-      Text { text: root.tr("Settings"); color: root.secondary; font.family: "sans-serif"; font.pixelSize: Style.space(13); Layout.fillWidth: true }
+      Text { horizontalAlignment: Text.AlignLeft; text: root.tr("Settings"); color: root.secondary; font.family: "sans-serif"; font.pixelSize: Style.space(13); Layout.fillWidth: true }
       Text { visible: root.saving; text: root.tr("Saving…"); color: root.secondary; font.family: "sans-serif"; font.pixelSize: Style.space(11) }
     }
   }

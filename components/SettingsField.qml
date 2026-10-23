@@ -1,11 +1,11 @@
 pragma ComponentBehavior: Bound
+import ".." as PluginLanguage
 import QtQuick
 import QtQuick.Layouts
 import qs.Ui
 import qs.Commons
 import qs.Commons as Commons
 import "../Preferences.js" as Preferences
-import "../Translations.js" as Translations
 
 Column {
   id: root
@@ -18,7 +18,7 @@ Column {
   signal save(var value)
   signal clearError()
   signal pasteFailed(string message)
-  function tr(label) { return Translations.text(label, language) }
+  function tr(label) { return PluginLanguage.FoamyI18n.t(label) }
   Loader {
     width: parent.width
     active: root.field.type === "enum"

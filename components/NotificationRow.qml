@@ -1,3 +1,4 @@
+import ".." as PluginLanguage
 import QtQuick
 import QtQuick.Effects
 import qs.Commons
@@ -73,8 +74,10 @@ Item {
     }
     Rectangle {
       visible: !root.first
-      x: root.groupCritical ? Style.space(3) : 1
-      width: parent.width - x - 1
+      anchors.left: parent.left
+      anchors.leftMargin: root.groupCritical ? Style.space(3) : 1
+      anchors.right: parent.right
+      anchors.rightMargin: 1
       height: 1
       color: Util.alpha(root.foreground, 0.12)
     }
@@ -98,20 +101,26 @@ Item {
     }
     Column {
       id: texts
-      x: Style.space(13)
+      objectName: "notificationRowText"
+      anchors.left: parent.left
+      anchors.leftMargin: Style.space(13)
+      anchors.right: parent.right
+      // Reserve the dismiss hit area for every text line and mirror it with the card.
+      anchors.rightMargin: Style.space(13) + (dismiss.visible ? Style.space(28) : 0)
       y: root.verticalPadding
-      width: parent.width - Style.space(26)
       spacing: Style.space(4)
       Text {
         visible: root.expanded
+        width: parent.width
+        elide: Text.ElideRight
         textFormat: Text.PlainText
-        text: Translations.relativeTime(Number(root.entry.timestamp || 0), root.now, root.language)
+        text: Translations.relativeTime(Number(root.entry.timestamp || 0), root.now, PluginLanguage.FoamyI18n.t)
         color: Util.alpha(root.foreground, 0.6)
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
       }
       Text {
-        width: parent.width - (root.expanded ? Style.space(28) : 0)
+        width: parent.width
         textFormat: Text.PlainText
         text: root.plain(root.entry.summary)
         elide: Text.ElideRight
@@ -161,6 +170,8 @@ Item {
       layer.enabled: true
     }
     NotificationAction {
+      id: dismiss
+      objectName: "notificationRowDismiss"
       anchors.right: parent.right
       anchors.rightMargin: Style.space(8)
       y: root.verticalPadding - Style.space(3)
@@ -170,7 +181,7 @@ Item {
       size: Style.space(26)
       iconSize: Style.space(14)
       focusable: false
-      tooltipText: Translations.text("Dismiss notification", root.language)
+      tooltipText: PluginLanguage.FoamyI18n.t("Dismiss notification")
       foreground: root.foreground
       hasCursor: root.dismissHasCursor
       onClicked: { root.pointerUsed(); root.removeRequested() }

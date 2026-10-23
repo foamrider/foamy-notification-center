@@ -22,7 +22,6 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "language": "system",
       "panelWidth": 420,
       "listHeight": 0,
       "badge": "Dot",

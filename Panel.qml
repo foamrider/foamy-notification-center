@@ -8,11 +8,11 @@ import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
+import qs.Ui as Ui
 
 import "." as Plugin
 import "Model.js" as Model
 import "BrowserIdentity.js" as BrowserIdentity
-import "Translations.js" as Translations
 import "Preferences.js" as Preferences
 import "components"
 
@@ -35,8 +35,10 @@ import "components"
 //
 // Glyphs are \u escapes rather than literal characters, so the source survives
 // editors and patches that mangle private-use codepoints.
-Panel {
+Ui.Panel {
   id: root
+  LayoutMirroring.enabled: FoamyI18n.rightToLeft
+  LayoutMirroring.childrenInherit: true
   objectName: "notificationCenterPanel"
 
   function open() {
@@ -90,8 +92,8 @@ Panel {
 
   // ------------------------------------------------------------- the service
   //
-  readonly property string language: Translations.language(setting("language", "system"), Qt.locale().name)
-  function tr(label, value) { return Translations.text(label, language, value) }
+  readonly property string language: FoamyI18n.language
+  function tr(label, value) { return FoamyI18n.t(label, value) }
 
   readonly property bool dnd: store ? store.doNotDisturb : false
   function toggleDnd() { if (store) store.toggleDnd() }
@@ -359,7 +361,7 @@ Panel {
       cursorDismiss = false
     } else {
       if (cursorIndex < 0) cursorIndex = 0
-      cursorDismiss = dx > 0
+      cursorDismiss = FoamyI18n.rightToLeft ? dx < 0 : dx > 0
     }
     list.positionViewAtIndex(cursorIndex, ListView.Contain)
   }
@@ -504,7 +506,7 @@ Panel {
       anchors.centerIn: parent
       // Past ninety-nine the number has stopped being information and the
       // badge is only saying "a lot", which it can say in three characters.
-      text: root.unread > 99 ? "99+" : String(root.unread)
+      text: root.unread > 99 ? FoamyI18n.number(99) + "+" : FoamyI18n.number(root.unread)
       font.family: root.fontFamily
       font.pixelSize: Math.max(8, Style.font.caption - Style.space(3))
       font.bold: true
@@ -657,7 +659,8 @@ Panel {
             id: title
             anchors.left: parent.left
             anchors.leftMargin: Style.space(16)
-            width: Math.max(0, searchControl.x - x - Style.space(8))
+            anchors.right: searchControl.left
+            anchors.rightMargin: Style.space(8)
             opacity: root.searching ? 0 : 1
             visible: opacity > 0
             Behavior on opacity { NumberAnimation { duration: 100 } }
@@ -716,8 +719,10 @@ Panel {
 
           Controls.Menu {
             id: moreMenu
+            contentItem.LayoutMirroring.enabled: FoamyI18n.rightToLeft
+            contentItem.LayoutMirroring.childrenInherit: true
             objectName: "notificationOverflowMenu"
-            x: Math.max(0, header.width - width - Style.space(12))
+            x: FoamyI18n.rightToLeft ? Style.space(12) : Math.max(0, header.width - width - Style.space(12))
             y: header.height - Style.space(6)
             width: Math.min(Style.space(248), header.width - Style.space(24))
             padding: Style.space(5)
@@ -760,6 +765,8 @@ Panel {
 
           Controls.Menu {
             id: snoozeMenu
+            contentItem.LayoutMirroring.enabled: FoamyI18n.rightToLeft
+            contentItem.LayoutMirroring.childrenInherit: true
             objectName: "notificationSnoozeMenu"
             x: moreMenu.x
             y: moreMenu.y
@@ -780,7 +787,7 @@ Panel {
             anchors.right: actions.left
             anchors.rightMargin: Style.space(4)
             anchors.verticalCenter: parent.verticalCenter
-            width: root.searching ? actions.x - Style.space(20) : Style.space(32)
+            width: root.searching ? Math.max(0, parent.width - actions.width - Style.space(32)) : Style.space(32)
             height: Style.space(32)
             radius: Style.cornerRadius * 2
             color: root.searching ? Qt.alpha(root.foreground, 0.055) : "transparent"
@@ -792,6 +799,7 @@ Panel {
             Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
             NotificationAction {
+              anchors.left: parent.left
               iconName: "search"
               tooltipText: root.tr("Search notifications  ( / )")
               foreground: root.searching ? Commons.Color.accent : Qt.alpha(root.foreground, 0.65)

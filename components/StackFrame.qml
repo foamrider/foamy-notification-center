@@ -1,3 +1,4 @@
+import ".." as PluginLanguage
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -5,6 +6,7 @@ import qs.Commons as Commons
 // Separate list rows share one card outline while remaining independently virtualized.
 Canvas {
   id: root
+  transform: Scale { origin.x: root.width / 2; xScale: PluginLanguage.FoamyI18n.rightToLeft ? -1 : 1 }
   property bool first: false
   property bool last: false
   property bool critical: false
