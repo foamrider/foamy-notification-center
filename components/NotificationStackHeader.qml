@@ -1,3 +1,4 @@
+import ".." as PluginLanguage
 import QtQuick
 import Quickshell
 import qs.Commons
@@ -100,7 +101,7 @@ Item {
     anchors.rightMargin: Style.space(9)
     anchors.verticalCenter: parent.verticalCenter
     textFormat: Text.PlainText
-    text: root.group.app === "Unknown app" ? Translations.text("Unknown app", root.language) : (root.group.label || root.group.app)
+    text: root.group.app === "Unknown app" ? PluginLanguage.FoamyI18n.t("Unknown app") : (root.group.label || root.group.app)
     elide: Text.ElideRight
     color: root.foreground
     font.family: root.fontFamily
@@ -122,7 +123,7 @@ Item {
     }
     Text {
       textFormat: Text.PlainText
-      text: root.group.entries.length + " · " + Translations.relativeTime(root.group.timestamp, root.now, root.language)
+      text: root.group.entries.length + " · " + Translations.relativeTime(root.group.timestamp, root.now, PluginLanguage.FoamyI18n.t)
       color: Util.alpha(root.foreground, 0.65)
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
@@ -140,7 +141,7 @@ Item {
     foreground: root.foreground
     hasCursor: root.dismissHasCursor
     opacity: hover.hovered || root.hasCursor ? 1 : 0
-    tooltipText: Translations.text(root.group.entries.length === 1 ? "Dismiss 1 notification" : "Dismiss %1 notifications", root.language, root.group.entries.length)
+    tooltipText: PluginLanguage.FoamyI18n.t(root.group.entries.length === 1 ? "Dismiss 1 notification" : "Dismiss %1 notifications", root.group.entries.length)
     onClicked: { root.pointerUsed(); root.removeRequested() }
   }
 }

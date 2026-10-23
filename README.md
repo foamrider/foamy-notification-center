@@ -71,8 +71,7 @@ change notification history or the enabled plugin list. The center uses Omarchy'
 existing widget settings IPC. Back or Escape returns from Settings; dropdowns
 and numeric editors consume Escape first to cancel their edit.
 
-Set `language` on the widget entry in `shell.json`: `system` (default), `en`,
-or `nb`. Other system languages fall back to English.
+Select the desktop language in **Omarchy → Setup → Language**. Existing widget `language` values are ignored.
 
 Set `useBrowserFavicons` on the widget entry to `true` (default) to show a
 website’s locally cached favicon, with the app icon and then the glyph as
@@ -237,3 +236,7 @@ The settings panel check requires a running Wayland session. Set
 and `settings-ui.py` to exercise that release without installing it. Both the
 stock service and Foamy service paths need validation; a fixture alone does not
 establish compatibility with a full OS upgrade.
+
+Language follows **Omarchy → Setup → Language** on Omarchy 4.5. Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin in English. Missing translations fall back to English.
+
+Translation checks: `python3 tests/i18n-runtime.py` uses the installed shell. Set `OMARCHY_PATH` to a 4.5 source tree to check live language switching against that version.

@@ -12,7 +12,6 @@ import qs.Ui
 import "." as Plugin
 import "Model.js" as Model
 import "BrowserIdentity.js" as BrowserIdentity
-import "Translations.js" as Translations
 import "Preferences.js" as Preferences
 import "components"
 
@@ -90,8 +89,8 @@ Panel {
 
   // ------------------------------------------------------------- the service
   //
-  readonly property string language: Translations.language(setting("language", "system"), Qt.locale().name)
-  function tr(label, value) { return Translations.text(label, language, value) }
+  readonly property string language: FoamyI18n.language
+  function tr(label, value) { return FoamyI18n.t(label, value) }
 
   readonly property bool dnd: store ? store.doNotDisturb : false
   function toggleDnd() { if (store) store.toggleDnd() }

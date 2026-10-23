@@ -6,7 +6,6 @@ import qs.Ui
 import qs.Commons
 import qs.Commons as Commons
 import "Preferences.js" as Preferences
-import "Translations.js" as Translations
 import "components"
 
 Item {
@@ -26,7 +25,7 @@ Item {
   signal back()
   signal clearError()
   signal pasteFailed(string message)
-  function tr(label) { return Translations.text(label, language) }
+  function tr(label) { return FoamyI18n.t(label) }
   function focusBack() { backButton.forceActiveFocus() }
   function resetScroll() { settingsScroll.contentY = 0 }
   Keys.onEscapePressed: root.back()

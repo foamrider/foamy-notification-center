@@ -1,3 +1,4 @@
+import ".." as PluginLanguage
 import QtQuick
 import QtQuick.Effects
 import qs.Commons
@@ -105,7 +106,7 @@ Item {
       Text {
         visible: root.expanded
         textFormat: Text.PlainText
-        text: Translations.relativeTime(Number(root.entry.timestamp || 0), root.now, root.language)
+        text: Translations.relativeTime(Number(root.entry.timestamp || 0), root.now, PluginLanguage.FoamyI18n.t)
         color: Util.alpha(root.foreground, 0.6)
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
@@ -170,7 +171,7 @@ Item {
       size: Style.space(26)
       iconSize: Style.space(14)
       focusable: false
-      tooltipText: Translations.text("Dismiss notification", root.language)
+      tooltipText: PluginLanguage.FoamyI18n.t("Dismiss notification")
       foreground: root.foreground
       hasCursor: root.dismissHasCursor
       onClicked: { root.pointerUsed(); root.removeRequested() }
