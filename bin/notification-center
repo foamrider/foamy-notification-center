@@ -2,16 +2,11 @@
 #
 # The store behind the notification center.
 #
-# Omarchy's notification service already writes every notification to disk: one
-# JSON file per popup under ~/.local/state/omarchy/notifications/, moved into
-# history/ when it leaves the screen. That directory is not a history you can
-# read back, though. It keeps ten files and deletes the eleventh, and the icon
-# it points at is deleted along with it.
-#
-# So this copies each file out of there the moment it appears, into an archive
-# that is kept for as long as you asked for, with its icon copied beside it so
-# the entry still has a face in a month. Nothing here writes to the service's
-# own directories: it only reads them and gets out of the way.
+# Stock 4.5 writes live.json/history.json arrays; Foamy and stock 4.0 use
+# individual popup/history files. Copy new and changed entries into our own
+# archive, retaining available images independently of the daemon's limits.
+# Aggregate stock files stay read-only. Explicit Foamy dismissal/clear operations
+# also remove its individual files so handled notifications cannot return.
 #
 # Every subcommand prints JSON, one object or one array, including failures, so
 # nothing that goes wrong reaches the panel as a parse error.
@@ -28,6 +23,7 @@ state_home=${XDG_STATE_HOME:-$HOME/.local/state}
 # Stock Omarchy uses HOME even with a custom XDG_STATE_HOME. Foamy follows XDG.
 # Resolve the configured daemon separately from our archive; installation alone
 # does not mean Foamy owns notifications. Explicit source overrides still win.
+foamy_enabled=0
 notification_state_home=$HOME/.local/state
 config_home=${XDG_CONFIG_HOME:-$HOME/.config}
 shell_config=$config_home/omarchy/shell.json
@@ -36,6 +32,7 @@ if [[ -f $shell_config && -f $foamy_manifest ]] &&
    jq -e '.id == "foamy.notifications"' "$foamy_manifest" >/dev/null 2>&1 &&
    jq -e 'any(.plugins[]?; .id == "foamy.notifications") and
      ((.disabledPlugins // []) | index("foamy.notifications") | not)' "$shell_config" >/dev/null 2>&1; then
+  foamy_enabled=1
   notification_state_home=$state_home
 fi
 src_dir=${NC_SRC_DIR:-$notification_state_home/omarchy/notifications}
@@ -245,8 +242,9 @@ screenshot_action() {
   local action=$1 file=$2
   printf '%s' "$action" | jq -r --arg file "$file" '
     if type == "array" and length == 2 then
-      if (.[0] == "tensaku-edit" or .[0] == "/usr/bin/tensaku-edit")
-         and (.[1] | type == "string") and .[1] == $file and $file != ""
+      if (.[0] == "tensaku-edit" or .[0] == "/usr/bin/tensaku-edit"
+          or .[0] == "omasnap" or .[0] == "/usr/bin/omasnap")
+         and (.[1] | type == "string") and (.[1] | sub("^file://"; "")) == $file and $file != ""
       then "edit-screenshot" else "" end
     else "" end
   ' 2>/dev/null || true
@@ -257,17 +255,40 @@ screenshot_action() {
 ingest_file() {
   local LC_ALL=C
   local file=$1
-  local key entry app_icon image_src exec_src icon_copy image_copy file_src file_action preview_copy existing source_hash assets_hash sources_hash source_json asset
+  local key source_json
   key=$(basename -- "$file"); key=${key%.json}
-  [[ $key =~ ^[0-9]+-[0-9]+$ ]] || return 0
-  if is_dismissed "$key"; then
-    return 0
+  if [[ $key == live || $key == history ]]; then
+    (( foamy_enabled )) && return 0
+    ingest_array "$file"
+    return $?
   fi
+  [[ $key =~ ^[0-9]+-[0-9]+$ ]] || return 0
   [[ -s $file ]] || return 0
-  # Capture one bounded version: the daemon atomically replaces this path during updates.
   source_json=$(head -c 131073 -- "$file") || return 1
   (( ${#source_json} <= 131072 )) || return 0
+  ingest_json "$key" "$source_json"
+}
 
+# Stock 4.5 writes bounded arrays atomically; keep its opaque identity separate
+# from Foamy/4.0 timestamp-id keys. Never rewrite the daemon's aggregate files.
+ingest_array() {
+  local file=$1 rows row key
+  [[ -s $file ]] || return 0
+  rows=$(python3 "$preview_policy_dir/read-stock-notifications.py" "$file" "$archive") || return 1
+  while IFS= read -r row; do
+    [[ -n $row ]] || continue
+    (( ${#row} <= 131072 )) || continue
+    key=$(jq -r .key <<< "$row") || return 1
+    ingest_json "$key" "$row" || return 1
+  done <<< "$rows"
+}
+
+valid_key() { [[ $1 =~ ^([0-9]+-[0-9]+|stock-[A-Za-z0-9_-]{1,120})$ ]]; }
+
+ingest_json() {
+  local key=$1 source_json=$2
+  local entry app_icon image_src exec_src icon_copy image_copy file_src file_action preview_copy existing source_hash assets_hash sources_hash asset
+  is_dismissed "$key" && return 0
   # A file caught mid-write parses as nothing; it will be caught again on the
   # move into history, or by the next sync.
   jq -e . <<< "$source_json" >/dev/null 2>&1 || return 0
@@ -295,6 +316,10 @@ ingest_file() {
   file_src=${file_src#file://}
   file_action=$(screenshot_action "$exec_src" "$file_src")
   existing=$(grep -F "\"key\":\"$key\"" "$archive" | head -n 1)
+  # An in-place stock update changes ts; keep the first arrival for unread state.
+  if [[ $key == stock-* && -n $existing ]]; then
+    source_json=$(jq --argjson stamp "$(jq '.timestamp' <<< "$existing")" '.timestamp = $stamp' <<< "$source_json") || return 1
+  fi
   source_hash=$(printf '%s' "$source_json" | sha256sum); source_hash=${source_hash%% *}
   sources_hash=$(printf '%s\n' "$app_icon" "$image_src" "$file_src" "$previews" | sha256sum); sources_hash=${sources_hash%% *}
   # Reuse retained images on text-only updates, but invalidate when source files change.
@@ -341,6 +366,7 @@ ingest_file() {
        key: $key,
        imageFormat: 1,
        sourceHash: $sourceHash,
+       stockHash: (.stockHash // ""),
        assetsHash: $assetsHash,
        assetSources: $assetSources,
        desktopEntry: (.desktopEntry // ""),
@@ -385,7 +411,7 @@ sync_all() {
   local file
   for file in "$src_history"/*.json "$src_dir"/*.json; do
     [[ -e $file ]] || continue
-    ingest_file "$file"
+    ingest_file "$file" || return 1
   done
 }
 
@@ -470,6 +496,7 @@ prune() {
       done
     fi
   fi
+  return 0
 }
 
 # ---------------------------------------------------------------- commands
@@ -481,9 +508,9 @@ quiet=0
 
 sync_and_prune() {
   if (( quiet )); then
-    sync_all >/dev/null
+    sync_all >/dev/null || return 1
   else
-    sync_all
+    sync_all || return 1
   fi
   prune
 }
@@ -491,7 +518,7 @@ sync_and_prune() {
 cmd_sync() {
   ensure_store
   with_lock prepare_archive || die "cannot normalize notification archive"
-  with_lock sync_and_prune
+  with_lock sync_and_prune || die "cannot synchronize notification history"
 }
 
 # An archive written before stored actions were removed still holds them. That
@@ -520,7 +547,7 @@ normalize_archive() {
   while IFS= read -r line; do
     key=$(jq -r '.key // ""' <<< "$line") || return 1
     icon=""; image=""; preview=""
-    if [[ $key =~ ^[0-9]+-[0-9]+$ ]]; then
+    if valid_key "$key"; then
       icon=$(archive_image "$(jq -r '.appIcon // ""' <<< "$line")" "$key" appIcon)
       image=$(archive_image "$(jq -r '.image // ""' <<< "$line")" "$key" image)
       preview=$(archive_image "$(jq -r '.preview // ""' <<< "$line")" "$key" preview)
@@ -534,19 +561,22 @@ normalize_archive() {
   mv -f -- "$archive.tmp" "$archive" || return 1
   rm -f -- "$archive.images"
   while IFS= read -r key; do
-    [[ $key =~ ^[0-9]+-[0-9]+$ ]] || continue
+    valid_key "$key" || continue
     rm -f -- "$images/$key-appIcon" "$images/$key-image" "$images/$key-preview"
   done < <(jq -r '.key' <<< "$pending")
 }
 
 cmd_watch() {
   ensure_store
-  mkdir -p "$src_dir" "$src_history"
+  mkdir -p "$src_dir"
+  local watch_paths=("$src_dir" "$source_state_dir" "$store")
+  if (( foamy_enabled )) || [[ ! -e $src_dir/live.json && ! -e $src_dir/history.json ]]; then mkdir -p "$src_history"; fi
+  [[ ! -d $src_history ]] || watch_paths+=("$src_history")
   command -v inotifywait >/dev/null 2>&1 || die "inotifywait is not installed"
   # Include the state directory so even the first DND file creation is observed.
   # Establish watches before startup reconciliation so arrivals cannot fall into a gap.
-  exec 3< <(LC_ALL=C inotifywait -m -e close_write -e moved_to -e delete -e create --format '%e|%w%f' \
-    "$src_dir" "$src_history" "$source_state_dir" "$store" 2>&1)
+  exec 3< <(LC_ALL=C inotifywait -m -e close_write -e moved_to -e delete -e create -e delete_self -e move_self --format '%e|%w%f' \
+    "${watch_paths[@]}" 2>&1)
   watcher=$!
   trap 'kill "$watcher" 2>/dev/null || true' EXIT INT TERM
   local event file ready=0
@@ -557,12 +587,14 @@ cmd_watch() {
   cmd_sync
   printf '%s\n' '{"event":"storeChanged"}'
   while IFS='|' read -r event file <&3; do
-    if [[ $event == *Q_OVERFLOW* ]]; then
+    if [[ $event == *DELETE_SELF* || $event == *MOVE_SELF* ]]; then
+      die "notification source changed; reconnecting"
+    elif [[ $event == *Q_OVERFLOW* ]]; then
       cmd_sync
       printf '%s\n' '{"event":"storeChanged"}'
     elif [[ $file == "$store/archive.jsonl" || $file == "$cleared_at_file" || $file == "$dismissed_file" ]]; then
       printf '%s\n' '{"event":"storeChanged"}'
-    elif [[ $file == "$source_state_dir/notifications.json" ]]; then
+    elif [[ $file == "$source_state_dir/notifications.json" || $file == "$src_dir/quiet.json" ]]; then
       printf '%s\n' '{"event":"dndChanged"}'
     elif [[ $event == CREATE* ]]; then
       # Ordinary JSON writes are ingested only when complete; Qt links its DND file atomically.
@@ -614,7 +646,7 @@ cmd_remove() {
   (( $# > 0 )) || die "remove needs a key"
   local key
   for key in "$@"; do
-    [[ $key =~ ^[0-9]+-[0-9]+$ ]] || die "invalid notification key"
+    valid_key "$key" || die "invalid notification key"
   done
   with_lock remove_keys "$@" || die "could not remove notifications"
   printf '{"ok":true,"removed":%s,"count":%s}\n' "$(printf '%s' "$1" | jq -Rs .)" "$#"

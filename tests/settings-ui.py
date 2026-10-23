@@ -14,7 +14,7 @@ base = Path(tempfile.mkdtemp(prefix="foamy-center-settings-"))
 app = base / "app"
 app.mkdir()
 for name in ["Commons", "Ui"]:
-    (app / name).symlink_to("/usr/share/omarchy/shell/" + name, target_is_directory=True)
+    (app / name).symlink_to(os.environ.get("OMARCHY_TEST_ROOT", "/usr/share/omarchy") + "/shell/" + name, target_is_directory=True)
 (app / "plugin").symlink_to(source, target_is_directory=True)
 home = base / "home"
 config = home / ".config/omarchy/shell.json"
@@ -50,6 +50,7 @@ ShellRoot {
   property bool failSave: false
   property bool finished: false
   property bool dnd: false
+  property int snoozedMinutes: 0
   QtObject {
     id: registry
     property var installedPlugins: ({"foamy.notifications":{id:"foamy.notifications"}})
@@ -59,6 +60,9 @@ ShellRoot {
   }
   IpcHandler {
     target: "notifications"
+    function snoozes(): string { return "{}" }
+    function unsnooze(key: string): string { root.snoozedMinutes=0; return "ok" }
+    function snoozeAll(minutes: string): string { root.snoozedMinutes=Number(minutes); return "ok" }
     function dndState(): string { return root.dnd ? "on" : "off" }
     function toggleDnd(): string { root.dnd = !root.dnd; return root.dnd ? "on" : "off" }
   }
@@ -135,12 +139,22 @@ ShellRoot {
       }
       function init() { panel.open(); tryCompare(panel, "opened", true); wait(200) }
       function cleanup() { panel.close(); wait(200) }
+      function test_00_snooze_menu() {
+        control("notificationMore").clicked()
+        var menu=control("notificationSnoozeMenu")
+        tryCompare(menu,"enabled",true)
+        control("notificationOverflowMenu").itemAt(1).triggered()
+        tryCompare(menu,"visible",true);wait(150);capture(menu.contentItem.parent,"snooze-menu")
+        menu.itemAt(0).triggered();tryCompare(root,"snoozedMinutes",30)
+        menu.itemAt(3).triggered();tryCompare(root,"snoozedMinutes",0)
+        menu.close()
+      }
       function test_01_menu_and_settings_save() {
         try {
         var more = control("notificationMore"), menu = control("notificationOverflowMenu")
         mouseClick(more)
         tryCompare(menu, "visible", true)
-        compare(menu.count, 2)
+        compare(menu.count, 3)
         verify(control("clearAllNotifications").visible)
         wait(150); capture(menu.contentItem.parent, "overflow-menu")
         control("notificationMute").triggered()
@@ -353,4 +367,4 @@ except subprocess.TimeoutExpired:
     output = process.communicate(timeout=3)[0]
 print(output)
 print("Settings captures:", app)
-assert process.returncode == 0 and "SETTINGS_UI 7 passed 0 failed" in output
+assert process.returncode == 0 and "SETTINGS_UI 8 passed 0 failed" in output

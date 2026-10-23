@@ -230,14 +230,14 @@ test("invalid app identity cannot become a stock focus regex",()=>{
 
 
 test("live image actions win; expired screenshots use Tensaku and other pictures use the viewer", () => {
- for (const [fileAction, program] of [["edit-screenshot", "tensaku-edit"], ["", "xdg-open"], ["arbitrary command", "xdg-open"]]) {
+ for (const [fileAction, program] of [["edit-screenshot", "omasnap"], ["", "xdg-open"], ["arbitrary command", "xdg-open"]]) {
   const row = {key:"100-1",app:"omarchy-action",file:"/tmp/image with spaces.png",fileAction,execArgv:'["unsafe"]'}
   const live = focusService(); live.focusNotification(row)
   live.focusProc.running=false; live.finishFocus(0,0,"invoked")
   assert.equal(live.completed,1); assert.equal(live.removed.length,0)
   const expired = focusService(); expired.focusNotification(row)
   expired.focusProc.running=false; expired.finishFocus(0,0,"unavailable")
-  assert.deepEqual(Array.from(expired.focusProc.command),["bash","/plugin/bin/open-notification-image",program==="tensaku-edit"?"edit-screenshot":"view-image",row.file])
+  assert.deepEqual(Array.from(expired.focusProc.command),["bash","/plugin/bin/open-notification-image",program==="omasnap"?"edit-screenshot":"view-image",row.file])
   assert.equal(expired.removed.length,0)
   expired.focusProc.running=false; expired.finishFocus(0,0,"")
   assert.deepEqual(Array.from(expired.removed),[row.key]); assert.equal(expired.completed,1)
@@ -266,7 +266,7 @@ test("only a two-argument Tensaku image action survives as a fixed intent, inclu
  // An old archive with argv migrates, while an already disarmed archive cannot guess the editor.
  fs.writeFileSync(f.archive,JSON.stringify({key:`${timestamp}-99`,timestamp,execArgv:JSON.stringify(commands[0])})+"\n")
  f.run("backfill"); rows=f.run("list"); assertDisarmed(rows)
- assert.equal(rows[0].fileAction,"edit-screenshot"); assert.deepEqual(Model.fileCommand(rows[0]),["tensaku-edit",file])
+ assert.equal(rows[0].fileAction,"edit-screenshot"); assert.deepEqual(Model.fileCommand(rows[0]),["omasnap",file])
 })
 
 test("fixed image launcher preserves spaces, rejects unsafe paths and reports startup failures without waiting for the editor", t => {
@@ -290,4 +290,21 @@ test("fixed image launcher preserves spaces, rejects unsafe paths and reports st
  // A long-lived editor must not hold the center's process or output pipes open.
  fs.writeFileSync(path.join(temp,"tensaku-edit"),'#!/bin/bash\nprintf "%s" "$1" > "$MARKER"\nsleep 1\n',{mode:0o755})
  const start=Date.now();assert.equal(run("edit-screenshot",file).status,0);assert.ok(Date.now()-start<700)
+})
+
+test('Omasnap screenshot vectors become a fixed intent and opener falls back in order',t=>{
+ const f=fixture(t),stamp=Date.now(),file=path.join(f.temp,'shot with spaces.png')
+ fs.writeFileSync(file,'fixture')
+ for(const [i,argv] of [[0,['omasnap','file://'+file]],[1,['/usr/bin/omasnap',file]],[2,['/tmp/omasnap',file]],[3,['omasnap',file,'--extra']]]) {
+  fs.writeFileSync(path.join(f.source,`${stamp}-${i}.json`),JSON.stringify({timestamp:stamp,app:'omarchy-action',summary:'Screenshot',body:'Edit',execArgv:JSON.stringify(argv)}))
+ }
+ f.run('sync');assert.equal(f.run('list').filter(row=>row.fileAction==='edit-screenshot').length,2)
+ const bin=path.join(f.temp,'bin');fs.mkdirSync(bin)
+ for(const name of ['jq','sleep']) fs.symlinkSync('/usr/bin/'+name,path.join(bin,name))
+ for(const name of ['omasnap','tensaku-edit','xdg-open']) fs.writeFileSync(path.join(bin,name),'#!/bin/bash\nprintf "%s" "'+name+'" > "$MARKER"\n',{mode:0o755})
+ const marker=path.join(f.temp,'marker'),helper=path.join(__dirname,'../bin/open-notification-image')
+ for(const name of ['omasnap','tensaku-edit','xdg-open']) {
+  const r=spawnSync('/usr/bin/bash',[helper,'edit-screenshot',file],{env:{...process.env,PATH:bin,MARKER:marker},encoding:'utf8'})
+  assert.equal(r.status,0,r.stderr);assert.equal(fs.readFileSync(marker,'utf8'),name);fs.unlinkSync(path.join(bin,name))
+ }
 })

@@ -2,7 +2,12 @@
 set -euo pipefail
 
 case ${1:-} in
-  edit-screenshot) program=tensaku-edit ;;
+  edit-screenshot)
+    # Prefer the current editor; 4.0 and machines without either can still open it.
+    if command -v omasnap >/dev/null; then program=omasnap
+    elif command -v tensaku-edit >/dev/null; then program=tensaku-edit
+    else program=xdg-open; fi
+    ;;
   view-image) program=xdg-open ;;
   *) exit 2 ;;
 esac

@@ -50,6 +50,22 @@ Panel {
   moduleName: "foamy.notification-center"
   ipcTarget: "foamy.notification-center"
 
+  component SnoozeItem: Controls.MenuItem {
+    id: snoozeItem
+    implicitHeight: Math.max(Style.space(42), contentItem.implicitHeight + Style.space(16))
+    contentItem: Text {
+      text: snoozeItem.text
+      textFormat: Text.PlainText
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      color: root.foreground
+      opacity: snoozeItem.enabled ? 1 : 0.45
+      wrapMode: Text.WordWrap
+      verticalAlignment: Text.AlignVCenter
+    }
+    background: Rectangle { color: snoozeItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: Style.cornerRadius * 2 }
+  }
+
   readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH")
 
   readonly property color foreground: Commons.Color.popups.text
@@ -377,6 +393,7 @@ Panel {
     if (store) store.focusError = ""
     if (!opened) {
       moreMenu.close()
+      snoozeMenu.close()
       editingSettings = false
       searching = false
       filter = ""
@@ -572,7 +589,7 @@ Panel {
       anchors.fill: parent
       // While the search field has the focus it owns every key, including the
       // ones this would otherwise read as navigation.
-      blocked: search.inputActiveFocus || root.editingSettings || moreMenu.visible
+      blocked: search.inputActiveFocus || root.editingSettings || moreMenu.visible || snoozeMenu.visible
       onCloseRequested: root.searching ? root.endSearch() : root.close()
       onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
       onActivateRequested: root.activateCursor(false)
@@ -721,6 +738,11 @@ Panel {
               background: Rectangle { color: muteItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: Style.cornerRadius * 2 }
               onTriggered: root.toggleDnd()
             }
+            SnoozeItem {
+              text: root.tr("Snooze notifications")
+              enabled: !!root.store && root.store.snoozeAvailable && !root.store.snoozeBusy
+              onTriggered: Qt.callLater(function() { snoozeMenu.open() })
+            }
             Controls.MenuItem {
               id: settingsItem
               objectName: "notificationSettings"
@@ -734,6 +756,23 @@ Panel {
               background: Rectangle { color: settingsItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: Style.cornerRadius * 2 }
               onTriggered: root.openSettings()
             }
+          }
+
+          Controls.Menu {
+            id: snoozeMenu
+            objectName: "notificationSnoozeMenu"
+            x: moreMenu.x
+            y: moreMenu.y
+            width: Math.min(Style.space(290), header.width - Style.space(24))
+            padding: Style.space(5)
+            enabled: !!root.store && root.store.snoozeAvailable && !root.store.snoozeBusy
+            closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
+            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: Style.cornerRadius * 2 }
+            onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) moreButton.forceActiveFocus() })
+            SnoozeItem { text: root.tr("30 minutes"); onTriggered: root.store.snoozeAll(30) }
+            SnoozeItem { text: root.tr("1 hour"); onTriggered: root.store.snoozeAll(60) }
+            SnoozeItem { text: root.tr("4 hours"); onTriggered: root.store.snoozeAll(240) }
+            SnoozeItem { text: root.tr("Resume snoozed notifications"); onTriggered: root.store.snoozeAll(0) }
           }
 
           Rectangle {
@@ -809,7 +848,7 @@ Panel {
           x: Style.space(14)
           width: parent.width - Style.space(28)
           textFormat: Text.PlainText
-          text: search.pasteError || (root.store ? root.tr(root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
+          text: search.pasteError || (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
           visible: !root.editingSettings && text !== ""
           color: Commons.Color.urgent
           font.family: root.fontFamily

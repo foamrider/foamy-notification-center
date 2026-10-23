@@ -8,7 +8,7 @@ import stat
 import sys
 import tempfile
 
-FIELDS = {"dndSilenceCritical": False, "groupDuplicates": True, "useBrowserFavicons": True, "compact": True,
+FIELDS = {"offerSnoozeWhenSharing": True, "dndSilenceCritical": False, "groupDuplicates": True, "useBrowserFavicons": True, "compact": True,
           "showImages": True, "closeButtonRemovesHistory": False, "normalTimeoutSec": 8}
 
 

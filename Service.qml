@@ -71,7 +71,7 @@ Item {
   signal focusCompleted()
 
   function focusNotification(row, useDefault) {
-    if (focusProc.running || !row || !/^[0-9]+-[0-9]+$/.test(String(row.key))) return
+    if (focusProc.running || !row || !/^([0-9]+-[0-9]+|stock-[A-Za-z0-9_-]{1,120})$/.test(String(row.key))) return
     focusError = ""
     focusEntry = row
     openingFile = false
@@ -112,7 +112,7 @@ Item {
           invokingDefault = false
           openingFile = true
           var helper = decodeURIComponent(Qt.resolvedUrl("bin/open-notification-image").toString().replace(/^file:\/\//, ""))
-          focusProc.command = ["bash", helper, command[0] === "tensaku-edit" ? "edit-screenshot" : "view-image", command[1]]
+          focusProc.command = ["bash", helper, command[0] === "omasnap" ? "edit-screenshot" : "view-image", command[1]]
           focusProc.running = true
         } else focusSendingApp()
         return
@@ -223,6 +223,7 @@ Item {
 
   function releaseNotificationActions(keys) {
     // Stock and older daemons have no retained actions; cleanup is optional IPC.
+    keys = keys.filter(function(key) { return /^[0-9]+-[0-9]+$/.test(key) })
     for (var i = 0; i < keys.length; i += 100)
       Quickshell.execDetached(["omarchy-shell", "-q", "foamy.notifications", "releaseHistory", keys.slice(i, i + 100).join(",")])
   }
@@ -232,6 +233,55 @@ Item {
   property bool dndKnown: false
   property string dndError: ""
   readonly property bool dndBusy: dndProc.running
+
+  property bool snoozeAvailable: false
+  readonly property bool snoozeBusy: snoozeProc.running
+  property string snoozeError: ""
+
+  function snoozeAll(minutes) {
+    if (!snoozeAvailable || snoozeProc.running) return
+    snoozeError = ""
+    snoozeProc.minutes = minutes
+    // Stock 4.5 toggles snoozeAll: clear the old global timer before setting one.
+    snoozeProc.command = ["omarchy-shell", "notifications", "unsnooze", minutes > 0 ? "*" : ""]
+    snoozeProc.running = true
+  }
+  function refreshSnooze() {
+    if (!snoozeProbe.running) snoozeProbe.running = true
+  }
+  Process {
+    id: snoozeProbe
+    command: ["omarchy-shell", "notifications", "snoozes"]
+    stdout: StdioCollector { id: snoozeProbeOutput }
+    stderr: StdioCollector {}
+    onExited: function(code, status) {
+      root.snoozeAvailable = false
+      if (code !== 0 || status !== 0) return
+      try {
+        var value = JSON.parse(snoozeProbeOutput.text)
+        root.snoozeAvailable = value !== null && typeof value === "object"
+      } catch (e) { /* Stock 4.0 has no timed snooze; its DND control remains available. */ }
+    }
+  }
+  Process {
+    id: snoozeProc
+    property int minutes: 0
+    stdout: StdioCollector { id: snoozeOutput }
+    stderr: StdioCollector {}
+    onExited: function(code, status) {
+      var result = String(snoozeOutput.text).trim()
+      if (code !== 0 || status !== 0 || !result || /not found|invalid|error|^no$|^full$/i.test(result)) {
+        root.snoozeError = "Could not change notification snooze. Try again."
+        return
+      }
+      if (minutes > 0) {
+        command = ["omarchy-shell", "notifications", "snoozeAll", String(minutes)]
+        minutes = 0
+        running = true
+      }
+      root.refreshDnd()
+    }
+  }
 
   function refreshDnd() {
     if (dndProc.running) { dndRefresh.restart(); return }
@@ -262,7 +312,7 @@ Item {
     id: dndProc
     stdout: StdioCollector { id: dndOutput }
     stderr: StdioCollector {}
-    onExited: function(exitCode, exitStatus) { root.applyDndResult(exitCode, exitStatus, dndOutput.text) }
+    onExited: function(exitCode, exitStatus) { root.applyDndResult(exitCode, exitStatus, dndOutput.text); root.refreshSnooze() }
   }
 
   Timer { id: dndRefresh; interval: 200; onTriggered: root.refreshDnd() }
@@ -285,6 +335,9 @@ Item {
     } catch (e) {
       return
     }
+    // Stopping the old watcher during a config change is an expected lifecycle event.
+    if (root.sourceRestartPending && entry && entry.error === "notification watcher stopped") return
+    if (entry && entry.ok === false) { root.loadError = String(entry.error || "Could not read notification history."); console.warn("Notification history:", root.loadError); return }
     if (entry && entry.event === "storeChanged") { archiveRevision++; reloadArchive.restart(); return }
     if (entry && entry.event === "dndChanged") { dndRefresh.restart(); return }
     if (entry && entry.event === "seenChanged") { root.readSeen(); return }
@@ -337,7 +390,8 @@ Item {
       onRead: function(line) { root.absorb(line) }
     }
     onExited: {
-      restartWatch.interval = root.sourceRestartPending ? 100 : 30000
+      if (!root.sourceRestartPending) console.warn("Notification history watcher stopped; reconnecting")
+      restartWatch.interval = root.sourceRestartPending ? 100 : 1000
       restartWatch.restart()
     }
   }
@@ -412,7 +466,7 @@ Item {
     function remove(keysCsv: string): string {
       var keys = keysCsv.split(",")
       if (!Array.isArray(keys) || keys.length > 100 || keys.some(function(key) {
-        return typeof key !== "string" || !/^[0-9]+-[0-9]+$/.test(key)
+        return typeof key !== "string" || !/^([0-9]+-[0-9]+|stock-[A-Za-z0-9_-]{1,120})$/.test(key)
       })) return "error: invalid keys"
       root.removeMany(keys)
       return "ok"
@@ -420,7 +474,7 @@ Item {
     function handled(keysCsv: string): string {
       var keys = keysCsv.split(",")
       if (!Array.isArray(keys) || keys.length > 100 || keys.some(function(key) {
-        return typeof key !== "string" || !/^[0-9]+-[0-9]+$/.test(key)
+        return typeof key !== "string" || !/^([0-9]+-[0-9]+|stock-[A-Za-z0-9_-]{1,120})$/.test(key)
       })) return "error: invalid keys"
       for (var i = 0; i < keys.length; i++) root.removedKeys[keys[i]] = true
       root.entries = root.visibleEntries(root.entries)

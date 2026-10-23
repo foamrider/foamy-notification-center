@@ -1,5 +1,12 @@
 // UI language is configured on the widget in shell.json, like other Foamy plugins.
 var norwegian = {
+  "Snooze notifications": "Demp varsler midlertidig",
+  "30 minutes": "30 minutter",
+  "1 hour": "1 time",
+  "4 hours": "4 timer",
+  "Resume snoozed notifications": "Gjenoppta midlertidig dempede varsler",
+  "Offer snooze when sharing the screen": "Tilby midlertidig demping ved skjermdeling",
+  "Could not change notification snooze. Try again.": "Kunne ikke endre midlertidig varseldemping. Prøv igjen.",
   "Notifications": "Varsler",
   "Notification Center": "Varselsenter",
   "Settings": "Innstillinger",

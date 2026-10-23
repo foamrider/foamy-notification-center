@@ -8,6 +8,7 @@ var centerFields = [
   {key:"maxItems",type:"integer",label:"Maximum notifications",defaultValue:1000,min:50,max:10000}
 ]
 var popupFields = [
+  {key:"offerSnoozeWhenSharing",type:"boolean",label:"Offer snooze when sharing the screen",defaultValue:true},
   {key:"dndSilenceCritical",type:"boolean",label:"Do Not Disturb also silences critical alerts",defaultValue:false},
   {key:"groupDuplicates",type:"boolean",label:"Group duplicate notifications",defaultValue:true},
   {key:"useBrowserFavicons",type:"boolean",label:"Use website favicons",defaultValue:true},

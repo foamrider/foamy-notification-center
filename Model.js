@@ -10,7 +10,7 @@ function isPreviewFile(value) {
 // Persist only a fixed image-editor intent; never execute an archived argv vector.
 function fileCommand(row) {
   if (!row || !isPreviewFile(row.file)) return null
-  return [row.fileAction === "edit-screenshot" ? "tensaku-edit" : "xdg-open", row.file]
+  return [row.fileAction === "edit-screenshot" ? "omasnap" : "xdg-open", row.file]
 }
 
 function unreadState(entries, lastSeen) {

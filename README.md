@@ -6,7 +6,8 @@ Notification history with app stacks, search, and do not disturb.
 
 ## Install
 
-Requires Omarchy Quattro with stock notifications or Foamy Notifications enabled, `jq`, `wl-paste`, and GNU `timeout`, plus
+Targets Omarchy 4.5 and retains basic compatibility with 4.0.
+Requires stock notifications or Foamy Notifications enabled, `jq`, `wl-paste`, and GNU `timeout`, plus
 `inotify-tools`. Website favicon lookup uses the system Python 3 runtime.
 
 File-backed app icons, attached images, and picture previews require `file` and
@@ -38,6 +39,9 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
 - Click search or press `/` to filter. Press Escape to close search.
 - Open **More options (⋯)** to silence/allow notifications or open **Settings**.
   Right-clicking the bar icon also toggles do not disturb.
+- **More options → Snooze notifications** offers 30 minutes, 1 hour, 4 hours,
+  or resume all snoozed senders. This works with current Foamy Notifications or
+  stock Omarchy 4.5. Stock 4.0 keeps DND but has no timed snooze.
 - Clear all stays next to search. Stack dismissal uses the X icon,
   shown on hover or keyboard selection.
 
@@ -128,9 +132,10 @@ remain in history; stock Omarchy exceptions still apply.
 The default `clickAction: "Auto"` first tries the current popup action through
 Foamy Notifications. If that action is unavailable, it opens an absolute PNG,
 JPEG, GIF, or WebP path, or focuses the sending app when no image is available.
-The standard two-argument `tensaku-edit` screenshot action becomes a fixed
-`edit-screenshot` intent, so screenshots still open in Tensaku after expiry or
-reload. Other images open with `xdg-open`. Missing files, unavailable apps, or immediate launch failures leave
+The standard two-argument `omasnap` or legacy `tensaku-edit` screenshot action becomes a fixed
+`edit-screenshot` intent, so screenshots remain editable after expiry or
+reload. Editing prefers Omasnap, falls back to Tensaku on 4.0, and finally to
+`xdg-open` when neither editor is installed. Other images open with `xdg-open`. Missing files, unavailable apps, or immediate launch failures leave
 the entry available for retry.
 
 Sender commands (`exec` and `execArgv`) are never replayed or kept in the archive.
@@ -151,6 +156,16 @@ comma-separated notification keys and performs a durable removal. The companion
 `handled` command only updates the in-memory list after a caller has already
 committed that removal; Foamy Notifications uses this to avoid a second archive
 rewrite. Both accept at most 100 exact `timestamp-id` keys.
+
+Stock Omarchy 4.5 stores arrays in `live.json` and `history.json`. The reader
+accepts those arrays as well as Foamy/4.0's individual notification files. Stock
+identities stay stable across updates and moves into history; updates do not
+become unread again. Only changed stock rows are ingested. Malformed or oversized
+arrays report a read error rather than silently returning an empty history.
+Stock aggregate files are read-only: center removal/clear affects the center's
+archive, not stock's own history panel or visible popups. Stock 4.5 does not save
+images, so those entries generally have app icons rather than historical avatars.
+Its redacted verification-code placeholders remain redacted.
 
 Updates to an existing notification replace its archived content without creating
 another unread item. The watcher reconciles at startup and after reconnecting,
@@ -217,4 +232,8 @@ python3 tests/stock-runtime.py --custom
 ```
 
 These checks use a private D-Bus session and temporary home directory.
-The settings panel check requires a running Wayland session.
+The settings panel check requires a running Wayland session. Set
+`OMARCHY_TEST_ROOT` to an extracted Omarchy 4.5 source tree for `stock-runtime.py`
+and `settings-ui.py` to exercise that release without installing it. Both the
+stock service and Foamy service paths need validation; a fixture alone does not
+establish compatibility with a full OS upgrade.
