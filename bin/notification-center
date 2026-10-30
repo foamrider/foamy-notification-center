@@ -44,6 +44,9 @@ seen_file="$store/seen"
 lock_file="$store/lock"
 dismissed_file="$store/dismissed"
 cleared_at_file="$store/cleared_at"
+# Retention watermark: the newest timestamp retention has dropped. Source
+# copies at or below it (read-only, they may outlive retention) never re-enter.
+pruned_through_file="$store/pruned_through"
 
 # How much is kept. Both are ceilings and the tighter one wins: 30 days of a
 # quiet week is a shorter list than 1000 notifications, and 1000 notifications
@@ -82,7 +85,7 @@ ensure_store() {
   # machine with a second account hands over every notification you have had
   # for the reading. Cheap enough to reassert on every call.
   chmod 700 "$store" "$images" 2>/dev/null || true
-  chmod 600 "$archive" "$dismissed_file" "$seen_file" "$cleared_at_file" 2>/dev/null || true
+  chmod 600 "$archive" "$dismissed_file" "$seen_file" "$cleared_at_file" "$pruned_through_file" 2>/dev/null || true
 }
 
 now_ms() { printf '%s' "$(($(date +%s%N) / 1000000))"; }
@@ -300,6 +303,16 @@ ingest_json() {
   # Transient action feedback remains a toast and does not enter this archive.
   [[ $transient == true ]] && return 0
 
+  # Retention already decided against these: older than the age limit, or at or
+  # below what a count prune dropped. Their source copies are not ours to
+  # delete, so without this they would come back as "new" rows on every sync.
+  if [[ $file_stamp =~ ^[0-9]+$ ]] && (( file_stamp > 0 )); then
+    (( file_stamp < $(now_ms) - keep_days * 86400000 )) && return 0
+    local pruned_through=0
+    [[ -s $pruned_through_file ]] && pruned_through=$(<"$pruned_through_file")
+    [[ $pruned_through =~ ^[0-9]+$ ]] && (( file_stamp <= pruned_through )) && return 0
+  fi
+
   if [[ -s $cleared_at_file ]]; then
     local cleared_at
     cleared_at=$(<"$cleared_at_file")
@@ -470,15 +483,27 @@ prune() {
   # line, which meant everything after it was missing from `kept` and was then
   # written back over the archive as the new truth. Everything below the bad
   # byte, gone.
-  if ! kept=$(jq -Rc --argjson cutoff "$cutoff" \
-      'fromjson? // empty | select(.timestamp >= $cutoff)' "$archive" 2>/dev/null); then
+  # Newest by timestamp, not by line: a late-arriving old row must never
+  # displace newer ones.
+  local verdict
+  if ! verdict=$(jq -Rsc --argjson cutoff "$cutoff" --argjson max "$max_items" '
+      [split("\n")[] | fromjson? // empty | select(type == "object" and .key)] as $rows
+      | ($rows | map(select((.timestamp // 0) >= $cutoff)) | sort_by(.timestamp // 0)) as $fresh
+      | ($fresh | if length > $max then .[length - $max:] else . end) as $kept
+      | ($kept | map(.key) | INDEX(.)) as $keep
+      | {kept: $kept, dropped: [$rows[] | select($keep[.key] == null) | {key, timestamp: (.timestamp // 0)}]}
+    ' "$archive" 2>/dev/null); then
     return 0
   fi
-  kept=$(printf '%s\n' "$kept" | tail -n "$max_items")
-
-  dropped=$(comm -23 \
-    <(jq -r '.key' "$archive" 2>/dev/null | sort) \
-    <(printf '%s\n' "$kept" | jq -r 'select(.key) | .key' 2>/dev/null | sort))
+  kept=$(jq -c '.kept[]' <<< "$verdict") || return 0
+  dropped=$(jq -r '.dropped[].key' <<< "$verdict") || return 0
+  local through previous=0
+  through=$(jq '[.dropped[].timestamp | numbers] | max // 0' <<< "$verdict") || through=0
+  [[ -s $pruned_through_file ]] && previous=$(<"$pruned_through_file")
+  [[ $previous =~ ^[0-9]+$ ]] || previous=0
+  if [[ $through =~ ^[0-9]+$ ]] && (( through > previous )); then
+    printf '%s\n' "$through" > "$pruned_through_file.tmp" && mv -f "$pruned_through_file.tmp" "$pruned_through_file"
+  fi
 
   printf '%s\n' "$kept" | grep -v '^$' > "$archive.tmp" || true
   mv -f "$archive.tmp" "$archive"
@@ -696,12 +721,17 @@ cmd_list() {
   # Expired rows never show, even before the next retention pass. A query
   # searches the whole archive (app, title, text), not just the loaded page.
   result=$(tac "$archive" | jq -Rnc --argjson cleared "$cleared_at" --argjson cutoff "$cutoff" --argjson limit "$limit" --arg query "$query" '
-    # Case-insensitive literal match with Unicode case folding (Oniguruma "i"),
+    # The same text Model.groupsFor() searches (app, summary and body joined by
+    # spaces), case-insensitive with Unicode case folding (Oniguruma "i"),
     # like the panel'"'"'s toLowerCase() filter: "école" finds "ÉCOLE".
     ($query | gsub("(?<c>[.*+?^$(){}|\\[\\]\\\\/-])"; "\\\(.c)")) as $q
-    | reduce (inputs | fromjson? | select((.timestamp // 0) > $cleared and (.timestamp // 0) >= $cutoff)
-        | select($q == "" or ([.app, .summary, .body] | map(tostring) | any(test($q; "i"))))) as $row
-      ([]; if length < $limit then . + [$row] else . end)
+    # Newest by timestamp (a stable sort keeps arrival order for ties), so a row
+    # that arrived late with an old timestamp never takes a newer row'"'"'s place in a page.
+    | [inputs | fromjson? | select(type == "object")
+        | select((.timestamp // 0) > $cleared and (.timestamp // 0) >= $cutoff)
+        | select($q == "" or ([(if (.app // "") == "" then "Unknown app" else (.app | tostring) end),
+            ((.summary // "") | tostring), ((.body // "") | tostring)] | join(" ") | test($q; "i")))]
+    | to_entries | sort_by(-(.value.timestamp // 0), .key) | map(.value) | .[:$limit]
   ') || die "cannot read notification archive"
   printf '%s\n' "$result"
 }

@@ -127,3 +127,29 @@ test('whitespace-only or truncated source files are skipped, not fatal',t=>{
  f.run('sync')
  assert.deepEqual(f.run('list').map(r=>r.summary),['Kept'])
 })
+test('archive search matches the joined app, title and text like the panel',t=>{
+ const f=fixture(t);f.run('list')
+ const stamp=Date.now()-1000
+ fs.writeFileSync(path.join(f.store,'archive.jsonl'),[{key:`${stamp}-1`,timestamp:stamp,app:'Firefox',summary:'Download complete',body:'file.zip'},{key:`${stamp}-2`,timestamp:stamp,app:'',summary:'x',body:''}].map(JSON.stringify).join('\n')+'\n')
+ assert.deepEqual(f.run('list','10','firefox download').map(r=>r.key),[`${stamp}-1`])
+ assert.deepEqual(f.run('list','10','complete file').map(r=>r.key),[`${stamp}-1`])
+ assert.deepEqual(f.run('list','10','unknown app x').map(r=>r.key),[`${stamp}-2`])
+})
+test('retention is by timestamp and pruned source copies never re-enter the archive',t=>{
+ const f=fixture(t),stamp=Date.now()-10000,env={...f.env,NC_MAX_ITEMS:'2'}
+ const run=(...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ for(const i of [1,2,3]) fs.writeFileSync(path.join(f.source,'history',`${stamp+i}-${i}.json`),JSON.stringify({timestamp:stamp+i,originalId:i,app:'T',summary:String(i)}))
+ for(let round=0;round<4;round++){run('sync');assert.deepEqual(run('list').map(r=>r.summary),['3','2'],`sync ${round}`)}
+ // A late-arriving older copy does not displace newer rows either.
+ fs.writeFileSync(path.join(f.source,`${stamp}-9.json`),JSON.stringify({timestamp:stamp,originalId:9,app:'T',summary:'old'}))
+ run('sync');assert.deepEqual(run('list').map(r=>r.summary),['3','2'])
+ // Source copies older than the age limit are not archived at all.
+ fs.writeFileSync(path.join(f.source,'1000-8.json'),JSON.stringify({timestamp:1000,originalId:8,app:'T',summary:'ancient'}))
+ run('sync');assert.ok(!fs.readFileSync(path.join(f.store,'archive.jsonl'),'utf8').includes('ancient'))
+})
+test('pages are newest by timestamp even when an old row arrived last',t=>{
+ const f=fixture(t);f.run('list')
+ const b=Date.now()-100000
+ fs.writeFileSync(path.join(f.store,'archive.jsonl'),[...[0,1,2].map(i=>({key:`${b+10+i}-1`,timestamp:b+10+i,summary:'new'+i})),{key:`${b}-9`,timestamp:b,summary:'late-old'}].map(JSON.stringify).join('\n')+'\n')
+ assert.deepEqual(f.run('list','3').map(r=>r.summary),['new2','new1','new0'])
+})
