@@ -132,15 +132,12 @@ Item {
       font.pixelSize: FoamyStyle.font.caption
     }
   }
-  NotificationAction {
+  FoamyAction {
     id: dismiss
     anchors.right: parent.right
     anchors.rightMargin: Style.space(6)
     anchors.verticalCenter: parent.verticalCenter
-    iconName: "close"
-    size: Style.space(26)
-    iconSize: Style.space(14)
-    focusable: false
+    iconName: "x"
     foreground: root.foreground
     hasCursor: root.dismissHasCursor
     opacity: hover.hovered || root.hasCursor ? 1 : 0

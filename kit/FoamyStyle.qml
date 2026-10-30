@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.1.0 0b0cb02b422d999bd0658bf0a4710084c3f69ac299695a507655de6d9a9ce1c2 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.2.0 5db882e6e261403096bf3d68ca1f580f877b1b08d83224662ec5ced4efa80be3 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -46,6 +46,12 @@ QtObject {
     readonly property int iconLarge: Style.space(18)
     readonly property int display: Style.space(24)
     readonly property int displayLarge: Style.space(28)
+    // Hero numerals: the one big number a panel is about (clock face,
+    // temperature, volume, countdown). numeralCompact for a second hero
+    // number or short screens. Units beside a numeral use `display`.
+    // Pair with monoFamily or font.features for steady digits.
+    readonly property int numeral: Style.space(56)
+    readonly property int numeralCompact: Style.space(40)
   }
 
   // --- popup geometry ----------------------------------------------------------
@@ -53,6 +59,8 @@ QtObject {
   readonly property int popupWidthWide: Style.space(560)
   readonly property int popupMaxHeight: Style.space(640)
   readonly property int menuWidth: Style.space(232)
+  // Inner padding of FoamyPopupCard menus (the stock tray menu uses 8 too).
+  readonly property int menuPadding: Style.space(8)
   // Inner padding of popup content (the card itself has padding 0 so lists
   // can scroll edge to edge).
   readonly property int padding: Style.space(20)
@@ -75,4 +83,10 @@ QtObject {
   readonly property int settingsIconSize: Style.space(16)
   readonly property int headerIconSize: Style.space(18)
   readonly property real iconStroke: 1.7
+
+  // MultiEffect, ShaderEffect and layer effects draw NOTHING under the
+  // software renderer (Omarchy CPU rendering, QT_QUICK_BACKEND=software, the
+  // preview harness). Gate them per item, where GraphicsInfo is available:
+  //   layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
+  // and keep the un-effected content readable without them.
 }

@@ -100,7 +100,7 @@ test("callback cleanup runs only after durable dismissal and batches exact keys,
  const state=service(),calls=[]
  let answer=true
  state.releaseQueue=[];state.releaseBusy=false;state.releaseRetry={running:false,restart(){this.running=true}}
- // Contract v2: Foamy is asked over its IPC (PeerIpc), never by deleting its files.
+ // Contract v2: Foamy is asked over its IPC (FoamyPeerIpc), never by deleting its files.
  state.peer.call=(target,method,args,done)=>{calls.push([target,method,...args]);done(answer,answer?'ok':'')}
  for(const name of ["releaseNotificationActions","pumpReleases"]) {
   const start=source.indexOf(`  function ${name}(`)
@@ -108,7 +108,7 @@ test("callback cleanup runs only after durable dismissal and batches exact keys,
  }
  const keys=Array.from({length:1001},(_,i)=>`${i+1}-1`)
  state.releaseNotificationActions(keys)
- // All 11 batches go out (more than PeerIpc's 8 concurrent CLI calls), in order.
+ // All 11 batches go out (more than FoamyPeerIpc's 8 concurrent CLI calls), in order.
  assert.equal(calls.length,11)
  assert.equal(calls[0][2].split(',').length,100)
  assert.deepEqual(calls[10],["foamy.notifications","releaseHistory","1001-1"])

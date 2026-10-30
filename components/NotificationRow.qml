@@ -172,7 +172,7 @@ Item {
       visible: false
       layer.enabled: true
     }
-    NotificationAction {
+    FoamyAction {
       id: dismiss
       objectName: "notificationRowDismiss"
       anchors.right: parent.right
@@ -180,10 +180,7 @@ Item {
       y: root.verticalPadding - Style.space(3)
       visible: root.expanded || root.dismissHasCursor
       opacity: hover.hovered || root.hasCursor ? 1 : 0
-      iconName: "close"
-      size: Style.space(26)
-      iconSize: Style.space(14)
-      focusable: false
+      iconName: "x"
       tooltipText: FoamyI18n.t("Dismiss notification")
       foreground: root.foreground
       hasCursor: root.dismissHasCursor

@@ -1,4 +1,4 @@
-// foamy-kit 0.1.0 185f7381c12b890ff269a8a72a5784b2afecabe298c9ceb701675dc9acf4b71a — do not edit; change foamy-kit and run sync
+// foamy-kit 0.2.0 322db103ce6d6476aac66858d421c75258365a5a2017188906cce61c8b1610ee — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Ui
 
@@ -12,15 +12,21 @@ import qs.Ui
 //     onHovered: cursor.hover(index)
 //     onClicked: root.activate(index)
 //   }
+//
+// The pointer shows a hand over the row; set cursorShape (e.g.
+// Qt.ArrowCursor) for rows that do nothing on click.
 CursorSurface {
   id: root
 
   signal hovered()
   signal clicked()
 
+  property int cursorShape: Qt.PointingHandCursor
+
   radius: FoamyStyle.radius
 
   HoverHandler {
+    cursorShape: root.cursorShape
     onHoveredChanged: if (hovered) root.hovered()
   }
   TapHandler {

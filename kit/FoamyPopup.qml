@@ -1,4 +1,4 @@
-// foamy-kit 0.1.0 4cc32a18ce81fa161d0e47c2e93299eac63f9871fd9de69832192d44e5277f03 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.2.0 9ab3d2c41900d56f7ea39d8c0a12d839724ffb0c90f07a6efd69ff0bbc46861e — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -27,6 +27,10 @@ import qs.Ui
 //   bodyItem, bodyImplicitHeight the built body (null until first open)
 //   ensureBody()                 build the body without opening
 //   wide: bool                   560 instead of 420
+//   maxHeight: real              height cap for the fitted card (default
+//                                FoamyStyle.popupMaxHeight 640; 0 = only the
+//                                screen limit, for panels that compact
+//                                themselves by screen height)
 //   contentWidth/contentHeight   override the defaults if needed
 //   cornerRadius, surfaceColor   foamy surface (rarely overridden)
 //   cardItem                     the drawn card (for screenshots/tests)
@@ -48,6 +52,7 @@ KeyboardPanel {
   id: root
 
   property bool wide: false
+  property real maxHeight: FoamyStyle.popupMaxHeight
   property real cornerRadius: FoamyStyle.radius
   property color surfaceColor: Commons.Color.popups.background
 
@@ -65,7 +70,7 @@ KeyboardPanel {
   padding: 0
   borderSpec: FoamyStyle.popupBorderSpec
   contentWidth: fittedContentWidth(wide ? FoamyStyle.popupWidthWide : FoamyStyle.popupWidth)
-  contentHeight: fittedContentHeight(bodyImplicitHeight, FoamyStyle.popupMaxHeight)
+  contentHeight: fittedContentHeight(bodyImplicitHeight, maxHeight)
   focusTarget: bodyLoader
 
   onOpenChanged: if (open && body) bodyRequested = true

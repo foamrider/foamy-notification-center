@@ -210,7 +210,7 @@ Ui.Panel {
       })
     }
   }
-  PeerIpc { id: peer }
+  FoamyPeerIpc { id: peer }
   Process {
     id: preferencesSave
     stdout: StdioCollector {}
@@ -647,12 +647,9 @@ Ui.Panel {
             onSettingsClicked: root.openSettings()
             onSettingsHovered: function(hovered) { if (hovered) root.keyboardNavigation = false }
             Component.onCompleted: settingsButton.objectName = "notificationSettings"
-            NotificationAction {
+            FoamyAction {
               objectName: "notificationSearchButton"
               iconName: "search"
-              size: FoamyStyle.actionSize
-              iconSize: FoamyStyle.iconSize
-              focusable: false
               tooltipText: root.tr("Search notifications  ( / )")
               foreground: root.searching ? Commons.Color.accent : FoamyPalette.secondaryText
               onClicked: root.searching ? root.endSearch() : root.startSearch()
@@ -666,13 +663,10 @@ Ui.Panel {
               actionEnabled: root.entries.length > 0
               onClicked: root.clearAll()
             }
-            NotificationAction {
+            FoamyAction {
               id: moreButton
               objectName: "notificationMore"
-              iconName: "more"
-              size: FoamyStyle.actionSize
-              iconSize: FoamyStyle.iconSize
-              focusable: false
+              iconName: "ellipsis"
               tooltipText: root.tr("More options")
               foreground: FoamyPalette.secondaryText
               onClicked: moreMenu.visible ? moreMenu.close() : moreMenu.open()
@@ -699,7 +693,7 @@ Ui.Panel {
               implicitHeight: Style.space(42)
               contentItem: RowLayout {
                 spacing: Style.space(10)
-                NotificationAction { iconName: root.dnd ? "bellOff" : "bell"; size: FoamyStyle.actionSize; iconSize: FoamyStyle.iconSize; foreground: root.dnd ? Commons.Color.accent : root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
+                FoamyIcon { name: root.dnd ? "bell-off" : "bell"; color: root.dnd ? Commons.Color.accent : root.foreground; Layout.preferredWidth: FoamyStyle.iconSize; Layout.preferredHeight: FoamyStyle.iconSize; Accessible.ignored: true }
                 Text { text: muteItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: FoamyStyle.font.bodySmall; color: root.foreground; Layout.fillWidth: true; wrapMode: Text.WordWrap }
               }
               background: Rectangle { color: muteItem.highlighted ? FoamyPalette.hoverFill : "transparent"; radius: FoamyStyle.radius }
@@ -767,11 +761,8 @@ Ui.Panel {
                 root.moveCursor(0, 1)
               }
             }
-            NotificationAction {
-              iconName: "close"
-              size: FoamyStyle.actionSize
-              iconSize: FoamyStyle.iconSize
-              focusable: false
+            FoamyAction {
+              iconName: "x"
               tooltipText: root.tr("Close search  ( Esc )")
               foreground: FoamyPalette.secondaryText
               onClicked: root.endSearch()

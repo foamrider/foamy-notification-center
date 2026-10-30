@@ -82,7 +82,7 @@ Item {
   // Without Foamy the source is stock Omarchy (4.0 files or 4.5 arrays).
   property string sourceKind: ""
   property var sourceInfo: ({})
-  PeerIpc { id: peer }
+  FoamyPeerIpc { id: peer }
   readonly property bool foamySource: sourceKind === "foamy" || sourceKind === "legacy"
 
   function resolveSource() {
@@ -297,7 +297,7 @@ Item {
   }
 
   // Foamy releases callbacks and drops its own copies; we never delete its files.
-  // Batches of 100 go one at a time (PeerIpc runs at most 8 CLI calls on 4.0);
+  // Batches of 100 go one at a time (FoamyPeerIpc runs at most 8 CLI calls on 4.0);
   // a failed batch stays queued and is retried, since these keys are already
   // gone from the archive and no later prune would ask again.
   property var releaseQueue: []
