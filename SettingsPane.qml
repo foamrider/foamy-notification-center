@@ -99,15 +99,13 @@ Column {
               onCommitted: function(next) {
                 if (Preferences.valid(field.scope, field.modelData.key, next)) root.save(field.scope, field.modelData.key, next)
               }
-              // The kit field skips re-committing the number it last sent until
-              // `value` changes; a failed save leaves `value` as it was, so clear
-              // that guard and show the stored value, keeping a newer draft.
+              // A failed save leaves `value` as it was: saveFailed() shows the
+              // stored value again (keeping a newer draft) and lets the same
+              // number be committed again.
               Connections {
                 target: root
                 function onSaveFailed(scope, key) {
-                  if (scope !== field.scope || key !== field.modelData.key) return
-                  numberEditor.lastCommitted = ""
-                  if (!numberEditor.editing) numberEditor.show()
+                  if (scope === field.scope && key === field.modelData.key) numberEditor.saveFailed()
                 }
               }
             }
