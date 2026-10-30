@@ -21,6 +21,8 @@ Column {
   // The enclosing FoamySettingsPage, to keep focused fields visible.
   property Item page: null
   signal save(string scope, string key, var value)
+  // The panel reports a save that failed (Panel.finishPreference(false)).
+  signal saveFailed(string scope, string key)
   spacing: FoamyStyle.sectionGap
 
   function current(scope, key) {
@@ -87,6 +89,7 @@ Column {
             // while not being edited), commits a valid changed number once on
             // Enter/focus-out, and Escape restores the value and stays on the page.
             FoamyNumberField {
+              id: numberEditor
               objectName: field.scope + "-" + field.modelData.key
               label: FoamyI18n.t(field.modelData.label)
               value: root.current(field.scope, field.modelData.key)
@@ -95,6 +98,17 @@ Column {
               stepSize: field.modelData.step || 1
               onCommitted: function(next) {
                 if (Preferences.valid(field.scope, field.modelData.key, next)) root.save(field.scope, field.modelData.key, next)
+              }
+              // The kit field skips re-committing the number it last sent until
+              // `value` changes; a failed save leaves `value` as it was, so clear
+              // that guard and show the stored value, keeping a newer draft.
+              Connections {
+                target: root
+                function onSaveFailed(scope, key) {
+                  if (scope !== field.scope || key !== field.modelData.key) return
+                  numberEditor.lastCommitted = ""
+                  if (!numberEditor.editing) numberEditor.show()
+                }
               }
             }
           }

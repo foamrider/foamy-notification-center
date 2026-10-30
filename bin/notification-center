@@ -399,6 +399,13 @@ ingest_json() {
   # only ever exclude more.
   if [[ -z $existing ]]; then
     stamp_excluded "$key" && return 0
+    # I1 for keys Foamy handled before their file reached us: its journal can
+    # list a key while the file is still being written, and its `handled` IPC
+    # may never arrive. The tombstone keeps it out once the journal moves on.
+    if handled_listed "$key"; then
+      add_tombstones <(printf '%s %s\n' "$key" "$(key_stamp "$key")") || return 1
+      return 0
+    fi
     if [[ $key == stock-* && $file_stamp =~ ^[0-9]+$ ]] && (( file_stamp > 0 )); then
       (( file_stamp <= $(cleared_line) )) && return 0
       (( file_stamp < $(now_ms) - keep_days * 86400000 )) && return 0
@@ -527,6 +534,13 @@ apply_handled() {
   mapfile -t keys < <(jq -r --argjson keys "$keys" '($keys | INDEX(.)) as $k | select($k[.key] != null) | .key' "$archive" 2>/dev/null)
   (( ${#keys[@]} )) || return 0
   remove_keys "${keys[@]}"
+}
+
+# Whether Foamy's handled journal lists a ts-id key (the same bounded read as
+# apply_handled; process substitution, so an early grep exit is no failure).
+handled_listed() {
+  [[ -n $handled_file && -s $handled_file && $1 =~ ^[0-9]+-[0-9]+$ ]] || return 1
+  grep -qxF -- "$1" < <(head -c 65536 -- "$handled_file")
 }
 
 # ---------------------------------------------------------------- trimming

@@ -45,3 +45,19 @@ test('numeric settings use kit FoamyNumberField and never assign over the settin
   assert.doesNotMatch(pane, /\btext\s*=\s*String\(root\.current/)
   assert.doesNotMatch(pane, /SafeTextField/)
 })
+test('a failed save is reported to the settings fields so the same number can be retried', () => {
+  const fs = require('node:fs'), vm = require('node:vm')
+  const panel = fs.readFileSync(require('node:path').join(__dirname, '../Panel.qml'), 'utf8')
+  const start = panel.indexOf('  function finishPreference(ok) {')
+  const failed = []
+  const ctx = vm.createContext({ preferenceActive: { scope: 'center', key: 'keepDays' }, settingsError: '', awaitingPeerSave: true,
+    tr: s => s, console: { warn() {} }, Qt: { callLater() {} }, preferenceFailed: (scope, key) => failed.push(scope + ':' + key) })
+  ctx.root = ctx
+  vm.runInContext(panel.slice(start, panel.indexOf('\n  }', start) + 4), ctx)
+  ctx.finishPreference(false)
+  assert.deepEqual(failed, ['center:keepDays'])
+  ctx.preferenceActive = { scope: 'center', key: 'maxItems' }; ctx.finishPreference(true)
+  assert.deepEqual(failed, ['center:keepDays'])
+  // The panel's settings page forwards it to SettingsPane.saveFailed (runtime: tests/settings-number.py).
+  assert.match(panel, /function onPreferenceFailed\(scope, key\) \{ settingsFields\.saveFailed\(scope, key\) \}/)
+})

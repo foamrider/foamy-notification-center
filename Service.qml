@@ -36,8 +36,11 @@ Item {
   property bool hasMore: false
   property string searchQuery: ""
   onSearchQueryChanged: reloadArchive.restart()
+  // A list read is running. Paging waits for it: the panel checks again when
+  // it ends, so one request never jumps two pages.
+  readonly property bool listing: listProc.running
   function loadMore() {
-    if (!hasMore || listLimit >= maxItems) return
+    if (!hasMore || listLimit >= maxItems || listProc.running) return
     listLimit = Math.min(maxItems, listLimit + pageSize)
     load()
   }

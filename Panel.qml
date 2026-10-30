@@ -188,11 +188,15 @@ Ui.Panel {
     if (result.command.length) { preferencesSave.command = result.command; preferencesSave.running = true }
     else finishPreference(true)
   }
+  // A failed save: the field shows the stored value again and accepts the same
+  // number as a fresh attempt ("Try again" must be able to retry it).
+  signal preferenceFailed(string scope, string key)
   function finishPreference(ok) {
     if (!preferenceActive) return
     if (!ok) {
       settingsError = tr("Could not save settings. Try again.")
       console.warn("Foamy Notification Center: settings save failed for", preferenceActive.scope, preferenceActive.key)
+      preferenceFailed(preferenceActive.scope, preferenceActive.key)
     }
     preferenceActive = null
     awaitingPeerSave = false
@@ -254,8 +258,17 @@ Ui.Panel {
   onMaxItemsChanged: pushSettings()
   onShowPreviewChanged: pushSettings()
 
+  // Paging: the end of the list loads the next page (up to maxItems). Checked
+  // on scroll and whenever the content, hasMore or a read changes: collapsed
+  // stacks can fit a whole page in the viewport, where atYEnd never changes.
+  function pageIfAtEnd() {
+    if (opened && list && list.atYEnd && store && store.hasMore && !store.listing) store.loadMore()
+  }
+
   Connections {
     target: root.store
+    function onHasMoreChanged() { Qt.callLater(root.pageIfAtEnd) }
+    function onListingChanged() { Qt.callLater(root.pageIfAtEnd) }
     function onEntryAdded(entry) { root.handleEntryAdded(entry) }
     function onEntriesReset() { root.rebuild() }
     function onBrowserIconsUpdated() { root.rebuild() }
@@ -839,8 +852,10 @@ Ui.Panel {
               // Construct only visible rows when restoring the detached model.
               cacheBuffer: 0
               wheelStep: Style.space(96)
-              // Paging: reaching the end loads the next 500 (up to maxItems).
-              onAtYEndChanged: if (atYEnd && root.store && root.store.hasMore) root.store.loadMore()
+              // Paging (root.pageIfAtEnd): reaching the end, or content that
+              // already fits, loads the next page.
+              onAtYEndChanged: Qt.callLater(root.pageIfAtEnd)
+              onContentHeightChanged: Qt.callLater(root.pageIfAtEnd)
               scrollbarWidth: Style.space(6)
               scrollbarInset: Style.space(2)
               // The flattened model keeps expanded stacks within the same virtualized list.
@@ -971,6 +986,7 @@ Ui.Panel {
           retryable: false
           onBack: root.closeSettings()
           SettingsPane {
+            id: settingsFields
             width: parent.width
             settings: root.settings
             popupSettings: root.popupSettings
@@ -980,6 +996,10 @@ Ui.Panel {
             saving: root.preferenceActive !== null
             page: settingsPane
             onSave: function(scope, key, value) { root.savePreference(scope, key, value) }
+            Connections {
+              target: root
+              function onPreferenceFailed(scope, key) { settingsFields.saveFailed(scope, key) }
+            }
           }
         }
       }

@@ -84,6 +84,44 @@ test('the source comes from the service (IPC), never from another plugin\'s conf
  fs.writeFileSync(handled,`${stamp}-2\n`);run(env,'sync');assert.deepEqual(run(env,'list'),[])
  assert.ok(fs.existsSync(path.join(foamy,'popups',`${stamp}-2.json`)),'source files are read-only')
 })
+test('a key in Foamy\'s handled journal before its file arrives is never archived, even after the journal moves on',async t=>{
+ const f=fixture(t),foamy=path.join(f.dir,'foamy'),handled=path.join(foamy,'handled'),history=path.join(foamy,'history')
+ fs.mkdirSync(path.join(foamy,'popups'),{recursive:true});fs.mkdirSync(history,{recursive:true});fs.writeFileSync(handled,'')
+ const env={...f.env,NC_SOURCE:'foamy',NC_SRC_DIR:path.join(foamy,'popups'),NC_SRC_HISTORY:history,NC_HANDLED:handled,NC_STATE_FILE:path.join(foamy,'state.json')}
+ const run=(...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ const events=[],watch=spawn(script,['watch'],{env})
+ let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
+ t.after(()=>watch.kill())
+ async function until(fn){const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))}}
+ await until(()=>events.some(e=>e.event==='storeChanged'))
+ const stamp=Date.now(),write=(id,summary)=>fs.writeFileSync(path.join(history,`${stamp}-${id}.json`),JSON.stringify({timestamp:stamp,originalId:id,app:'Test',summary}))
+ // The journal names the key first (its `handled` IPC never arrives), then the file lands.
+ fs.writeFileSync(handled,`${stamp}-3\n`);await new Promise(r=>setTimeout(r,150))
+ write(3,'Handled');write(4,'Fresh')
+ await until(()=>events.some(e=>e.summary==='Fresh'))
+ assert.ok(!events.some(e=>e.summary==='Handled'),JSON.stringify(events))
+ assert.deepEqual(run('list').map(r=>r.summary),['Fresh'])
+ // Durable: Foamy trimming its journal while the file stays does not bring it back.
+ fs.writeFileSync(handled,'');run('sync');assert.deepEqual(run('list').map(r=>r.summary),['Fresh'])
+})
+test('a first page that fits the viewport (collapsed stacks) still loads the next page',()=>{
+ const panel=fs.readFileSync(path.join(__dirname,'../Panel.qml'),'utf8'),service=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const take=(src,name)=>{const start=src.indexOf(`  function ${name}(`);assert.ok(start>=0,name);return src.slice(start,src.indexOf('\n  }',start)+4)}
+ const store=vm.createContext({hasMore:false,listLimit:500,pageSize:500,maxItems:1000,loads:0,listProc:{running:false},load(){store.loads++}})
+ store.root=store;vm.runInContext(take(service,'loadMore'),store)
+ Object.defineProperty(store,'listing',{get(){return store.listProc.running}})
+ // 500 rows of one app collapse to a header and one message: the list sits at its end from the start.
+ const ui=vm.createContext({opened:true,list:{atYEnd:true},store});ui.root=ui;vm.runInContext(take(panel,'pageIfAtEnd'),ui)
+ // The read is still running when hasMore turns true: nothing yet, one request per read.
+ store.listProc.running=true;store.hasMore=true;ui.pageIfAtEnd();assert.equal(store.loads,0)
+ // The read ends (onListingChanged) with atYEnd unchanged: the next page loads without any scroll.
+ store.listProc.running=false;ui.pageIfAtEnd();assert.equal(store.listLimit,1000);assert.equal(store.loads,1)
+ store.listProc.running=true;ui.pageIfAtEnd();store.listProc.running=false;ui.pageIfAtEnd();assert.equal(store.listLimit,1000,'never past maxItems')
+ ui.opened=false;store.listLimit=500;ui.pageIfAtEnd();assert.equal(store.listLimit,500,'closed: no paging')
+ // Wiring: every change that can leave the list at its end re-checks.
+ for(const hook of ['function onHasMoreChanged() { Qt.callLater(root.pageIfAtEnd) }','function onListingChanged() { Qt.callLater(root.pageIfAtEnd) }','onAtYEndChanged: Qt.callLater(root.pageIfAtEnd)','onContentHeightChanged: Qt.callLater(root.pageIfAtEnd)']) assert.ok(panel.includes(hook),hook)
+ assert.match(service,/readonly property bool listing: listProc\.running/)
+})
 test('search folds Unicode case like the panel and matches the query literally',t=>{
  const f=fixture(t);f.run('list')
  const stamp=Date.now()-1000

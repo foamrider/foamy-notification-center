@@ -59,6 +59,20 @@ ShellRoot {
     f.field.focus = false
     compare(pane.saved, ["center:keepDays=9"])
    }
+   function test_same_number_retries_after_a_failed_save() {
+    var f = editor()
+    f.field.forceActiveFocus()
+    keyClick(Qt.Key_End); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_1); keyClick(Qt.Key_4)
+    keyClick(Qt.Key_Return)
+    compare(pane.saved, ["center:keepDays=14"])
+    pane.saveFailed("center", "keepDays")                    // Panel.finishPreference(false); value stays 30
+    compare(f.field.text, "30")
+    keyClick(Qt.Key_End); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_1); keyClick(Qt.Key_4)
+    keyClick(Qt.Key_Return)
+    compare(pane.saved, ["center:keepDays=14", "center:keepDays=14"])
+    f.field.focus = false
+    compare(pane.saved.length, 2)                           // focus-out does not send it a third time
+   }
    function cleanup() { pane.settings = ({ keepDays: 30, maxItems: 1000 }); pane.saved = []; wait(50) }
    onCompletedChanged: if (completed) console.log("NUMBER_SETTINGS", qtest_results.passCount, "passed", qtest_results.failCount, "failed")
   }
@@ -73,4 +87,4 @@ output = result.stdout + result.stderr
 print('\n'.join(line for line in output.splitlines() if 'NUMBER_SETTINGS' in line or 'FAIL' in line or 'Actual' in line or 'Expected' in line or 'Error' in line))
 import re
 match = re.search(r'NUMBER_SETTINGS (\d+) passed (\d+) failed', output)
-assert match and int(match.group(1)) >= 3 and match.group(2) == '0', output
+assert match and int(match.group(1)) >= 4 and match.group(2) == '0', output
