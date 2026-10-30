@@ -115,6 +115,15 @@ Column {
                 }
                 onEditingFinished: commit()
                 onAccepted: commit()
+                // Escape cancels the edit: restore the saved value first and keep
+                // the key, so the page does not close and the focus loss that
+                // follows has nothing new to save. A second Escape leaves Settings.
+                onKeyPressed: function(event) {
+                  if (event.key !== Qt.Key_Escape) return
+                  event.accepted = true
+                  text = String(root.current(field.scope, field.modelData.key))
+                  if (root.page) root.page.focusBack()
+                }
               }
             }
           }

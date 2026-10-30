@@ -38,3 +38,10 @@ test('center settings save through FoamyPrefs with the host module name; popup s
   assert.ok(panel.includes('peer.call("foamy.notifications", "setPreference"'))
   assert.ok(!/notification-preferences|setBarWidget/.test(panel))
 })
+test('numeric settings consume Escape, restore the saved value and keep Settings open', () => {
+  const pane = require('node:fs').readFileSync(require('node:path').join(__dirname, '../SettingsPane.qml'), 'utf8')
+  const handler = pane.slice(pane.indexOf('onKeyPressed: function(event) {'), pane.indexOf('}', pane.indexOf('onKeyPressed: function(event) {')))
+  assert.match(handler, /Qt\.Key_Escape/)
+  assert.ok(handler.indexOf('event.accepted = true') < handler.indexOf('text = String(root.current('), 'the key is consumed before focus can move')
+  assert.ok(handler.indexOf('text = String(root.current(') < handler.indexOf('focusBack()'), 'the value is restored before focus leaves, so editingFinished saves nothing')
+})
