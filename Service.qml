@@ -363,7 +363,11 @@ Item {
     releaseBeforeBusy = true
     peer.call("foamy.notifications", "releaseHistoryBefore", [String(cut)], function(ok, output) {
       root.releaseBeforeBusy = false
-      if (ok && String(output).trim() === "ok") { if (root.releaseBeforeCut === cut) root.releaseBeforeCut = 0 }
+      if (ok && String(output).trim() === "ok") {
+        // A newer Clear all may have arrived while this call was in flight: send it now.
+        if (root.releaseBeforeCut === cut) root.releaseBeforeCut = 0
+        else root.pumpReleaseBefore()
+      }
       else if (root.foamySource) releaseRetry.restart()
       else root.releaseBeforeCut = 0
     })
