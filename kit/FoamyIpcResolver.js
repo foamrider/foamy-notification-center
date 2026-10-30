@@ -1,5 +1,5 @@
 .pragma library
-// foamy-kit 0.3.0 429b18a7c00baf4488c6792a95e4be71207aefa1a237436cef34e33122956915 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.1 429b18a7c00baf4488c6792a95e4be71207aefa1a237436cef34e33122956915 — do not edit; change foamy-kit and run sync
 
 // Finds 4.5's IpcRegistry at runtime. 4.0 has no such singleton, and a
 // static `import qs.Commons` reference to it would stop the plugin loading
