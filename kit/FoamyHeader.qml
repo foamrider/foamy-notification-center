@@ -1,4 +1,4 @@
-// foamy-kit 0.2.0 66e0dc49184dee294fa8a34f933ed04b02ed70a2132d53df70e254fe8c4cdbdd — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.0 ce8a8a5f3462791974ccef640994e84d4f02513fd1f54d97edca3893c3d9e1ae — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -26,19 +26,26 @@ Item {
   property bool showSettings: true
   property bool settingsHasCursor: false
   property color foreground: FoamyPalette.text
+  // Insets around the row (FoamyHeroBand sets the vertical ones to 0).
+  property real horizontalPadding: FoamyStyle.padding
+  property real topPadding: FoamyStyle.padding
+  property real bottomPadding: FoamyStyle.padding
   property alias settingsButton: settingsButton
   default property alias trailing: trailingRow.data
 
   signal settingsClicked()
   signal settingsHovered(bool hovered)
 
-  implicitWidth: row.implicitWidth + FoamyStyle.padding * 2
-  implicitHeight: Math.max(FoamyStyle.settingsButtonSize, textColumn.implicitHeight) + FoamyStyle.padding * 2
+  implicitWidth: row.implicitWidth + horizontalPadding * 2
+  implicitHeight: Math.max(FoamyStyle.settingsButtonSize, textColumn.implicitHeight) + topPadding + bottomPadding
 
   RowLayout {
     id: row
     anchors.fill: parent
-    anchors.margins: FoamyStyle.padding
+    anchors.leftMargin: root.horizontalPadding
+    anchors.rightMargin: root.horizontalPadding
+    anchors.topMargin: root.topPadding
+    anchors.bottomMargin: root.bottomPadding
     spacing: FoamyStyle.gapLarge
 
     FoamyIcon {

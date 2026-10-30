@@ -633,43 +633,84 @@ Ui.Panel {
           spacing: Style.space(8)
 
           // ------------------------------------------------------ header
-          FoamyHeader {
+          // The foamy hero band: title row (bell, "Notifications", total, search /
+          // clear / more, settings) and the unread summary in the hero slot.
+          FoamyHeroBand {
             id: header
             objectName: "notificationCenterHeader"
             width: parent.width
+            readonly property int unreadCount: Model.unreadState(root.entries, root.readMark).unread
+            iconName: root.dnd ? "bell-off" : "bell"
             title: root.tr("Notifications")
-            meta: {
-              if (root.dnd) return root.tr("Do not disturb")
-              var count = Model.unreadState(root.entries, root.readMark).unread
-              return FoamyI18n.tn("%1 unread", count)
-            }
+            meta: root.entries.length ? FoamyI18n.tn("%1 notifications", root.entries.length) : ""
             settingsHasCursor: root.keyboardNavigation && root.cursorOnSettings
             onSettingsClicked: root.openSettings()
             onSettingsHovered: function(hovered) { if (hovered) root.keyboardNavigation = false }
             Component.onCompleted: settingsButton.objectName = "notificationSettings"
-            FoamyAction {
-              objectName: "notificationSearchButton"
-              iconName: "search"
-              tooltipText: root.tr("Search notifications  ( / )")
-              foreground: root.searching ? Commons.Color.accent : FoamyPalette.secondaryText
-              onClicked: root.searching ? root.endSearch() : root.startSearch()
-            }
-            FoamyAction {
-              objectName: "clearAllNotifications"
-              iconName: "trash"
-              destructive: true
-              tooltipText: root.tr("Clear all notifications")
-              foreground: FoamyPalette.secondaryText
-              actionEnabled: root.entries.length > 0
-              onClicked: root.clearAll()
-            }
-            FoamyAction {
-              id: moreButton
-              objectName: "notificationMore"
-              iconName: "ellipsis"
-              tooltipText: root.tr("More options")
-              foreground: FoamyPalette.secondaryText
-              onClicked: moreMenu.visible ? moreMenu.close() : moreMenu.open()
+            trailing: [
+              FoamyAction {
+                objectName: "notificationSearchButton"
+                iconName: "search"
+                tooltipText: root.tr("Search notifications  ( / )")
+                foreground: root.searching ? Commons.Color.accent : FoamyPalette.secondaryText
+                onClicked: root.searching ? root.endSearch() : root.startSearch()
+              },
+              FoamyAction {
+                objectName: "clearAllNotifications"
+                iconName: "trash"
+                destructive: true
+                tooltipText: root.tr("Clear all notifications")
+                foreground: FoamyPalette.secondaryText
+                actionEnabled: root.entries.length > 0
+                onClicked: root.clearAll()
+              },
+              FoamyAction {
+                id: moreButton
+                objectName: "notificationMore"
+                iconName: "ellipsis"
+                tooltipText: root.tr("More options")
+                foreground: FoamyPalette.secondaryText
+                onClicked: moreMenu.visible ? moreMenu.close() : moreMenu.open()
+              }
+            ]
+
+            // Hero: the unread count and whether notifications are getting through.
+            RowLayout {
+              objectName: "notificationUnreadHero"
+              Layout.fillWidth: true
+              spacing: FoamyStyle.gapLarge
+              Text {
+                text: FoamyI18n.number(header.unreadCount) + (root.unreadCapped ? "+" : "")
+                textFormat: Text.PlainText
+                color: header.unreadCount > 0 ? FoamyPalette.text : FoamyPalette.secondaryText
+                font.family: FoamyStyle.fontFamily
+                font.pixelSize: FoamyStyle.font.numeralCompact
+                font.weight: Font.Light
+                Layout.alignment: Qt.AlignVCenter
+              }
+              Column {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: FoamyStyle.gapTiny
+                Text {
+                  width: parent.width
+                  text: FoamyI18n.tn("unread", header.unreadCount)
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  color: FoamyPalette.text
+                  font.family: FoamyStyle.fontFamily
+                  font.pixelSize: FoamyStyle.font.subtitle
+                }
+                Text {
+                  width: parent.width
+                  text: root.dnd ? root.tr("Do not disturb is on") : root.tr("Notifications are on")
+                  textFormat: Text.PlainText
+                  elide: Text.ElideRight
+                  color: root.dnd ? Commons.Color.accent : FoamyPalette.secondaryText
+                  font.family: FoamyStyle.fontFamily
+                  font.pixelSize: FoamyStyle.font.bodySmall
+                }
+              }
             }
           }
 

@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.2.0 5f4459d510118119c216d5d57fa1e9a87d2ec2459b49e70dcf3344a179922bd9 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.0 7351706e3bff0b8e5f0a9c0fc1459c006db74672dff30c275b4ca1df5d312c18 — do not edit; change foamy-kit and run sync
 import QtQuick
 import Quickshell.Io
 import qs.Commons as Commons
@@ -25,6 +25,19 @@ QtObject {
   readonly property color hoverFill: Qt.alpha(text, 0.08)
   readonly property color fieldFill: Qt.alpha(text, 0.055)
   readonly property color selectedFill: Qt.alpha(accent, 0.18)
+
+  // --- hero band (FoamyHeroBand) ---------------------------------------------------
+  // The foamy header band: the popup surface tinted toward the accent, from
+  // the dev-era headers (power 0.075, audio/github/weather 0.08 + glow, NC
+  // 0.12 -> 0.035). A diagonal wash from bandFill to bandFillEnd, a soft
+  // accent glow at the trailing top corner, a hairline into the body.
+  readonly property color bandFill: Qt.tint(background, Qt.alpha(accent, lightTheme ? 0.11 : 0.09))
+  readonly property color bandFillEnd: Qt.tint(background, Qt.alpha(accent, lightTheme ? 0.05 : 0.04))
+  readonly property color bandGlow: Qt.alpha(accent, lightTheme ? 0.10 : 0.14)
+  readonly property color bandEdge: Qt.alpha(text, lightTheme ? 0.10 : 0.08)
+  // Over pictures (artwork, sky): keeps band text readable.
+  readonly property color bandScrimTop: Qt.alpha(background, lightTheme ? 0.45 : 0.35)
+  readonly property color bandScrimBottom: Qt.alpha(background, lightTheme ? 0.82 : 0.78)
 
   // --- theme status colours ------------------------------------------------------
   readonly property string themePath: (Commons.Color.currentThemePath || "") + "/colors.toml"

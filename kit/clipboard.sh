@@ -1,5 +1,5 @@
 #!/bin/bash
-# foamy-kit 0.2.0 5084c8e33fd38e0ba57b1cf2b732cd04a4985d714583f7445e45419d95ae3118 — do not edit; change foamy-kit and run sync
+# foamy-kit 0.3.0 5084c8e33fd38e0ba57b1cf2b732cd04a4985d714583f7445e45419d95ae3118 — do not edit; change foamy-kit and run sync
 set -euo pipefail
 
 case ${1:-} in

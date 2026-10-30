@@ -75,9 +75,9 @@ Item {
 
   Plugin.Panel {
     id: panel
-    // Sit on the simulated bar's anchor so the popup lands where the real one does.
-    x: preview.anchorItem.mapToItem(preview, 0, 0).x
-    y: preview.anchorItem.mapToItem(preview, 0, 0).y
+    // Live inside the simulated bar's anchor (the bar strip window on 4.0), so
+    // the popup measures the bar the way the real one does.
+    parent: preview.anchorItem
     width: preview.anchorItem.width
     height: preview.anchorItem.height
     bar: preview.bar

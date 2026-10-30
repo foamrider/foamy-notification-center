@@ -60,5 +60,15 @@
   "Resume snoozed notifications": "Resume snoozed notifications",
   "Offer snooze when sharing the screen": "Offer snooze when sharing the screen",
   "Could not change notification snooze. Try again.": "Could not change notification snooze. Try again.",
-  "Notification center": "Notification center"
+  "Notification center": "Notification center",
+  "%1 notifications": {
+    "one": "%1 notification",
+    "other": "%1 notifications"
+  },
+  "unread": {
+    "one": "unread",
+    "other": "unread"
+  },
+  "Do not disturb is on": "Do not disturb is on",
+  "Notifications are on": "Notifications are on"
 }

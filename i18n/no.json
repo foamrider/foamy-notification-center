@@ -60,5 +60,15 @@
   "Resume snoozed notifications": "Gjenoppta midlertidig dempede varsler",
   "Offer snooze when sharing the screen": "Tilby midlertidig demping ved skjermdeling",
   "Could not change notification snooze. Try again.": "Kunne ikke endre midlertidig varseldemping. Prøv igjen.",
-  "Notification center": "Varselsenter"
+  "Notification center": "Varselsenter",
+  "%1 notifications": {
+    "one": "%1 varsel",
+    "other": "%1 varsler"
+  },
+  "unread": {
+    "one": "ulest",
+    "other": "uleste"
+  },
+  "Do not disturb is on": "Ikke forstyrr er på",
+  "Notifications are on": "Varsler er på"
 }

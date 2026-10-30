@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.2.0 5db882e6e261403096bf3d68ca1f580f877b1b08d83224662ec5ced4efa80be3 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.0 9f622f100cb1a843e070624b8ae16fc0b9d0cda8e402cccccce18cc6720df408 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -59,6 +59,12 @@ QtObject {
   readonly property int popupWidthWide: Style.space(560)
   readonly property int popupMaxHeight: Style.space(640)
   readonly property int menuWidth: Style.space(232)
+  // Hero band (FoamyHeroBand): compact paddings around the title row and hero.
+  readonly property int bandPaddingTop: Style.space(16)
+  readonly property int bandPaddingBottom: Style.space(16)
+  readonly property int bandGap: Style.space(14)
+  // Band corners meet the inside of the 1px popup border.
+  readonly property real bandRadius: innerRadius(radius, borderWidth)
   // Inner padding of FoamyPopupCard menus (the stock tray menu uses 8 too).
   readonly property int menuPadding: Style.space(8)
   // Inner padding of popup content (the card itself has padding 0 so lists

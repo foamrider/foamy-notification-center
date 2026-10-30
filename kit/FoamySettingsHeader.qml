@@ -1,4 +1,4 @@
-// foamy-kit 0.2.0 30a5b66bc0f1ae714a166e672ac32c2db3952913ca1d618165cef71a31d9d897 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.0 b5b1307cddd811fb80b56a3b5ff8834271999b7b6f6fbdd0e3bc33be2a3194a2 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -10,14 +10,20 @@ Item {
   property string title: FoamyI18n.t("Settings")
   property bool saving: false
   property alias backButton: backButton
+  property real horizontalPadding: FoamyStyle.padding
+  property real topPadding: FoamyStyle.padding
+  property real bottomPadding: FoamyStyle.padding
 
   signal back()
 
-  implicitHeight: Math.max(FoamyStyle.settingsButtonSize, titleText.implicitHeight) + FoamyStyle.padding * 2
+  implicitHeight: Math.max(FoamyStyle.settingsButtonSize, titleText.implicitHeight) + topPadding + bottomPadding
 
   RowLayout {
     anchors.fill: parent
-    anchors.margins: FoamyStyle.padding
+    anchors.leftMargin: root.horizontalPadding
+    anchors.rightMargin: root.horizontalPadding
+    anchors.topMargin: root.topPadding
+    anchors.bottomMargin: root.bottomPadding
     spacing: FoamyStyle.gap
 
     FoamyAction {
