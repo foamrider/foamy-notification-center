@@ -489,7 +489,11 @@ prune() {
   # The source's own copies are its business: under `watch` the service asks
   # Foamy over IPC to drop them (releaseHistory); nothing here deletes them.
   if (( ${NC_WATCHING:-0} && ${#pruned[@]} )) && [[ $source_kind != stock ]]; then
-    printf '%s\n' "${pruned[@]:0:1000}" | jq -Rsc '{event:"pruned", keys:(split("\n") | map(select(length > 0)))}'
+    # Every dropped key, in events of at most 1,000 (the service queues 100-key IPC batches).
+    local start
+    for (( start = 0; start < ${#pruned[@]}; start += 1000 )); do
+      printf '%s\n' "${pruned[@]:start:1000}" | jq -Rsc '{event:"pruned", keys:(split("\n") | map(select(length > 0)))}'
+    done
   fi
   return 0
 }

@@ -106,3 +106,17 @@ test('a source directory created after the watcher started is picked up',async t
  await until(()=>events.some(e=>e.event==='rewatch'))
  assert.deepEqual(f.run('list').map(r=>r.summary),['Arrived'])
 })
+test('a retention pass reports every pruned Foamy key, in bounded events',async t=>{
+ const f=fixture(t),stamp=Date.now()-1000
+ f.run('list')
+ fs.writeFileSync(path.join(f.store,'archive.jsonl'),Array.from({length:2101},(_,i)=>JSON.stringify({key:`${stamp+i}-1`,timestamp:stamp+i,summary:'x'})).join('\n')+'\n')
+ const events=[],watch=spawn(script,['watch'],{env:{...f.env,NC_SOURCE:'foamy',NC_MAX_ITEMS:'100'}})
+ let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
+ t.after(()=>watch.kill())
+ const end=Date.now()+8000
+ while(!events.some(e=>e.event==='storeChanged')){assert.ok(Date.now()<end);await new Promise(r=>setTimeout(r,25))}
+ const pruned=events.filter(e=>e.event==='pruned')
+ assert.equal(pruned.length,3)
+ assert.ok(pruned.every(e=>e.keys.length<=1000))
+ assert.equal(new Set(pruned.flatMap(e=>e.keys)).size,2001)
+})
