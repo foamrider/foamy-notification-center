@@ -5,6 +5,7 @@ const I = require('./i18n.cjs');
 const manifest = require('../manifest.json');
 const tokens = s => [...s.matchAll(/%[1-9][0-9]*|\{\w+\}/g)].map(m => m[0]).sort();
 for (const [key, value] of Object.entries(I.en)) {
+  if (value && typeof value === 'object') { assert.equal(value.other, key, `English plural key: ${key}`); continue; }
   assert.equal(value, key, `English source key: ${key}`);
   if (Object.hasOwn(I.no, key)) assert.deepEqual(tokens(I.no[key]), tokens(value), key);
 }

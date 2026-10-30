@@ -63,7 +63,7 @@ Ui.Panel {
       text: snoozeItem.text
       textFormat: Text.PlainText
       font.family: root.fontFamily
-      font.pixelSize: Style.font.caption
+      font.pixelSize: FoamyStyle.font.caption
       color: root.foreground
       opacity: snoozeItem.enabled ? 1 : 0.45
       wrapMode: Text.WordWrap
@@ -76,7 +76,8 @@ Ui.Panel {
 
   readonly property color foreground: Commons.Color.popups.text
   readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
-  readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+  // The foamy body font, as in every foamy popup.
+  readonly property string fontFamily: FoamyStyle.fontFamily
 
   // ----------------------------------------------------------------- settings
 
@@ -119,17 +120,18 @@ Ui.Panel {
   property bool awaitingPeerSave: false
 
   function openSettings() {
-    moreMenu.close()
+    if (moreMenu) moreMenu.close()
+    if (snoozeMenu) snoozeMenu.close()
     endSearch()
     editingSettings = true
     settingsError = ""
     reloadPopupPreferences()
-    settingsPane.resetScroll()
-    Qt.callLater(function() { if (root.opened) settingsPane.focusBack() })
+    if (settingsPane) settingsPane.resetScroll()
+    Qt.callLater(function() { if (root.opened && root.settingsPane) root.settingsPane.focusBack() })
   }
   function closeSettings() {
     editingSettings = false
-    Qt.callLater(function() { if (root.opened) moreButton.forceActiveFocus() })
+    Qt.callLater(function() { if (root.opened && root.keyCatcher) root.keyCatcher.forceActiveFocus() })
   }
   function reloadPopupPreferences() {
     if (!editingSettings || popupSettingsLoading || preferenceActive !== null || !store) return
@@ -324,16 +326,23 @@ Ui.Panel {
 
   // ----------------------------------------------------------------- the list
 
-  readonly property NotificationList list: listLoader.item
-  readonly property real listAvailableHeight: {
-    var chrome = header.height + (removalError.visible ? removalError.implicitHeight : 0)
-      + content.spacing * (1 + Number(removalError.visible)) + Style.space(10)
-    return Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - chrome)
-  }
+  // The lazy popup body (null until the first open) and the parts of it the
+  // panel drives.
+  readonly property Item view: popup.bodyItem
+  readonly property Item keyCatcher: view
+  readonly property var list: view ? view.list : null
+  readonly property var search: view ? view.search : null
+  readonly property var moreMenu: view ? view.moreMenu : null
+  readonly property var snoozeMenu: view ? view.snoozeMenu : null
+  readonly property var settingsPane: view ? view.settingsPane : null
+  readonly property real listAvailableHeight:
+    Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - (view ? view.chromeHeight : Style.space(80)))
   property bool rowsDirty: true
   property var rows: []
   property var expandedGroups: ({})
   property int cursorIndex: -1
+  // The single cursor: list rows, or the header's settings button above row 0.
+  property bool cursorOnSettings: false
   property bool cursorDismiss: false
   property bool keyboardNavigation: false
 
@@ -365,19 +374,24 @@ Ui.Panel {
   }
 
   function moveCursor(dx, dy) {
-    if (rows.length === 0) return
     keyboardNavigation = true
-    if (dy) {
+    if (dy < 0 && cursorIndex <= 0) { cursorOnSettings = true; cursorIndex = -1; return }
+    if (cursorOnSettings) {
+      if (dy > 0 && rows.length > 0) { cursorOnSettings = false; cursorIndex = 0 }
+      else return
+    } else if (rows.length === 0) { cursorOnSettings = true; return }
+    else if (dy) {
       cursorIndex = Math.max(0, Math.min(rows.length - 1, cursorIndex + dy))
       cursorDismiss = false
     } else {
       if (cursorIndex < 0) cursorIndex = 0
       cursorDismiss = FoamyI18n.rightToLeft ? dx < 0 : dx > 0
     }
-    list.positionViewAtIndex(cursorIndex, ListView.Contain)
+    if (list) list.positionViewAtIndex(cursorIndex, ListView.Contain)
   }
 
   function activateCursor(removeOnly) {
+    if (cursorOnSettings) { if (!removeOnly) openSettings(); return }
     if (cursorIndex < 0 || cursorIndex >= rows.length) return
     var row = rows[cursorIndex]
     if (removeOnly || cursorDismiss) {
@@ -405,8 +419,8 @@ Ui.Panel {
     // Action feedback belongs to this panel visit, not the persistent archive.
     if (store) store.focusError = ""
     if (!opened) {
-      moreMenu.close()
-      snoozeMenu.close()
+      if (moreMenu) moreMenu.close()
+      if (snoozeMenu) snoozeMenu.close()
       editingSettings = false
       searching = false
       filter = ""
@@ -415,6 +429,7 @@ Ui.Panel {
     }
     now = Date.now()
     keyboardNavigation = false
+    cursorOnSettings = false
     cursorIndex = -1
     cursorDismiss = false
     if (store) store.load()
@@ -519,7 +534,7 @@ Ui.Panel {
       // badge is only saying "a lot", which it can say in three characters.
       text: root.unread > 99 || root.unreadCapped ? FoamyI18n.number(Math.min(99, root.unread)) + "+" : FoamyI18n.number(root.unread)
       font.family: root.fontFamily
-      font.pixelSize: Math.max(8, Style.font.caption - Style.space(3))
+      font.pixelSize: Math.max(8, FoamyStyle.font.caption - Style.space(3))
       font.bold: true
       color: Commons.Color.background
     }
@@ -554,7 +569,9 @@ Ui.Panel {
     }
   }
   // foamy-kit FoamyPopup: the stock qs.Ui.KeyboardPanel (4.0 and 4.5, so 4.5's
-  // full-screen bar window places the card under the bar) with the foamy surface.
+  // full-screen bar window places the card under the bar) with the foamy
+  // surface. Its content is the lazy `body`, built on first open; the archive,
+  // unread count and IPC live in Service.qml, outside it.
   FoamyPopup {
     id: popup
     objectName: "notificationCenterPopup"
@@ -566,10 +583,10 @@ Ui.Panel {
     bar: root.bar
     owner: root
     open: root.opened
-    focusTarget: root.editingSettings ? settingsPane : keyCatcher
+    focusTarget: root.editingSettings && root.settingsPane ? root.settingsPane.backTarget : bodyItem
     contentWidth: popup.fittedContentWidth(Style.space(root.panelWidth))
     contentHeight: Math.round(Math.min(
-      Math.max(popup.verticalContentInset, content.implicitHeight + Style.space(10) + popup.verticalContentInset),
+      Math.max(popup.verticalContentInset, popup.bodyImplicitHeight + popup.verticalContentInset),
       popup.usableCardHeight))
 
     Behavior on contentHeight {
@@ -580,133 +597,84 @@ Ui.Panel {
     // The host's own geometry: on 4.5 the stock KeyboardPanel measures the bar
     // strip, not the full-screen bar window.
     readonly property real usableCardHeight: availableCardHeight
-    PanelKeyCatcher {
-      id: keyCatcher
-      anchors.fill: parent
-      // While the search field has the focus it owns every key, including the
-      // ones this would otherwise read as navigation.
-      blocked: search.inputActiveFocus || root.editingSettings || moreMenu.visible || snoozeMenu.visible
-      onCloseRequested: root.searching ? root.endSearch() : root.close()
-      onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
-      onActivateRequested: root.activateCursor(false)
-      onDeleteRequested: root.activateCursor(true)
-      onTabRequested: function(direction) { root.switchPanel(direction) }
-      onTextKey: function(text) {
-        // "/" is the only key that starts a search, because a panel that
-        // started filtering on any keypress would be a panel that swallows
-        // whatever you were typing in the window underneath.
-        if (text === "/") root.startSearch()
-      }
 
-      Column {
-        id: content
-        anchors.fill: parent
-        spacing: Style.space(8)
+    body: Component {
+      PanelKeyCatcher {
+        id: keyCatcher
+        objectName: "notificationCenterView"
+        // Reached from Panel functions through root.view.
+        property alias list: listLoader.item
+        property alias search: search
+        property alias moreMenu: moreMenu
+        property alias snoozeMenu: snoozeMenu
+        property alias moreButton: moreButton
+        property alias settingsPane: settingsPane
+        readonly property real chromeHeight: header.height + (searchRow.visible ? searchRow.height + content.spacing : 0)
+          + (errorLine.visible ? errorLine.implicitHeight + content.spacing : 0) + content.spacing + Style.space(10)
+        implicitHeight: root.editingSettings ? settingsPane.implicitHeight : content.implicitHeight + Style.space(10)
+        // While the search field or a menu has the keys, or Settings is open, this stands aside.
+        blocked: search.inputActiveFocus || root.editingSettings || moreMenu.visible || snoozeMenu.visible
+        onCloseRequested: root.searching ? root.endSearch() : root.close()
+        onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
+        onActivateRequested: root.activateCursor(false)
+        onDeleteRequested: root.activateCursor(true)
+        onTabRequested: function(direction) { root.switchPanel(direction) }
+        onTextKey: function(text) {
+          // "/" searches and "s" opens Settings; no other key starts anything, so
+          // the panel never swallows what you were typing underneath.
+          if (text === "/") root.startSearch()
+          else if (text === "s") root.openSettings()
+        }
 
-        // -------------------------------------------------------- header
-
-        Item {
-          id: header
+        Column {
+          id: content
           visible: !root.editingSettings
           width: parent.width
-          height: Style.space(58)
+          spacing: Style.space(8)
 
-          Canvas {
-            anchors.fill: parent
-            property color surface: Commons.Color.popups.background
-            property color accent: Commons.Color.accent
-            // Inset the header curve so it meets the inside of the popup border.
-            readonly property real cornerRadius: Math.max(0, Math.min(width / 2, height, popup.cornerRadius - Border.top(popup.borderSpec)))
-            onCornerRadiusChanged: requestPaint()
-            onSurfaceChanged: requestPaint()
-            onAccentChanged: requestPaint()
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
-            onPaint: {
-              var ctx = getContext("2d")
-              ctx.reset()
-              var r = cornerRadius
-              ctx.beginPath()
-              ctx.moveTo(r, 0)
-              ctx.lineTo(width - r, 0)
-              ctx.arcTo(width, 0, width, r, r)
-              ctx.lineTo(width, height)
-              ctx.lineTo(0, height)
-              ctx.lineTo(0, r)
-              ctx.arcTo(0, 0, r, 0, r)
-              ctx.closePath()
-              var wash = ctx.createLinearGradient(0, 0, width, height)
-              wash.addColorStop(0, Qt.tint(surface, Qt.alpha(accent, 0.12)))
-              wash.addColorStop(1, Qt.tint(surface, Qt.alpha(accent, 0.035)))
-              ctx.fillStyle = wash
-              ctx.fill()
-            }
-          }
-          Rectangle {
-            anchors.bottom: parent.bottom
+          // ------------------------------------------------------ header
+          FoamyHeader {
+            id: header
+            objectName: "notificationCenterHeader"
             width: parent.width
-            height: 1
-            color: Qt.alpha(root.foreground, 0.08)
-          }
-
-          Column {
-            id: title
-            anchors.left: parent.left
-            anchors.leftMargin: Style.space(16)
-            anchors.right: searchControl.left
-            anchors.rightMargin: Style.space(8)
-            opacity: root.searching ? 0 : 1
-            visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: FoamyMotion.duration(100) } }
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Style.space(2)
-            Text {
-              textFormat: Text.PlainText
-              width: parent.width
-              elide: Text.ElideRight
-              text: root.tr("Notifications")
-              font.bold: true
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
+            title: root.tr("Notifications")
+            meta: {
+              if (root.dnd) return root.tr("Do not disturb")
+              var count = Model.unreadState(root.entries, root.readMark).unread
+              return FoamyI18n.tn("%1 unread", count)
             }
-            Text {
-              textFormat: Text.PlainText
-              width: parent.width
-              elide: Text.ElideRight
-              text: {
-                if (root.dnd) return root.tr("Do not disturb")
-                var count = Model.unreadState(root.entries, root.readMark).unread
-                return root.tr(count === 1 ? "1 unread" : "%1 unread", count)
-              }
-              color: Util.alpha(root.foreground, 0.6)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-            }
-          }
-
-          Row {
-            id: actions
-            anchors.right: parent.right
-            anchors.rightMargin: Style.space(12)
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Style.space(4)
-
+            settingsHasCursor: root.keyboardNavigation && root.cursorOnSettings
+            onSettingsClicked: root.openSettings()
+            onSettingsHovered: function(hovered) { if (hovered) root.keyboardNavigation = false }
+            Component.onCompleted: settingsButton.objectName = "notificationSettings"
             NotificationAction {
+              objectName: "notificationSearchButton"
+              iconName: "search"
+              size: FoamyStyle.actionSize
+              iconSize: FoamyStyle.iconSize
+              focusable: false
+              tooltipText: root.tr("Search notifications  ( / )")
+              foreground: root.searching ? Commons.Color.accent : FoamyPalette.secondaryText
+              onClicked: root.searching ? root.endSearch() : root.startSearch()
+            }
+            FoamyAction {
               objectName: "clearAllNotifications"
               iconName: "trash"
+              destructive: true
               tooltipText: root.tr("Clear all notifications")
-              foreground: Qt.alpha(root.foreground, 0.65)
-              hoverForeground: Commons.Color.urgent
-              enabled: root.entries.length > 0
+              foreground: FoamyPalette.secondaryText
+              actionEnabled: root.entries.length > 0
               onClicked: root.clearAll()
             }
             NotificationAction {
               id: moreButton
               objectName: "notificationMore"
               iconName: "more"
+              size: FoamyStyle.actionSize
+              iconSize: FoamyStyle.iconSize
+              focusable: false
               tooltipText: root.tr("More options")
-              foreground: Qt.alpha(root.foreground, 0.65)
+              foreground: FoamyPalette.secondaryText
               onClicked: moreMenu.visible ? moreMenu.close() : moreMenu.open()
             }
           }
@@ -716,13 +684,13 @@ Ui.Panel {
             contentItem.LayoutMirroring.enabled: FoamyI18n.rightToLeft
             contentItem.LayoutMirroring.childrenInherit: true
             objectName: "notificationOverflowMenu"
-            x: FoamyI18n.rightToLeft ? Style.space(12) : Math.max(0, header.width - width - Style.space(12))
+            x: FoamyI18n.rightToLeft ? FoamyStyle.padding : Math.max(0, content.width - width - FoamyStyle.padding)
             y: header.height - Style.space(6)
-            width: Math.min(Style.space(248), header.width - Style.space(24))
+            width: Math.min(Style.space(248), content.width - FoamyStyle.padding * 2)
             padding: Style.space(5)
             closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
-            onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) moreButton.forceActiveFocus() })
-            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: FoamyStyle.radius }
+            onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) keyCatcher.forceActiveFocus() })
+            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: FoamyStyle.popupBorderSpec; radius: FoamyStyle.radius }
             Controls.MenuItem {
               id: muteItem
               objectName: "notificationMute"
@@ -731,10 +699,10 @@ Ui.Panel {
               implicitHeight: Style.space(42)
               contentItem: RowLayout {
                 spacing: Style.space(10)
-                NotificationAction { iconName: root.dnd ? "bellOff" : "bell"; size: Style.space(24); foreground: root.dnd ? Commons.Color.accent : root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
-                Text { text: muteItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: Style.font.caption; color: root.foreground; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+                NotificationAction { iconName: root.dnd ? "bellOff" : "bell"; size: FoamyStyle.actionSize; iconSize: FoamyStyle.iconSize; foreground: root.dnd ? Commons.Color.accent : root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
+                Text { text: muteItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: FoamyStyle.font.bodySmall; color: root.foreground; Layout.fillWidth: true; wrapMode: Text.WordWrap }
               }
-              background: Rectangle { color: muteItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: FoamyStyle.radius }
+              background: Rectangle { color: muteItem.highlighted ? FoamyPalette.hoverFill : "transparent"; radius: FoamyStyle.radius }
               onTriggered: root.toggleDnd()
             }
             SnoozeItem {
@@ -745,19 +713,6 @@ Ui.Panel {
               enabled: visible && !root.store.snoozeBusy
               onTriggered: Qt.callLater(function() { snoozeMenu.open() })
             }
-            Controls.MenuItem {
-              id: settingsItem
-              objectName: "notificationSettings"
-              text: root.tr("Settings")
-              implicitHeight: Style.space(42)
-              contentItem: RowLayout {
-                spacing: Style.space(10)
-                NotificationAction { iconName: "settings"; size: Style.space(24); foreground: root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
-                Text { text: settingsItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: Style.font.caption; color: root.foreground; Layout.fillWidth: true }
-              }
-              background: Rectangle { color: settingsItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: FoamyStyle.radius }
-              onTriggered: root.openSettings()
-            }
           }
 
           Controls.Menu {
@@ -767,60 +722,35 @@ Ui.Panel {
             objectName: "notificationSnoozeMenu"
             x: moreMenu.x
             y: moreMenu.y
-            width: Math.min(Style.space(290), header.width - Style.space(24))
+            width: Math.min(Style.space(290), content.width - FoamyStyle.padding * 2)
             padding: Style.space(5)
             enabled: !!root.store && root.store.snoozeAvailable && !root.store.snoozeBusy
             closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
-            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: FoamyStyle.radius }
-            onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) moreButton.forceActiveFocus() })
+            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: FoamyStyle.popupBorderSpec; radius: FoamyStyle.radius }
+            onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) keyCatcher.forceActiveFocus() })
             SnoozeItem { text: root.tr("30 minutes"); onTriggered: root.store.snoozeAll(30) }
             SnoozeItem { text: root.tr("1 hour"); onTriggered: root.store.snoozeAll(60) }
             SnoozeItem { text: root.tr("4 hours"); onTriggered: root.store.snoozeAll(240) }
             SnoozeItem { text: root.tr("Resume snoozed notifications"); onTriggered: root.store.snoozeAll(0) }
           }
 
-          Rectangle {
-            id: searchControl
-            anchors.right: actions.left
-            anchors.rightMargin: Style.space(4)
-            anchors.verticalCenter: parent.verticalCenter
-            width: root.searching ? Math.max(0, parent.width - actions.width - Style.space(32)) : Style.space(32)
-            height: Style.space(32)
-            radius: FoamyStyle.radius
-            color: root.searching ? Qt.alpha(root.foreground, 0.055) : "transparent"
-            border.width: search.inputActiveFocus ? 1 : 0
-            border.color: Commons.Color.accent
-            // Clipping this rounded surface cuts off its antialiased focus outline.
-            antialiasing: true
-            border.pixelAligned: false
-            Behavior on width { NumberAnimation { duration: FoamyMotion.duration(160); easing.type: Easing.OutCubic } }
-
-            NotificationAction {
-              anchors.left: parent.left
-              iconName: "search"
-              tooltipText: root.tr("Search notifications  ( / )")
-              foreground: root.searching ? Commons.Color.accent : Qt.alpha(root.foreground, 0.65)
-              onClicked: root.startSearch()
-            }
+          // ------------------------------------------------------ search
+          RowLayout {
+            id: searchRow
+            objectName: "notificationSearchRow"
+            visible: root.searching
+            x: FoamyStyle.padding
+            width: parent.width - FoamyStyle.padding * 2
+            spacing: FoamyStyle.gap
             SafeTextField {
               id: search
               objectName: "notificationSearch"
-              x: Style.space(32)
-              width: Math.max(0, parent.width - Style.space(64))
-              height: parent.height
-              visible: root.searching
+              Layout.fillWidth: true
+              implicitHeight: FoamyStyle.controlHeight
               enabled: root.searching
               placeholderText: root.tr("Search")
-              color: root.foreground
-              placeholderTextColor: Qt.alpha(root.foreground, 0.45)
-              selectionColor: Qt.alpha(Commons.Color.accent, 0.3)
-              selectedTextColor: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              padding: 0
-              background: Item {}
-              onTextChanged: { root.filter = text; if (root.store) root.store.searchQuery = text.trim().slice(0, 256) }
               translate: root.tr
+              onTextChanged: { root.filter = text; if (root.store) root.store.searchQuery = text.trim().slice(0, 256) }
               onKeyPressed: function(event) {
                 if (event.key === Qt.Key_Escape) { event.accepted = true; root.endSearch() }
                 else if (event.key === Qt.Key_Down) {
@@ -838,36 +768,37 @@ Ui.Panel {
               }
             }
             NotificationAction {
-              anchors.right: parent.right
-              visible: root.searching
               iconName: "close"
+              size: FoamyStyle.actionSize
+              iconSize: FoamyStyle.iconSize
+              focusable: false
               tooltipText: root.tr("Close search  ( Esc )")
-              foreground: Qt.alpha(root.foreground, 0.65)
+              foreground: FoamyPalette.secondaryText
               onClicked: root.endSearch()
             }
           }
-        }
 
-        Text {
-          id: removalError
-          x: Style.space(14)
-          width: parent.width - Style.space(28)
-          textFormat: Text.PlainText
-          text: search.pasteError || (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
-          visible: !root.editingSettings && text !== ""
-          color: Commons.Color.urgent
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          wrapMode: Text.WordWrap
-        }
+          Text {
+            id: errorLine
+            objectName: "notificationError"
+            x: FoamyStyle.padding
+            width: parent.width - FoamyStyle.padding * 2
+            textFormat: Text.PlainText
+            text: search.pasteError || (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
+            visible: text !== ""
+            color: Commons.Color.urgent
+            font.family: root.fontFamily
+            font.pixelSize: FoamyStyle.font.bodySmall
+            wrapMode: Text.WordWrap
+            Accessible.role: Accessible.AlertMessage
+          }
 
-        // ---------------------------------------------------------- list
-
+          // ------------------------------------------------------ list
         Loader {
           id: listLoader
           width: parent.width
           active: true
-          visible: !root.editingSettings && (root.rows.length > 0 || (item && item.contentHeight > 0))
+          visible: (root.rows.length > 0 || (item && item.contentHeight > 0))
           // Keep the lightweight list; detach its model to release delegates after fade-out.
           sourceComponent: Component {
             NotificationList {
@@ -979,9 +910,9 @@ Ui.Panel {
 
         Text {
           textFormat: Text.PlainText
-          x: Style.space(14)
-          width: parent.width - Style.space(28)
-          visible: !root.editingSettings && root.rows.length === 0 && (!list || list.contentHeight <= 0)
+          x: FoamyStyle.padding
+          width: parent.width - FoamyStyle.padding * 2
+          visible: root.rows.length === 0 && (!listLoader.item || listLoader.item.contentHeight <= 0)
           horizontalAlignment: Text.AlignHCenter
           topPadding: Style.space(22)
           bottomPadding: Style.space(22)
@@ -990,33 +921,37 @@ Ui.Panel {
               : root.tr("Nothing has come in yet")
           wrapMode: Text.WordWrap
           font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          color: root.foreground
-          opacity: 0.55
+          font.pixelSize: FoamyStyle.font.bodySmall
+          color: FoamyPalette.mutedText
         }
 
-        SettingsPane {
+        }
+
+        FoamySettingsPage {
           id: settingsPane
           objectName: "notificationSettingsPane"
-          width: parent.width
-          height: Math.min(implicitHeight, Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - Style.space(10)))
           visible: root.editingSettings
-          settings: root.settings
-          popupSettings: root.popupSettings
-          popupInstalled: root.popupPluginInstalled
-          popupAvailable: root.popupPluginInstalled && root.popupSettingsAvailable
-          loading: root.popupSettingsLoading
+          width: parent.width
+          height: Math.min(implicitHeight, Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset))
+          maxHeight: Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset)
           saving: root.preferenceActive !== null
           error: root.settingsError
-          language: root.language
-          onSave: function(scope, key, value) { root.savePreference(scope, key, value) }
+          retryable: false
           onBack: root.closeSettings()
-          onClearError: root.settingsError = ""
-          onPasteFailed: function(message) { root.settingsError = message }
+          SettingsPane {
+            width: parent.width
+            settings: root.settings
+            popupSettings: root.popupSettings
+            popupInstalled: root.popupPluginInstalled
+            popupAvailable: root.popupPluginInstalled && root.popupSettingsAvailable
+            loading: root.popupSettingsLoading
+            saving: root.preferenceActive !== null
+            page: settingsPane
+            onSave: function(scope, key, value) { root.savePreference(scope, key, value) }
+            onPasteFailed: function(message) { root.settingsError = message }
+          }
         }
-
       }
     }
   }
-
 }

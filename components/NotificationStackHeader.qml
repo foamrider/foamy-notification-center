@@ -18,7 +18,7 @@ Item {
   property string language: "en"
   property double readMark: 0
   property color foreground: Commons.Color.foreground
-  property string fontFamily: Style.font.family
+  property string fontFamily: FoamyStyle.fontFamily
   signal toggleRequested()
   signal removeRequested()
   signal pointerUsed()
@@ -93,7 +93,7 @@ Item {
       text: root.group.glyph || root.group.app.charAt(0).toUpperCase()
       color: root.foreground
       font.family: root.fontFamily
-      font.pixelSize: Style.font.body
+      font.pixelSize: FoamyStyle.font.body
     }
   }
   Text {
@@ -108,7 +108,7 @@ Item {
     elide: Text.ElideRight
     color: root.foreground
     font.family: root.fontFamily
-    font.pixelSize: Style.font.caption
+    font.pixelSize: FoamyStyle.font.caption
   }
   Row {
     id: metadata
@@ -129,7 +129,7 @@ Item {
       text: FoamyI18n.number(root.group.entries.length) + " · " + CenterText.relativeTime(root.group.timestamp, root.now, FoamyI18n.t)
       color: Util.alpha(root.foreground, 0.65)
       font.family: root.fontFamily
-      font.pixelSize: Style.font.caption
+      font.pixelSize: FoamyStyle.font.caption
     }
   }
   NotificationAction {

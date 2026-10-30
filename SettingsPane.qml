@@ -1,139 +1,121 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Controls as Controls
 import QtQuick.Layouts
-import qs.Ui
 import qs.Commons
 import qs.Commons as Commons
 import "Preferences.js" as Preferences
-import "components"
 import "kit"
 
-Item {
+// The center's settings sections, placed inside the kit FoamySettingsPage
+// (back, "Settings", "Saving…", error line, scrolling, Esc). Center settings
+// belong to this widget; the "Foamy Notifications" section is owned by that
+// plugin and saved through its IPC (Panel.savePreference).
+Column {
   id: root
-  LayoutMirroring.enabled: FoamyI18n.rightToLeft
-  LayoutMirroring.childrenInherit: true
   required property var settings
   required property var popupSettings
-  required property string language
   property bool popupAvailable: false
   property bool popupInstalled: false
   property bool loading: false
   property bool saving: false
-  property string error: ""
-  readonly property color secondary: Qt.tint(Commons.Color.popups.background, Qt.alpha(Commons.Color.popups.text, 0.7))
-  readonly property int padding: Style.space(20)
-  implicitHeight: settingsHeader.height + settingsBody.implicitHeight
+  // The enclosing FoamySettingsPage, to keep focused fields visible.
+  property Item page: null
   signal save(string scope, string key, var value)
-  signal back()
-  signal clearError()
   signal pasteFailed(string message)
-  function tr(label) { return FoamyI18n.t(label) }
-  function focusBack() { backButton.forceActiveFocus() }
-  function resetScroll() { settingsScroll.contentY = 0 }
-  Keys.onEscapePressed: root.back()
+  spacing: FoamyStyle.sectionGap
 
-  // Keep native Tab focus visible when the complete settings page needs to scroll.
-  function keepFocusVisible(item) {
-    if (!visible || !item) return
-    var ancestor = item
-    while (ancestor && ancestor !== settingsScroll.contentItem) ancestor = ancestor.parent
-    if (!ancestor) return
-    var point = item.mapToItem(settingsScroll.contentItem, 0, 0)
-    if (point.y < settingsScroll.contentY) settingsScroll.contentY = Math.max(0, point.y - Style.space(8))
-    else if (point.y + item.height > settingsScroll.contentY + settingsScroll.height)
-      settingsScroll.contentY = Math.max(0, Math.min(settingsScroll.contentHeight - settingsScroll.height, point.y + item.height - settingsScroll.height + Style.space(8)))
+  function current(scope, key) {
+    return Preferences.value(scope, scope === "center" ? root.settings : root.popupSettings, key)
   }
-  Connections {
-    target: root.Window.window
-    function onActiveFocusItemChanged() { root.keepFocusVisible(target.activeFocusItem) }
+  function optionLabel(option) {
+    return FoamyI18n.t(Preferences.optionLabel(option))
   }
-  Item {
-    id: settingsHeader
-    width: parent.width
-    height: headerRow.implicitHeight + root.padding * 2
-    RowLayout {
-      id: headerRow
-      anchors.centerIn: parent
-      width: root.width - root.padding * 2
-      NotificationAction {
-        id: backButton
-        objectName: "settingsBack"
-        iconName: "back"
-        foreground: root.secondary
-        tooltipText: root.tr("Back")
-        onClicked: root.back()
-      }
-      Text { horizontalAlignment: Text.AlignLeft; text: root.tr("Settings"); color: root.secondary; font.family: FoamyStyle.fontFamily; font.pixelSize: Style.space(13); Layout.fillWidth: true }
-      Text { visible: root.saving; text: root.tr("Saving…"); color: root.secondary; font.family: FoamyStyle.fontFamily; font.pixelSize: Style.space(11) }
-    }
-  }
-  Flickable {
-    id: settingsScroll
-    objectName: "settingsScroll"
-    anchors.top: settingsHeader.bottom
-    anchors.bottom: parent.bottom
-    width: parent.width
-    contentWidth: width
-    contentHeight: settingsBody.implicitHeight
-    clip: true
-    flickableDirection: Flickable.VerticalFlick
-    boundsBehavior: Flickable.StopAtBounds
-    onContentHeightChanged: contentY = Math.max(0, Math.min(contentY, contentHeight - height))
-    onHeightChanged: contentY = Math.max(0, Math.min(contentY, contentHeight - height))
-    Controls.ScrollBar.vertical: Controls.ScrollBar { policy: Controls.ScrollBar.AsNeeded }
-    Column {
-      id: settingsBody
-      width: parent.width
-      leftPadding: root.padding
-      rightPadding: root.padding
-      bottomPadding: root.padding
-      spacing: Style.space(14)
+
+  Repeater {
+    model: [{scope: "center", title: "Notification center", fields: Preferences.centerFields},
+            {scope: "popups", title: "Foamy Notifications", fields: Preferences.popupFields}]
+    FoamySettingsSection {
+      id: section
+      required property var modelData
+      width: root.width
+      title: FoamyI18n.t(section.modelData.title)
+
       Text {
-        width: root.width - root.padding * 2
-        visible: root.error !== ""
-        text: root.error
+        objectName: section.modelData.scope + "-availability"
+        width: parent.width
+        visible: section.modelData.scope === "popups" && !root.popupAvailable
+        text: FoamyI18n.t(root.loading ? "Reading settings…" : root.popupInstalled ? "Plugin not enabled" : "Plugin not installed")
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
-        color: Commons.Color.urgent
+        color: FoamyPalette.mutedText
         font.family: FoamyStyle.fontFamily
-        font.pixelSize: Style.space(12)
-        Accessible.role: Accessible.AlertMessage
+        font.pixelSize: FoamyStyle.font.bodySmall
       }
+
       Repeater {
-        model: [{scope:"center",label:"Notification Center",fields:Preferences.centerFields}, {scope:"popups",label:"Foamy Notifications",fields:Preferences.popupFields}]
-        Column {
-          id: section
+        // Keep loaded editors stable during refreshes so reads cannot steal focus.
+        model: section.modelData.scope === "center" || root.popupAvailable ? section.modelData.fields : []
+        Loader {
+          id: field
           required property var modelData
-          width: root.width - root.padding * 2
-          spacing: Style.space(14)
-          Text { text: root.tr(section.modelData.label); color: root.secondary; font.family: FoamyStyle.fontFamily; font.pixelSize: Style.space(13) }
-          Text {
-            objectName: section.modelData.scope + "-availability"
-            width: parent.width
-            visible: section.modelData.scope === "popups" && !root.popupAvailable && (root.loading || root.error === "")
-            text: root.tr(root.loading ? "Reading settings…" : root.popupInstalled ? "Plugin not enabled" : "Plugin not installed")
-            textFormat: Text.PlainText
-            wrapMode: Text.WordWrap
-            color: Qt.tint(Commons.Color.popups.background, Qt.alpha(Commons.Color.popups.text, 0.55))
-            font.family: FoamyStyle.fontFamily
-            font.pixelSize: Style.space(12)
+          readonly property string scope: section.modelData.scope
+          width: section.width
+          enabled: !root.saving
+          sourceComponent: modelData.type === "boolean" ? toggleField : modelData.type === "enum" ? choiceField : numberField
+
+          Component {
+            id: toggleField
+            FoamyToggle {
+              objectName: field.scope + "-" + field.modelData.key
+              label: FoamyI18n.t(field.modelData.label)
+              checked: root.current(field.scope, field.modelData.key) === true
+              onClicked: root.save(field.scope, field.modelData.key, !checked)
+            }
           }
-          Repeater {
-            // Keep loaded editors stable during refreshes so reads cannot steal focus.
-            model: section.modelData.scope === "center" || root.popupAvailable ? section.modelData.fields : []
-            SettingsField {
-              required property var modelData
-              width: section.width
-              scope: section.modelData.scope
-              field: modelData
-              settings: scope === "center" ? root.settings : root.popupSettings
-              language: root.language
-              enabled: !root.saving && (scope === "center" || root.popupAvailable)
-              opacity: enabled ? 1 : 0.55
-              onSave: function(value) { root.save(scope, field.key, value) }
-              onClearError: root.clearError()
-              onPasteFailed: function(message) { root.pasteFailed(message) }
+          Component {
+            id: choiceField
+            FoamyDropdown {
+              objectName: field.scope + "-" + field.modelData.key
+              label: FoamyI18n.t(field.modelData.label)
+              value: String(root.current(field.scope, field.modelData.key))
+              options: field.modelData.options.map(function(option) { return { value: option, label: root.optionLabel(option) } })
+              onChanged: function(next) { root.save(field.scope, field.modelData.key, next) }
+            }
+          }
+          Component {
+            id: numberField
+            RowLayout {
+              id: numberRow
+              spacing: FoamyStyle.gap
+              Text {
+                Layout.fillWidth: true
+                text: FoamyI18n.t(field.modelData.label)
+                textFormat: Text.PlainText
+                wrapMode: Text.WordWrap
+                color: FoamyPalette.text
+                font.family: FoamyStyle.fontFamily
+                font.pixelSize: FoamyStyle.font.body
+              }
+              SafeTextField {
+                id: input
+                objectName: field.scope + "-" + field.modelData.key
+                Layout.preferredWidth: Style.space(76)
+                implicitHeight: FoamyStyle.controlHeight
+                horizontalAlignment: Text.AlignRight
+                text: String(root.current(field.scope, field.modelData.key))
+                translate: FoamyI18n.t
+                Accessible.name: FoamyI18n.t(field.modelData.label)
+                onPasteErrorChanged: if (pasteError !== "") root.pasteFailed(pasteError)
+                onInputActiveFocusChanged: if (inputActiveFocus && root.page) root.page.keepVisible(numberRow)
+                function commit() {
+                  var value = Number(text.trim())
+                  if (/^[0-9]+$/.test(text.trim()) && Preferences.valid(field.scope, field.modelData.key, value)) {
+                    if (value !== root.current(field.scope, field.modelData.key)) root.save(field.scope, field.modelData.key, value)
+                  } else text = String(root.current(field.scope, field.modelData.key))
+                }
+                onEditingFinished: commit()
+                onAccepted: commit()
+              }
             }
           }
         }

@@ -26,7 +26,10 @@
   "Show pictures": "Show pictures",
   "Do not disturb": "Do not disturb",
   "1 unread": "1 unread",
-  "%1 unread": "%1 unread",
+  "%1 unread": {
+    "one": "%1 unread",
+    "other": "%1 unread"
+  },
   "Silenced · %1 new": "Silenced · %1 new",
   "Notifications silenced": "Notifications silenced",
   "1 new notification": "1 new notification",
@@ -56,5 +59,6 @@
   "4 hours": "4 hours",
   "Resume snoozed notifications": "Resume snoozed notifications",
   "Offer snooze when sharing the screen": "Offer snooze when sharing the screen",
-  "Could not change notification snooze. Try again.": "Could not change notification snooze. Try again."
+  "Could not change notification snooze. Try again.": "Could not change notification snooze. Try again.",
+  "Notification center": "Notification center"
 }

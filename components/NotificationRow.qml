@@ -24,7 +24,7 @@ Item {
   property double now: 0
   property string language: "en"
   property color foreground: Commons.Color.foreground
-  property string fontFamily: Style.font.family
+  property string fontFamily: FoamyStyle.fontFamily
   signal clicked()
   signal removeRequested()
   signal pointerUsed()
@@ -120,7 +120,7 @@ Item {
         text: CenterText.relativeTime(Number(root.entry.timestamp || 0), root.now, FoamyI18n.t)
         color: Util.alpha(root.foreground, 0.6)
         font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
+        font.pixelSize: FoamyStyle.font.caption
       }
       Text {
         width: parent.width
@@ -130,7 +130,7 @@ Item {
         maximumLineCount: 1
         color: root.foreground
         font.family: root.fontFamily
-        font.pixelSize: Style.font.body
+        font.pixelSize: FoamyStyle.font.body
       }
       Text {
         width: parent.width
@@ -142,7 +142,7 @@ Item {
         maximumLineCount: 2
         color: Util.alpha(root.foreground, 0.75)
         font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
+        font.pixelSize: FoamyStyle.font.caption
       }
       Image {
         id: previewImage
