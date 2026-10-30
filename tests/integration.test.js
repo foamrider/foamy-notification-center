@@ -120,3 +120,10 @@ test('a retention pass reports every pruned Foamy key, in bounded events',async 
  assert.ok(pruned.every(e=>e.keys.length<=1000))
  assert.equal(new Set(pruned.flatMap(e=>e.keys)).size,2001)
 })
+test('whitespace-only or truncated source files are skipped, not fatal',t=>{
+ const f=fixture(t),stamp=Date.now()
+ fs.writeFileSync(path.join(f.source,`${stamp}-1.json`),'  \n')
+ fs.writeFileSync(path.join(f.source,`${stamp}-2.json`),JSON.stringify({timestamp:stamp,originalId:2,app:'Ok',summary:'Kept'}))
+ f.run('sync')
+ assert.deepEqual(f.run('list').map(r=>r.summary),['Kept'])
+})

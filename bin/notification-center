@@ -292,6 +292,9 @@ ingest_json() {
   fields=$(jq -r '[(.transient == true), ((.timestamp // 0) | tonumber? // 0), (.appIcon // "" | tostring),
     (.image // "" | tostring), ((.execArgv // .exec // "") | if type == "string" then . else tojson end)] | @sh' <<< "$source_json" 2>/dev/null) || return 0
   eval "set -- $fields"
+  # Whitespace-only or truncated input: jq succeeds with no output. Skip it; it
+  # is caught again when its write completes.
+  (( $# == 5 )) || return 0
   transient=$1 file_stamp=$2 app_icon=$3 image_src=$4 exec_src=$5
 
   # Transient action feedback remains a toast and does not enter this archive.
@@ -330,6 +333,7 @@ ingest_json() {
     fields=$(jq -r '[(.fileAction // ""), (.imageFormat // 0 | tostring), (.sourceHash // ""), (.assetsHash // ""),
       (.appIcon // ""), (.image // ""), (.preview // ""), (.assetSources // "")] | @sh' <<< "$existing") || return 1
     eval "set -- $fields"
+    (( $# == 8 )) || return 0
     ex_action=$1 ex_format=$2 ex_source=$3 ex_assets=$4 ex_icon=$5 ex_image=$6 ex_preview=$7 ex_sources=$8
     if [[ $ex_action == "$file_action" && $ex_format == 1 && $ex_source == "$source_hash" && $ex_assets == "$assets_hash" ]]; then
       return 0
