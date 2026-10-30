@@ -54,25 +54,33 @@ test('queued archive refreshes and content comparisons do not drop updates',()=>
 
 test('large archive pages contain one JSON array, filter before limiting, and keep newest order',t=>{
  const f=fixture(t);f.run('list')
- const records=Array.from({length:1000},(_,i)=>({key:`${i+1}-1`,timestamp:i+1,body:'x'.repeat(1000)}))
+ const base=Date.now()-100000,records=Array.from({length:1000},(_,i)=>({key:`${base+i+1}-1`,timestamp:base+i+1,body:i===10?'needle':'x'.repeat(500)}))
  fs.writeFileSync(path.join(f.store,'archive.jsonl'),records.map(JSON.stringify).join('\n')+'\ninvalid\n')
- const page=f.run('list','500');assert.equal(page.length,500);assert.equal(page[0].key,'1000-1');assert.equal(page[499].key,'501-1')
- fs.writeFileSync(path.join(f.store,'cleared_at'),'750');assert.equal(f.run('list','500').length,250)
+ const page=f.run('list','500');assert.equal(page.length,500);assert.equal(page[0].key,`${base+1000}-1`);assert.equal(page[499].key,`${base+501}-1`)
+ // Paging past the first 500 and searching the whole archive.
+ assert.equal(f.run('list','1001').length,1000)
+ assert.deepEqual(f.run('list','500','NEEDLE').map(r=>r.key),[`${base+11}-1`])
+ fs.writeFileSync(path.join(f.store,'cleared_at'),String(base+750));assert.equal(f.run('list','500').length,250)
+ // Expired rows never show, even before retention runs.
+ fs.writeFileSync(path.join(f.store,'cleared_at'),'0');const expired=spawnSync(script,['list','5000'],{env:{...f.env,NC_KEEP_DAYS:'1'},encoding:'utf8'});assert.equal(JSON.parse(expired.stdout).length,1000)
+ fs.appendFileSync(path.join(f.store,'archive.jsonl'),JSON.stringify({key:'5-5',timestamp:5})+'\n');assert.equal(f.run('list','5000').length,1000)
  assert.deepEqual(f.run('list','0'),[])
  const bad=spawnSync(script,['list','invalid'],{env:f.env,encoding:'utf8'});assert.equal(bad.status,1);assert.equal(JSON.parse(bad.stdout).ok,false)
 })
-test('custom state home follows stock unless Foamy is both installed and enabled',t=>{
- const f=fixture(t),home=path.join(f.dir,'home'),xdg=path.join(f.dir,'custom'),config=path.join(home,'.config/omarchy')
+test('the source comes from the service (IPC), never from another plugin\'s config, and the handled journal is applied',t=>{
+ const f=fixture(t),home=path.join(f.dir,'home'),config=path.join(home,'.config/omarchy')
  fs.mkdirSync(config,{recursive:true})
- const env={...f.env,HOME:home,XDG_CONFIG_HOME:path.join(home,'.config'),XDG_STATE_HOME:xdg};delete env.NC_SRC_DIR;delete env.NC_SRC_HISTORY
- const run=(...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
- const stamp=Date.now()
- for(const [base,title,id] of [[path.join(home,'.local/state'),'Stock',1],[xdg,'Foamy',2]]) {
-  const dir=path.join(base,'omarchy/notifications');fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,`${stamp}-${id}.json`),JSON.stringify({timestamp:stamp,originalId:id,app:'Test',summary:title}))
- }
- const manifest=path.join(config,'plugins/foamy.notifications');fs.mkdirSync(manifest,{recursive:true});fs.writeFileSync(path.join(manifest,'manifest.json'),JSON.stringify({id:'foamy.notifications'}))
- for(const [cfg,expected] of [[{plugins:[]},'Stock'],[{plugins:[{id:'foamy.notifications'}]},'Foamy'],[{plugins:[{id:'foamy.notifications'}],disabledPlugins:['foamy.notifications']},'Stock']]) {
-  fs.writeFileSync(path.join(config,'shell.json'),JSON.stringify(cfg));fs.rmSync(f.store,{recursive:true,force:true});run('sync');assert.deepEqual(run('list').map(r=>r.summary),[expected])
- }
- fs.unlinkSync(path.join(manifest,'manifest.json'));fs.writeFileSync(path.join(config,'shell.json'),JSON.stringify({plugins:[{id:'foamy.notifications'}]}));fs.rmSync(f.store,{recursive:true,force:true});run('sync');assert.deepEqual(run('list').map(r=>r.summary),['Stock'])
+ const stamp=Date.now(),stock=path.join(home,'.local/state/omarchy/notifications'),foamy=path.join(f.dir,'foamy')
+ for(const [dir,title,id] of [[stock,'Stock',1],[path.join(foamy,'popups'),'Foamy',2]]) {fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,`${stamp}-${id}.json`),JSON.stringify({timestamp:stamp,originalId:id,app:'Test',summary:title}))}
+ // Foamy enabled in shell.json no longer changes anything by itself.
+ fs.writeFileSync(path.join(config,'shell.json'),JSON.stringify({plugins:[{id:'foamy.notifications'}]}))
+ const base={...f.env,HOME:home,XDG_CONFIG_HOME:path.join(home,'.config')};delete base.NC_SRC_DIR;delete base.NC_SRC_HISTORY
+ const run=(env,...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ run(base,'sync');assert.deepEqual(run(base,'list').map(r=>r.summary),['Stock'])
+ fs.rmSync(f.store,{recursive:true,force:true})
+ const handled=path.join(foamy,'handled')
+ const env={...base,NC_SOURCE:'foamy',NC_SRC_DIR:path.join(foamy,'popups'),NC_SRC_HISTORY:path.join(foamy,'history'),NC_HANDLED:handled,NC_STATE_FILE:path.join(foamy,'state.json')}
+ run(env,'sync');assert.deepEqual(run(env,'list').map(r=>r.summary),['Foamy'])
+ fs.writeFileSync(handled,`${stamp}-2\n`);run(env,'sync');assert.deepEqual(run(env,'list'),[])
+ assert.ok(fs.existsSync(path.join(foamy,'popups',`${stamp}-2.json`)),'source files are read-only')
 })

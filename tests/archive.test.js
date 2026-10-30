@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-test("prune retains valid records after corruption and clear preserves the archive", () => {
+test("prune retains valid records after corruption and clear deletes them", () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "notification-archive-test-"));
   try {
     const state = path.join(temp, "omarchy-notification-center");
@@ -24,10 +24,13 @@ test("prune retains valid records after corruption and clear preserves the archi
     fs.writeFileSync(archive, JSON.stringify(records[0]) + "\ncorrupt\n" + JSON.stringify(records[1]) + "\n");
     run("sync");
     assert.deepEqual(JSON.parse(run("list")).map(row => row.key).sort(), records.map(row => row.key));
-    const before = fs.readFileSync(archive, "utf8");
+    const image = path.join(state, "images", `${records[0].key}-image.png`);
+    fs.mkdirSync(path.dirname(image), { recursive: true }); fs.writeFileSync(image, "png");
     run("clear");
     assert.deepEqual(JSON.parse(run("list")), []);
-    assert.equal(fs.readFileSync(archive, "utf8"), before);
+    // Clear all is a real deletion: rows and their retained images are gone.
+    assert.equal(fs.readFileSync(archive, "utf8").trim(), "");
+    assert.equal(fs.existsSync(image), false);
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

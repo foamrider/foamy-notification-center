@@ -20,24 +20,21 @@ umask 077
 
 state_home=${XDG_STATE_HOME:-$HOME/.local/state}
 
-# Stock Omarchy uses HOME even with a custom XDG_STATE_HOME. Foamy follows XDG.
-# Resolve the configured daemon separately from our archive; installation alone
-# does not mean Foamy owns notifications. Explicit source overrides still win.
-foamy_enabled=0
-notification_state_home=$HOME/.local/state
-config_home=${XDG_CONFIG_HOME:-$HOME/.config}
-shell_config=$config_home/omarchy/shell.json
-foamy_manifest=$config_home/omarchy/plugins/foamy.notifications/manifest.json
-if [[ -f $shell_config && -f $foamy_manifest ]] &&
-   jq -e '.id == "foamy.notifications"' "$foamy_manifest" >/dev/null 2>&1 &&
-   jq -e 'any(.plugins[]?; .id == "foamy.notifications") and
-     ((.disabledPlugins // []) | index("foamy.notifications") | not)' "$shell_config" >/dev/null 2>&1; then
-  foamy_enabled=1
-  notification_state_home=$state_home
-fi
-src_dir=${NC_SRC_DIR:-$notification_state_home/omarchy/notifications}
+# The source is resolved by the service over IPC (`foamy.notifications storeInfo`)
+# and handed over in NC_SOURCE / NC_SRC_DIR / NC_SRC_HISTORY / NC_HANDLED /
+# NC_STATE_FILE. This script never inspects another plugin's config or files
+# beyond those read-only paths, and never deletes them. Default: stock Omarchy,
+# which uses HOME even with a custom XDG_STATE_HOME.
+source_kind=${NC_SOURCE:-stock}
+src_dir=${NC_SRC_DIR:-$HOME/.local/state/omarchy/notifications}
 src_history=${NC_SRC_HISTORY:-$src_dir/history}
 source_state_dir=$(dirname "$src_dir")
+handled_file=${NC_HANDLED:-}
+if [[ -n ${NC_STATE_FILE:-} ]]; then
+  dnd_files=("$NC_STATE_FILE")
+else
+  dnd_files=("$source_state_dir/notifications.json" "$src_dir/quiet.json")
+fi
 
 # Ours.
 store=${NC_STORE:-$state_home/omarchy-notification-center}
@@ -258,7 +255,7 @@ ingest_file() {
   local key source_json
   key=$(basename -- "$file"); key=${key%.json}
   if [[ $key == live || $key == history ]]; then
-    (( foamy_enabled )) && return 0
+    [[ $source_kind == stock ]] || return 0
     ingest_array "$file"
     return $?
   fi
@@ -287,56 +284,59 @@ valid_key() { [[ $1 =~ ^([0-9]+-[0-9]+|stock-[A-Za-z0-9_-]{1,120})$ ]]; }
 
 ingest_json() {
   local key=$1 source_json=$2
-  local entry app_icon image_src exec_src icon_copy image_copy file_src file_action preview_copy existing source_hash assets_hash sources_hash asset
+  local entry app_icon image_src exec_src icon_copy image_copy file_src file_action preview_copy existing source_hash assets_hash sources_hash asset fields transient file_stamp
   is_dismissed "$key" && return 0
-  # A file caught mid-write parses as nothing; it will be caught again on the
-  # move into history, or by the next sync.
-  jq -e . <<< "$source_json" >/dev/null 2>&1 || return 0
+  # One jq reads every field this needs (a file caught mid-write fails here and is
+  # caught again on its move into history or the next sync); @sh output is
+  # shell-quoted for `eval`, never sender-controlled code.
+  fields=$(jq -r '[(.transient == true), ((.timestamp // 0) | tonumber? // 0), (.appIcon // "" | tostring),
+    (.image // "" | tostring), ((.execArgv // .exec // "") | if type == "string" then . else tojson end)] | @sh' <<< "$source_json" 2>/dev/null) || return 0
+  eval "set -- $fields"
+  transient=$1 file_stamp=$2 app_icon=$3 image_src=$4 exec_src=$5
 
   # Transient action feedback remains a toast and does not enter this archive.
-  jq -e '.transient == true' <<< "$source_json" >/dev/null 2>&1 && return 0
+  [[ $transient == true ]] && return 0
 
   if [[ -s $cleared_at_file ]]; then
-    local cleared_at file_stamp
-    cleared_at=$(cat "$cleared_at_file" 2>/dev/null || echo 0)
-    if [[ $cleared_at =~ ^[0-9]+$ ]] && (( cleared_at > 0 )); then
-      file_stamp=$(jq -r '(.timestamp // 0) | tonumber?' <<< "$source_json" 2>/dev/null || echo 0)
-      if [[ $file_stamp =~ ^[0-9]+$ ]] && (( file_stamp > 0 && file_stamp <= cleared_at )); then
-        return 0
-      fi
+    local cleared_at
+    cleared_at=$(<"$cleared_at_file")
+    if [[ $cleared_at =~ ^[0-9]+$ && $file_stamp =~ ^[0-9]+$ ]] && (( cleared_at > 0 && file_stamp > 0 && file_stamp <= cleared_at )); then
+      return 0
     fi
   fi
 
-  app_icon=$(jq -r '.appIcon // ""' <<< "$source_json")
-  image_src=$(jq -r '.image // ""' <<< "$source_json")
-  # execArgv is what the service writes now; exec is what it wrote before.
-  exec_src=$(jq -r '.execArgv // .exec // ""' <<< "$source_json")
-
-  file_src=$(preview_source "$exec_src")
-  file_src=${file_src#file://}
-  file_action=$(screenshot_action "$exec_src" "$file_src")
+  file_src="" file_action=""
+  if [[ -n $exec_src ]]; then
+    file_src=$(preview_source "$exec_src")
+    file_src=${file_src#file://}
+    [[ -n $file_src ]] && file_action=$(screenshot_action "$exec_src" "$file_src")
+  fi
   existing=$(grep -F "\"key\":\"$key\"" "$archive" | head -n 1)
   # An in-place stock update changes ts; keep the first arrival for unread state.
   if [[ $key == stock-* && -n $existing ]]; then
-    source_json=$(jq --argjson stamp "$(jq '.timestamp' <<< "$existing")" '.timestamp = $stamp' <<< "$source_json") || return 1
+    source_json=$(jq -c --argjson stamp "$(jq '.timestamp' <<< "$existing")" '.timestamp = $stamp' <<< "$source_json") || return 1
   fi
-  source_hash=$(printf '%s' "$source_json" | sha256sum); source_hash=${source_hash%% *}
-  sources_hash=$(printf '%s\n' "$app_icon" "$image_src" "$file_src" "$previews" | sha256sum); sources_hash=${sources_hash%% *}
-  # Reuse retained images on text-only updates, but invalidate when source files change.
-  assets_hash=$({
+  # Three digests in one sha256sum process.
+  local digests
+  digests=$(sha256sum <(printf '%s' "$source_json") <(printf '%s\n' "$app_icon" "$image_src" "$file_src" "$previews") <(
     printf '%s\n' "$app_icon" "$image_src" "$file_src" "$previews"
     for asset in "$app_icon" "$image_src" "$file_src"; do
       is_path "$asset" && stat -Lc '%d:%i:%s:%y:%z' -- "${asset#file://}" 2>/dev/null
-    done
-  } | sha256sum); assets_hash=${assets_hash%% *}
-  if [[ -n $existing ]] && [[ $(jq -r '.fileAction // ""' <<< "$existing") == "$file_action" ]] && [[ $(jq -r '.imageFormat // 0' <<< "$existing") == 1 ]] && [[ $(jq -r '.sourceHash // ""' <<< "$existing") == "$source_hash" ]] &&
-     [[ $(jq -r '.assetsHash // ""' <<< "$existing") == "$assets_hash" ]]; then
-    return 0
+    done)) || return 1
+  { read -r source_hash _; read -r sources_hash _; read -r assets_hash _; } <<< "$digests"
+
+  local ex_action="" ex_format=0 ex_source="" ex_assets="" ex_icon="" ex_image="" ex_preview="" ex_sources=""
+  if [[ -n $existing ]]; then
+    fields=$(jq -r '[(.fileAction // ""), (.imageFormat // 0 | tostring), (.sourceHash // ""), (.assetsHash // ""),
+      (.appIcon // ""), (.image // ""), (.preview // ""), (.assetSources // "")] | @sh' <<< "$existing") || return 1
+    eval "set -- $fields"
+    ex_action=$1 ex_format=$2 ex_source=$3 ex_assets=$4 ex_icon=$5 ex_image=$6 ex_preview=$7 ex_sources=$8
+    if [[ $ex_action == "$file_action" && $ex_format == 1 && $ex_source == "$source_hash" && $ex_assets == "$assets_hash" ]]; then
+      return 0
+    fi
   fi
-  if [[ -n $existing ]] && [[ $(jq -r '.imageFormat // 0' <<< "$existing") == 1 ]] && [[ $(jq -r '.assetsHash // ""' <<< "$existing") == "$assets_hash" ]]; then
-    icon_copy=$(jq -r '.appIcon // ""' <<< "$existing")
-    image_copy=$(jq -r '.image // ""' <<< "$existing")
-    preview_copy=$(jq -r '.preview // ""' <<< "$existing")
+  if [[ -n $existing && $ex_format == 1 && $ex_assets == "$assets_hash" ]]; then
+    icon_copy=$ex_icon image_copy=$ex_image preview_copy=$ex_preview
   else
     icon_copy=$(archive_image "$app_icon" "$key" "appIcon")
     image_copy=$(archive_image "$image_src" "$key" "image")
@@ -345,10 +345,10 @@ ingest_json() {
       preview_copy=$(copy_image "$file_src" "$key" "preview")
     fi
     # Sender cleanup is not an image change: keep retained copies when the same original disappears.
-    if [[ -n $existing ]] && [[ $(jq -r '.imageFormat // 0' <<< "$existing") == 1 ]] && [[ $(jq -r '.assetSources // ""' <<< "$existing") == "$sources_hash" ]]; then
-      if is_path "$app_icon" && [[ ! -e ${app_icon#file://} ]]; then icon_copy=$(jq -r '.appIcon // ""' <<< "$existing"); fi
-      if is_path "$image_src" && [[ ! -e ${image_src#file://} ]]; then image_copy=$(jq -r '.image // ""' <<< "$existing"); fi
-      if [[ -n $file_src && ! -e $file_src ]]; then preview_copy=$(jq -r '.preview // ""' <<< "$existing"); fi
+    if [[ -n $existing && $ex_format == 1 && $ex_sources == "$sources_hash" ]]; then
+      if is_path "$app_icon" && [[ ! -e ${app_icon#file://} ]]; then icon_copy=$ex_icon; fi
+      if is_path "$image_src" && [[ ! -e ${image_src#file://} ]]; then image_copy=$ex_image; fi
+      if [[ -n $file_src && ! -e $file_src ]]; then preview_copy=$ex_preview; fi
     fi
   fi
 
@@ -398,8 +398,8 @@ ingest_json() {
     mv -f "$archive.tmp" "$archive" || return 1
   else
     printf '%s\n' "$entry" >> "$archive"
+    ingest_added=1
   fi
-  ingest_changed=1
   printf '%s\n' "$entry"
 }
 
@@ -413,6 +413,19 @@ sync_all() {
     [[ -e $file ]] || continue
     ingest_file "$file" || return 1
   done
+  apply_handled
+}
+
+# Foamy's handled journal (contract v2): notifications clicked or acted on there.
+# Read-only; removing them here is durable even if the shell restarted before
+# its `handled` IPC call reached us.
+apply_handled() {
+  [[ -n $handled_file && -s $handled_file && -s $archive ]] || return 0
+  local keys
+  keys=$(head -c 65536 -- "$handled_file" | grep -E '^[0-9]+-[0-9]+$' | jq -Rsc 'split("\n") | map(select(length > 0))') || return 0
+  mapfile -t keys < <(jq -r --argjson keys "$keys" '($keys | INDEX(.)) as $k | select($k[.key] != null) | .key' "$archive" 2>/dev/null)
+  (( ${#keys[@]} )) || return 0
+  remove_keys "${keys[@]}"
 }
 
 # ---------------------------------------------------------------- trimming
@@ -466,37 +479,33 @@ prune() {
   printf '%s\n' "$kept" | grep -v '^$' > "$archive.tmp" || true
   mv -f "$archive.tmp" "$archive"
 
-  local key
+  local key pruned=()
   while IFS= read -r key; do
     [[ -n $key ]] || continue
     rm -f -- "$images/$key-appIcon" "$images/$key-image" "$images/$key-preview" \
       "$images/$key-appIcon.png" "$images/$key-image.png" "$images/$key-preview.png"
-    # The source file too. It was the service's copy of something this archive
-    # now no longer has, so there is nothing left that would show it again.
-    rm -f -- "$src_history/$key.json"
+    [[ $key =~ ^[0-9]+-[0-9]+$ ]] && pruned+=("$key")
   done <<< "$dropped"
-
-  # And the source files under the clear line. Clear draws that line instead of
-  # deleting anything, which leaves the tidying to happen here: the archive has
-  # these, nothing is going to show them again, and this directory is not
-  # cleaned by anybody else. Doing it on the retention pass rather than on the
-  # click is the whole point, because a click that deletes is a click you have
-  # to be sure about.
-  if [[ -s $cleared_at_file ]]; then
-    local cleared_at f base stamp
-    cleared_at=$(cat "$cleared_at_file" 2>/dev/null || echo 0)
-    if [[ $cleared_at =~ ^[0-9]+$ ]] && (( cleared_at > 0 )); then
-      for f in "$src_history"/*.json; do
-        [[ -e $f ]] || continue
-        base=${f##*/}
-        base=${base%.json}
-        stamp=${base%%-*}
-        [[ $stamp =~ ^[0-9]+$ ]] || continue
-        (( stamp <= cleared_at )) && rm -f -- "$f"
-      done
-    fi
+  # The source's own copies are its business: under `watch` the service asks
+  # Foamy over IPC to drop them (releaseHistory); nothing here deletes them.
+  if (( ${NC_WATCHING:-0} && ${#pruned[@]} )) && [[ $source_kind != stock ]]; then
+    printf '%s\n' "${pruned[@]:0:1000}" | jq -Rsc '{event:"pruned", keys:(split("\n") | map(select(length > 0)))}'
   fi
   return 0
+}
+
+# Retention work only when a limit can have been crossed: more rows than the
+# ceiling, or an oldest row past the age cutoff. Rows are appended in arrival
+# order, so the first line is the oldest.
+prune_needed() {
+  [[ -s $archive ]] || return 1
+  local count first stamp
+  count=$(wc -l < "$archive")
+  (( count > max_items )) && return 0
+  IFS= read -r first < "$archive" || return 1
+  [[ $first =~ \"timestamp\":([0-9]+) ]] || return 0
+  stamp=${BASH_REMATCH[1]}
+  (( stamp < $(now_ms) - keep_days * 86400000 ))
 }
 
 # ---------------------------------------------------------------- commands
@@ -512,7 +521,9 @@ sync_and_prune() {
   else
     sync_all || return 1
   fi
-  prune
+  # Also enforces retention on a quiet machine: watch runs this at start and hourly.
+  prune_needed && prune
+  return 0
 }
 
 cmd_sync() {
@@ -568,10 +579,12 @@ normalize_archive() {
 
 cmd_watch() {
   ensure_store
-  mkdir -p "$src_dir"
-  local watch_paths=("$src_dir" "$source_state_dir" "$store")
-  if (( foamy_enabled )) || [[ ! -e $src_dir/live.json && ! -e $src_dir/history.json ]]; then mkdir -p "$src_history"; fi
-  [[ ! -d $src_history ]] || watch_paths+=("$src_history")
+  NC_WATCHING=1
+  # Watch only what exists; never create directories in another plugin's state.
+  local watch_paths=("$store") path
+  for path in "$src_dir" "$src_history" "$source_state_dir" ${handled_file:+"$(dirname "$handled_file")"} "$(dirname "${dnd_files[0]}")"; do
+    [[ -d $path ]] && [[ " ${watch_paths[*]} " != *" $path "* ]] && watch_paths+=("$path")
+  done
   command -v inotifywait >/dev/null 2>&1 || die "inotifywait is not installed"
   # Include the state directory so even the first DND file creation is observed.
   # Establish watches before startup reconciliation so arrivals cannot fall into a gap.
@@ -586,7 +599,17 @@ cmd_watch() {
   (( ready )) || die "notification watcher failed to start"
   cmd_sync
   printf '%s\n' '{"event":"storeChanged"}'
-  while IFS='|' read -r event file <&3; do
+  local status
+  while true; do
+    # The hourly timeout is the retention timer: limits hold while nothing arrives.
+    IFS='|' read -r -t 3600 event file <&3
+    status=$?
+    if (( status > 128 )); then
+      with_lock prune || die "cannot apply notification retention"
+      printf '%s\n' '{"event":"storeChanged"}'
+      continue
+    fi
+    (( status == 0 )) || break
     if [[ $event == *DELETE_SELF* || $event == *MOVE_SELF* ]]; then
       die "notification source changed; reconnecting"
     elif [[ $event == *Q_OVERFLOW* ]]; then
@@ -594,8 +617,10 @@ cmd_watch() {
       printf '%s\n' '{"event":"storeChanged"}'
     elif [[ $file == "$store/archive.jsonl" || $file == "$cleared_at_file" || $file == "$dismissed_file" ]]; then
       printf '%s\n' '{"event":"storeChanged"}'
-    elif [[ $file == "$source_state_dir/notifications.json" || $file == "$src_dir/quiet.json" ]]; then
+    elif [[ " ${dnd_files[*]} " == *" $file "* ]]; then
       printf '%s\n' '{"event":"dndChanged"}'
+    elif [[ -n $handled_file && $file == "$handled_file" ]]; then
+      [[ $event == *DELETE* ]] || { with_lock apply_handled || die "cannot update notification archive"; }
     elif [[ $event == CREATE* ]]; then
       # Ordinary JSON writes are ingested only when complete; Qt links its DND file atomically.
       continue
@@ -609,18 +634,20 @@ cmd_watch() {
 }
 
 ingest_one() {
-  ingest_changed=0
+  ingest_added=0
   ingest_file "$1" || return $?
-  # Duplicate filesystem events and archival moves do not need a retention rewrite.
-  (( ingest_changed )) && prune
+  # Duplicate events, in-place updates and moves need no retention rewrite;
+  # a new row prunes only when a limit can have been crossed.
+  (( ingest_added )) && prune_needed && prune
   return 0
 }
 
 cmd_list() {
   ensure_store
   with_lock normalize_archive || die "cannot normalize notification archive"
-  local limit=${1:-200}
-  local cleared_at=0
+  local limit=${1:-200} query=${2:-}
+  local cleared_at=0 cutoff
+  cutoff=$(( $(now_ms) - keep_days * 86400000 ))
   if [[ -s $cleared_at_file ]]; then
     cleared_at=$(cat "$cleared_at_file" 2>/dev/null || echo 0)
     [[ $cleared_at =~ ^[0-9]+$ ]] || cleared_at=0
@@ -634,8 +661,13 @@ cmd_list() {
   local result
   # Consume the whole stream but retain only the requested page. Closing a pipe
   # early with head causes SIGPIPE and can append a second JSON value under pipefail.
-  result=$(tac "$archive" | jq -Rnc --argjson cleared "$cleared_at" --argjson limit "$limit" '
-    reduce (inputs | fromjson? | select((.timestamp // 0) > $cleared)) as $row
+  (( ${#query} <= 256 )) || die "search is too long"
+  # Expired rows never show, even before the next retention pass. A query
+  # searches the whole archive (app, title, text), not just the loaded page.
+  result=$(tac "$archive" | jq -Rnc --argjson cleared "$cleared_at" --argjson cutoff "$cutoff" --argjson limit "$limit" --arg query "$query" '
+    ($query | ascii_downcase) as $q
+    | reduce (inputs | fromjson? | select((.timestamp // 0) > $cleared and (.timestamp // 0) >= $cutoff)
+        | select($q == "" or ([.app, .summary, .body] | map(tostring | ascii_downcase) | any(contains($q))))) as $row
       ([]; if length < $limit then . + [$row] else . end)
   ') || die "cannot read notification archive"
   printf '%s\n' "$result"
@@ -657,27 +689,35 @@ remove_keys() {
   # One locked rewrite avoids spawning a process and scanning the archive per card.
   jq -Rc --args '($ARGS.positional | INDEX(.)) as $keys | fromjson? | select($keys[.key] == null)' \
     -- "$@" < "$archive" > "$archive.tmp" || return 1
-  printf '%s\n' "$@" >> "$dismissed_file" || return 1
+  # Each tombstone once: the handled journal and the `handled` IPC can both report a key.
+  local fresh
+  fresh=$(printf '%s\n' "$@" | grep -vxF -f "$dismissed_file" 2>/dev/null) || true
+  [[ -z $fresh ]] || printf '%s\n' "$fresh" >> "$dismissed_file" || return 1
   mv -f "$archive.tmp" "$archive" || return 1
   for key in "$@"; do
+    # Only our own copies: the source asks its daemon over IPC (releaseHistory).
     rm -f -- "$images/$key-appIcon" "$images/$key-image" "$images/$key-preview" \
-      "$images/$key-appIcon.png" "$images/$key-image.png" "$images/$key-preview.png" \
-      "$src_history/$key.json" "$src_dir/$key.json" || return 1
+      "$images/$key-appIcon.png" "$images/$key-image.png" "$images/$key-preview.png" || return 1
   done
 }
 
-# Clear is a line drawn under what you have seen, not a shredder. It used to
-# empty the archive, delete every stored image, and delete the source history
-# out from under the service as well, which is a lot of somebody's month to
-# hang on one click with no way back.
-#
-# The timestamp on its own already does the whole job: `is_dismissed` treats
-# every key older than it as dismissed, ingest skips source files older than
-# it, and `list` filters on it. Everything below the line simply stops being
-# shown, and ages out through the ordinary retention limits like everything
-# else. Nothing to confirm, because nothing is destroyed.
+# Clear deletes: every archived row up to now and its retained images go.
+# The cleared_at line stays so read-only sources (stock 4.5's history.json)
+# are not ingested again; Foamy is asked to drop its own copies over IPC.
 clear_all() {
-  now_ms > "$cleared_at_file"
+  local stamp kept dropped key
+  stamp=$(now_ms)
+  printf '%s\n' "$stamp" > "$cleared_at_file"
+  [[ -s $archive ]] || return 0
+  kept=$(jq -Rc --argjson cut "$stamp" 'fromjson? // empty | select((.timestamp // 0) > $cut)' "$archive") || return 1
+  dropped=$(jq -Rr --argjson cut "$stamp" 'fromjson? // empty | select((.timestamp // 0) <= $cut) | .key' "$archive") || return 1
+  printf '%s\n' "$kept" | grep -v '^$' > "$archive.tmp" || true
+  mv -f "$archive.tmp" "$archive" || return 1
+  while IFS= read -r key; do
+    valid_key "$key" || continue
+    rm -f -- "$images/$key-appIcon" "$images/$key-image" "$images/$key-preview" \
+      "$images/$key-appIcon.png" "$images/$key-image.png" "$images/$key-preview.png"
+  done <<< "$dropped"
 }
 
 cmd_clear() {
@@ -810,7 +850,7 @@ backfill_previews() {
 case ${1:-} in
   sync)   shift; quiet=1; cmd_sync; printf '{"ok":true,"synced":true}\n' ;;
   watch)  shift; cmd_watch ;;
-  list)   shift; cmd_list "${1:-200}" ;;
+  list)   shift; cmd_list "${1:-200}" "${2:-}" ;;
   remove) shift; cmd_remove "$@" ;;
   clear)  shift; cmd_clear ;;
   seen)   shift; cmd_seen "$@" ;;
@@ -827,9 +867,9 @@ notification-center: the store behind the Omarchy notification center
 
   watch              follow the notification service and archive what it receives
   sync               catch up on anything not archived yet
-  list [LIMIT]       the archive as JSON, newest first (default 200)
+  list [LIMIT] [Q]   the archive as JSON, newest first (default 200), optionally matching Q
   remove KEY...      drop the specified notifications
-  clear              drop all of them
+  clear              delete all of them (and their images)
   seen [MS]          read or set when the center was last opened
   unread             how many arrived since then
   seed [N]           fill the archive with test traffic
