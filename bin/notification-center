@@ -581,9 +581,19 @@ cmd_watch() {
   ensure_store
   NC_WATCHING=1
   # Watch only what exists; never create directories in another plugin's state.
-  local watch_paths=("$store") path
+  # A source directory that does not exist yet is watched through its nearest
+  # existing ancestor; when it (or a directory on the way) appears, the watcher
+  # syncs and asks to be restarted so the new directory gets its own watch.
+  local watch_paths=("$store") path ancestor
+  missing_paths=()
   for path in "$src_dir" "$src_history" "$source_state_dir" ${handled_file:+"$(dirname "$handled_file")"} "$(dirname "${dnd_files[0]}")"; do
-    [[ -d $path ]] && [[ " ${watch_paths[*]} " != *" $path "* ]] && watch_paths+=("$path")
+    ancestor=$path
+    if [[ ! -d $path ]]; then
+      missing_paths+=("$path")
+      while [[ ! -d $ancestor && $ancestor == /?* ]]; do ancestor=$(dirname "$ancestor"); done
+      [[ -d $ancestor && $ancestor != / ]] || continue
+    fi
+    [[ " ${watch_paths[*]} " != *" $ancestor "* ]] && watch_paths+=("$ancestor")
   done
   command -v inotifywait >/dev/null 2>&1 || die "inotifywait is not installed"
   # Include the state directory so even the first DND file creation is observed.
@@ -621,6 +631,10 @@ cmd_watch() {
       printf '%s\n' '{"event":"dndChanged"}'
     elif [[ -n $handled_file && $file == "$handled_file" ]]; then
       [[ $event == *DELETE* ]] || { with_lock apply_handled || die "cannot update notification archive"; }
+    elif [[ $event == *ISDIR* ]] && source_path_appeared "$file"; then
+      with_lock sync_and_prune >/dev/null 2>&1 || true
+      printf '%s\n' '{"event":"rewatch"}'
+      exit 0
     elif [[ $event == CREATE* ]]; then
       # Ordinary JSON writes are ingested only when complete; Qt links its DND file atomically.
       continue
@@ -631,6 +645,15 @@ cmd_watch() {
     fi
   done
   die "notification watcher stopped"
+}
+
+# Whether a created directory is a missing source path or one of its ancestors.
+source_path_appeared() {
+  local created=$1 path
+  for path in "${missing_paths[@]}"; do
+    [[ $path == "$created" || $path == "$created"/* ]] && return 0
+  done
+  return 1
 }
 
 ingest_one() {
@@ -665,9 +688,11 @@ cmd_list() {
   # Expired rows never show, even before the next retention pass. A query
   # searches the whole archive (app, title, text), not just the loaded page.
   result=$(tac "$archive" | jq -Rnc --argjson cleared "$cleared_at" --argjson cutoff "$cutoff" --argjson limit "$limit" --arg query "$query" '
-    ($query | ascii_downcase) as $q
+    # Case-insensitive literal match with Unicode case folding (Oniguruma "i"),
+    # like the panel'"'"'s toLowerCase() filter: "école" finds "ÉCOLE".
+    ($query | gsub("(?<c>[.*+?^$(){}|\\[\\]\\\\/-])"; "\\\(.c)")) as $q
     | reduce (inputs | fromjson? | select((.timestamp // 0) > $cleared and (.timestamp // 0) >= $cutoff)
-        | select($q == "" or ([.app, .summary, .body] | map(tostring | ascii_downcase) | any(contains($q))))) as $row
+        | select($q == "" or ([.app, .summary, .body] | map(tostring) | any(test($q; "i"))))) as $row
       ([]; if length < $limit then . + [$row] else . end)
   ') || die "cannot read notification archive"
   printf '%s\n' "$result"

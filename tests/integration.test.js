@@ -84,3 +84,25 @@ test('the source comes from the service (IPC), never from another plugin\'s conf
  fs.writeFileSync(handled,`${stamp}-2\n`);run(env,'sync');assert.deepEqual(run(env,'list'),[])
  assert.ok(fs.existsSync(path.join(foamy,'popups',`${stamp}-2.json`)),'source files are read-only')
 })
+test('search folds Unicode case like the panel and matches the query literally',t=>{
+ const f=fixture(t);f.run('list')
+ const stamp=Date.now()-1000
+ fs.writeFileSync(path.join(f.store,'archive.jsonl'),[{key:`${stamp}-1`,timestamp:stamp,summary:'ÉCOLE ouverte'},{key:`${stamp}-2`,timestamp:stamp,summary:'axb'}].map(JSON.stringify).join('\n')+'\n')
+ assert.deepEqual(f.run('list','10','école').map(r=>r.key),[`${stamp}-1`])
+ assert.deepEqual(f.run('list','10','a.b'),[])
+ assert.deepEqual(f.run('list','10','['),[])
+})
+test('a source directory created after the watcher started is picked up',async t=>{
+ const f=fixture(t),late=path.join(f.dir,'late','notifications')
+ const env={...f.env,NC_SRC_DIR:late,NC_SRC_HISTORY:path.join(late,'history')}
+ const events=[],watch=spawn(script,['watch'],{env})
+ let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
+ t.after(()=>watch.kill())
+ async function until(fn){const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))}}
+ await until(()=>events.some(e=>e.event==='storeChanged'))
+ assert.equal(fs.existsSync(late),false,'the watcher never creates the source directory')
+ const stamp=Date.now()
+ fs.mkdirSync(late,{recursive:true});fs.writeFileSync(path.join(late,`${stamp}-7.json`),JSON.stringify({timestamp:stamp,originalId:7,app:'Late',summary:'Arrived'}))
+ await until(()=>events.some(e=>e.event==='rewatch'))
+ assert.deepEqual(f.run('list').map(r=>r.summary),['Arrived'])
+})
