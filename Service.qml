@@ -297,12 +297,33 @@ Item {
   }
 
   // Foamy releases callbacks and drops its own copies; we never delete its files.
+  // Batches of 100 go one at a time (PeerIpc runs at most 8 CLI calls on 4.0);
+  // a failed batch stays queued and is retried, since these keys are already
+  // gone from the archive and no later prune would ask again.
+  property var releaseQueue: []
+  property bool releaseBusy: false
   function releaseNotificationActions(keys) {
     if (!foamySource) return
     keys = keys.filter(function(key) { return /^[0-9]+-[0-9]+$/.test(key) })
-    for (var i = 0; i < keys.length && i < 1000; i += 100)
-      peer.call("foamy.notifications", "releaseHistory", [keys.slice(i, i + 100).join(",")])
+    var queue = releaseQueue.slice()
+    for (var i = 0; i < keys.length; i += 100) queue.push(keys.slice(i, i + 100).join(","))
+    // Bounded: 100 batches (10,000 keys) covers maxItems.
+    releaseQueue = queue.slice(-100)
+    pumpReleases()
   }
+  function pumpReleases() {
+    if (releaseBusy || !releaseQueue.length || releaseRetry.running) return
+    releaseBusy = true
+    peer.call("foamy.notifications", "releaseHistory", [releaseQueue[0]], function(ok, output) {
+      root.releaseBusy = false
+      if (ok && String(output).trim() === "ok") {
+        root.releaseQueue = root.releaseQueue.slice(1)
+        root.pumpReleases()
+      } else if (root.foamySource) releaseRetry.restart()
+      else root.releaseQueue = []
+    })
+  }
+  Timer { id: releaseRetry; interval: 5000; onTriggered: root.pumpReleases() }
 
   // Ordinary plugins use the public IPC commands, not the bar-only service proxy.
   property bool doNotDisturb: false
@@ -404,10 +425,12 @@ Item {
     entries = []
     unreadSource = []
     entriesReset()
-    var cut = String(Date.now())
-    clearProc.cut = cut
-    if (!clearProc.running) clearProc.running = true
+    // A clear requested while one runs runs again afterwards, with its own cutoff.
+    if (clearProc.running) { clearPending = true; return }
+    clearProc.cut = String(Date.now())
+    clearProc.running = true
   }
+  property bool clearPending: false
   Process {
     id: clearProc
     property string cut: ""
@@ -416,6 +439,12 @@ Item {
     onExited: function(code, status) {
       if (code === 0 && status === 0) { if (root.foamySource) peer.call("foamy.notifications", "releaseHistoryBefore", [cut]) }
       else root.removalError = "Could not clear notifications. Try again."
+      if (root.clearPending) {
+        root.clearPending = false
+        cut = String(Date.now())
+        running = true
+        return
+      }
       root.load()
     }
   }
@@ -434,6 +463,8 @@ Item {
     if (entry && entry.event === "dndChanged") { dndRefresh.restart(); return }
     if (entry && entry.event === "seenChanged") { root.readSeen(); return }
     if (entry && entry.event === "pruned") { root.releaseNotificationActions(entry.keys || []); return }
+    // A missing source directory appeared: the watcher exits to be rebuilt with it.
+    if (entry && entry.event === "rewatch") { root.sourceRestartPending = true; return }
     if (!entry || !entry.key) return
     if (removedKeys[String(entry.key)]) return
     for (var i = 0; i < entries.length; i++) {

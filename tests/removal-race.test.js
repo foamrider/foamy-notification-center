@@ -96,24 +96,51 @@ test("failed dismissal releases only failed tombstones and reloads for retry", (
   assert.deepEqual(Array.from(state.removeProc.command), ["remove", failed.key])
 })
 
-test("callback cleanup runs only after durable dismissal and batches exact keys", () => {
+test("callback cleanup runs only after durable dismissal and batches exact keys, one batch at a time", () => {
  const state=service(),calls=[]
+ let answer=true
+ state.releaseQueue=[];state.releaseBusy=false;state.releaseRetry={running:false,restart(){this.running=true}}
  // Contract v2: Foamy is asked over its IPC (PeerIpc), never by deleting its files.
- state.peer.call=(target,method,args)=>calls.push([target,method,...args])
- const start=source.indexOf("  function releaseNotificationActions(")
- vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
- const keys=Array.from({length:101},(_,i)=>`${i+1}-1`)
+ state.peer.call=(target,method,args,done)=>{calls.push([target,method,...args]);done(answer,answer?'ok':'')}
+ for(const name of ["releaseNotificationActions","pumpReleases"]) {
+  const start=source.indexOf(`  function ${name}(`)
+  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ }
+ const keys=Array.from({length:1001},(_,i)=>`${i+1}-1`)
  state.releaseNotificationActions(keys)
- assert.equal(calls.length,2)
+ // All 11 batches go out (more than PeerIpc's 8 concurrent CLI calls), in order.
+ assert.equal(calls.length,11)
  assert.equal(calls[0][2].split(',').length,100)
- assert.deepEqual(calls[1],["foamy.notifications","releaseHistory","101-1"])
+ assert.deepEqual(calls[10],["foamy.notifications","releaseHistory","1001-1"])
+ // A failed batch stays queued for a retry instead of being dropped.
+ answer=false;state.releaseNotificationActions(['5-5'])
+ assert.equal(state.releaseQueue.length,1);assert.equal(state.releaseRetry.running,true)
+ answer=true;state.releaseRetry.running=false;state.pumpReleases()
+ assert.equal(state.releaseQueue.length,0)
  state.activeRemovalKeys=['100-1'];state.removeErrors={text:''};state.exitCode=0;state.exitStatus=0
  const handler=source.indexOf("    onExited: function(exitCode, exitStatus) {",source.indexOf("    id: removeProc"))
+ const before=calls.length
  vm.runInContext(source.slice(source.indexOf("{",handler)+1,source.indexOf("\n    }",handler)),state)
- assert.equal(calls[2][2],"100-1")
+ assert.equal(calls[before][2],"100-1")
  // Keys Foamy itself reported as handled are not sent back to it.
  state.quietRemovalKeys={'100-2':true};state.activeRemovalKeys=['100-2']
  vm.runInContext(source.slice(source.indexOf("{",handler)+1,source.indexOf("\n    }",handler)),state)
- assert.equal(calls.length,3)
- state.foamySource=false;state.releaseNotificationActions(['1-1']);assert.equal(calls.length,3)
+ assert.equal(calls.length,before+1)
+ state.foamySource=false;state.releaseNotificationActions(['1-1']);assert.equal(calls.length,before+1)
+})
+
+test("a second Clear all while one runs is queued, not dropped", () => {
+ const state=service()
+ state.clearProc={running:true,cut:""};state.clearPending=false;state.unreadSource=[]
+ const start=source.indexOf("  function clearAll(")
+ vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ state.clearAll()
+ assert.equal(state.clearPending,true)
+ const exit=source.indexOf("    onExited: function(code, status) {",source.indexOf("    id: clearProc"))
+ const body=source.slice(source.indexOf("{",exit)+1,source.indexOf("\n    }",exit))
+ const proc={cut:"1",running:false}
+ const ctx=vm.createContext({code:0,status:0,cut:"1",running:false,root:{foamySource:false,clearPending:true,load(){ctx.loaded=true}},peer:{call(){}},String,Date})
+ vm.runInContext("(function(){"+body+"})()",ctx)
+ assert.equal(ctx.running,true,"the queued clear runs after the active one")
+ assert.equal(ctx.root.clearPending,false)
 })
