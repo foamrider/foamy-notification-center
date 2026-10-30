@@ -8,7 +8,7 @@ Item {
   id: preview
   required property QtObject bar
   required property Item anchorItem
-  property var previewStates: ["default", "empty", "menu", "settings"]
+  property var previewStates: ["default", "settings"]
   property string previewState: "default"
   property int settleMs: 900
   property Item popupRef: null
