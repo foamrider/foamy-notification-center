@@ -85,8 +85,27 @@ def changed_rows(source, archive):
     return sorted(result, key=lambda row: row['timestamp'])
 
 
+def present_keys(source):
+    """Every archive key the stock file still holds (for tombstone trimming)."""
+    with source.open('rb') as stream:
+        raw = stream.read(LIMIT + 1)
+    if not raw.strip():
+        return []
+    if len(raw) > LIMIT:
+        raise ValueError('stock notification file exceeds 8 MiB')
+    rows = json.loads(raw)
+    if not isinstance(rows, list):
+        raise ValueError('invalid stock notification array')
+    return ['stock-' + row['key'] for row in rows
+            if isinstance(row, dict) and isinstance(row.get('key'), str) and KEY.fullmatch(row['key'])]
+
+
 def main():
     try:
+        if sys.argv[1] == '--keys':
+            for key in present_keys(Path(sys.argv[2])):
+                print(key)
+            return 0
         for row in changed_rows(Path(sys.argv[1]), Path(sys.argv[2])):
             print(json.dumps(row, ensure_ascii=True, separators=(',', ':')))
     except (OSError, ValueError) as error:

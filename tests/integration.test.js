@@ -153,3 +153,23 @@ test('pages are newest by timestamp even when an old row arrived last',t=>{
  fs.writeFileSync(path.join(f.store,'archive.jsonl'),[...[0,1,2].map(i=>({key:`${b+10+i}-1`,timestamp:b+10+i,summary:'new'+i})),{key:`${b}-9`,timestamp:b,summary:'late-old'}].map(JSON.stringify).join('\n')+'\n')
  assert.deepEqual(f.run('list','3').map(r=>r.summary),['new2','new1','new0'])
 })
+test('rows retained across an equal-timestamp split keep taking updates',t=>{
+ const f=fixture(t),stamp=Date.now()-5000,env={...f.env,NC_MAX_ITEMS:'2'}
+ const run=(...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ for(const i of [1,2,3]) fs.writeFileSync(path.join(f.source,'history',`${stamp}-${i}.json`),JSON.stringify({timestamp:stamp,originalId:i,app:'T',summary:'v1'}))
+ run('sync');const kept=run('list').map(r=>r.key).sort();assert.deepEqual(kept,[`${stamp}-2`,`${stamp}-3`])
+ fs.writeFileSync(path.join(f.source,'history',`${stamp}-3.json`),JSON.stringify({timestamp:stamp,originalId:3,app:'T',summary:'v2'}))
+ run('sync');assert.equal(run('list').find(r=>r.key===`${stamp}-3`).summary,'v2')
+ assert.ok(!run('list').some(r=>r.key===`${stamp}-1`))
+})
+test('a dismissal tombstone outlives any number of older rows while its source copy survives',t=>{
+ const f=fixture(t),now=Date.now(),key=`${now-1000}-1`
+ fs.writeFileSync(path.join(f.source,'history',`${key}.json`),JSON.stringify({timestamp:now-1000,originalId:1,app:'T',summary:'dismissed'}))
+ f.run('sync');f.run('remove',key)
+ const older=Array.from({length:2100},(_,i)=>JSON.stringify({key:`${now-900000+i}-${i+10}`,timestamp:now-900000+i,summary:'x'}))
+ fs.appendFileSync(path.join(f.store,'archive.jsonl'),older.join('\n')+'\n')
+ // The service removes in batches of at most 100 keys.
+ for(let b=0;b<2100;b+=100) f.run('remove',...Array.from({length:100},(_,i)=>`${now-900000+b+i}-${b+i+10}`))
+ f.run('prune');f.run('sync')
+ assert.ok(!f.run('list','5000').some(r=>r.key===key),'the dismissed notification came back')
+})

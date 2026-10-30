@@ -126,7 +126,12 @@ arrival and a 120 ms fade on removal. The departed row then collapses over
 140 ms so remaining cards move smoothly. The panel height also animates.
 Message updates retain their card, and scrolling does not replay the entrance.
 
-Keeps up to 1,000 notifications for 30 days by default. Retention is enforced
+Keeps up to 1,000 notifications for 30 days by default. The archive's
+invariants (identity is the key; equal timestamps are ordered by key; removed
+notifications never return while a source still holds a copy; rows still in the
+archive always take updates; what each source can resurrect and how tombstones
+prevent it) are written at the top of `bin/notification-center` and checked by
+the randomised `tests/retention-property.test.js`. Retention is enforced
 when the watcher starts, after new arrivals that cross a limit, and hourly while
 nothing arrives; expired entries never show. **Clear all deletes** the archived
 entries and their images (and asks Foamy Notifications to drop its own copies). Silenced notifications

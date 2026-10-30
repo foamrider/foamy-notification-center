@@ -44,9 +44,36 @@ seen_file="$store/seen"
 lock_file="$store/lock"
 dismissed_file="$store/dismissed"
 cleared_at_file="$store/cleared_at"
-# Retention watermark: the newest timestamp retention has dropped. Source
-# copies at or below it (read-only, they may outlive retention) never re-enter.
+# Retention watermark "TS KEY": the highest rank retention has dropped.
 pruned_through_file="$store/pruned_through"
+
+# ------------------------------------------------- archive invariants
+#
+# Identity is the key, never the timestamp. "ts-id" keys (Foamy, stock 4.0
+# files) carry an immutable arrival stamp; "stock-…" keys (stock 4.5 arrays)
+# do not, and their source rows change ts on in-place updates. A row's rank is
+# (archive timestamp, key), keys compared bytewise: equal timestamps are
+# ordered by key, so every split is deterministic.
+#
+# I1 Removed stays removed. A key that left the archive (dismissed, handled,
+#    cleared or pruned) is never ingested again while any source still holds
+#    a copy. Sources are read-only to us and can outlive retention.
+# I2 Present rows update. Exclusions apply only to keys absent from the
+#    archive; a row still in the archive always takes its source's update.
+# I3 Retention keeps the top max_items rows by rank among rows younger than
+#    keep_days; the watermark records the highest rank it dropped.
+# I4 New keys enter. A key never removed, younger than keep_days, after the
+#    clear line and ranked above the watermark is archived on the next sync.
+#
+# How I1 is enforced for keys absent from the archive:
+#  - ts-id keys: by their immutable stamp: at or below cleared_at, older than
+#    keep_days, or ranked at or below the watermark; else by a tombstone.
+#  - stock-… keys: by a tombstone only (their source ts moves), so every
+#    removal of a stock key (dismiss, clear, retention) writes one.
+# Tombstones ("KEY TS REMOVED_AT") are dropped only when that guarantee no
+# longer needs them: a ts-id key once its stamp is covered as above; a stock
+# key once a full sync finds it in no source file (and an hour has passed, so
+# a removal that raced its first write keeps its tombstone).
 
 # How much is kept. Both are ceilings and the tighter one wins: 30 days of a
 # quiet week is a shorter list than 1000 notifications, and 1000 notifications
@@ -90,12 +117,58 @@ ensure_store() {
 
 now_ms() { printf '%s' "$(($(date +%s%N) / 1000000))"; }
 
+# The immutable stamp of a ts-id key, or nothing for stock-… keys.
+key_stamp() { [[ $1 =~ ^([0-9]+)-[0-9]+$ ]] && printf '%s' "${BASH_REMATCH[1]}"; }
+
+# Whether rank (ts1, key1) <= (ts2, key2); keys compared bytewise.
+rank_le() {
+  local LC_ALL=C
+  (( $1 < $3 )) && return 0
+  (( $1 > $3 )) && return 1
+  [[ $2 < $4 || $2 == "$4" ]]
+}
+
+watermark() {
+  local line=""
+  [[ -s $pruned_through_file ]] && IFS= read -r line < "$pruned_through_file"
+  # Older files hold a bare stamp: rank (ts, "") sits below every key of that ts.
+  [[ $line =~ ^([0-9]+)(\ ([A-Za-z0-9_-]+))?$ ]] || { printf '0 '; return; }
+  printf '%s %s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[3]}"
+}
+
+cleared_line() {
+  local cleared=0
+  [[ -s $cleared_at_file ]] && cleared=$(<"$cleared_at_file")
+  [[ $cleared =~ ^[0-9]+$ ]] || cleared=0
+  printf '%s' "$cleared"
+}
+
+# I1 for a ts-id key absent from the archive: covered by its stamp alone.
+stamp_excluded() {
+  local key=$1 stamp wm_ts wm_key
+  stamp=$(key_stamp "$key") || return 1
+  [[ -n $stamp ]] || return 1
+  (( stamp <= $(cleared_line) )) && return 0
+  (( stamp < $(now_ms) - keep_days * 86400000 )) && return 0
+  read -r wm_ts wm_key <<< "$(watermark)"
+  rank_le "$stamp" "$key" "$wm_ts" "${wm_key:-}"
+}
+
+# Tombstones for keys (one line each, written once): KEY TS REMOVED_AT.
+# $1: file of "KEY TS" lines.
+add_tombstones() {
+  local now
+  now=$(now_ms)
+  awk -v now="$now" 'FILENAME == ARGV[1] { seen[$1] = 1; next } ($1 != "" && !($1 in seen)) { seen[$1] = 1; print $1, ($2 == "" ? 0 : $2), now }' \
+    "$dismissed_file" "$1" >> "$dismissed_file"
+}
+
 # ---------------------------------------------------------------- ingesting
 
 is_dismissed() {
   local key=$1
   [[ -n $key ]] || return 1
-  if [[ -s $dismissed_file ]] && grep -qxF "$key" "$dismissed_file" 2>/dev/null; then
+  if [[ -s $dismissed_file ]] && grep -qE "^${key}( |\$)" "$dismissed_file" 2>/dev/null; then
     return 0
   fi
   if [[ -s $cleared_at_file ]]; then
@@ -303,21 +376,16 @@ ingest_json() {
   # Transient action feedback remains a toast and does not enter this archive.
   [[ $transient == true ]] && return 0
 
-  # Retention already decided against these: older than the age limit, or at or
-  # below what a count prune dropped. Their source copies are not ours to
-  # delete, so without this they would come back as "new" rows on every sync.
-  if [[ $file_stamp =~ ^[0-9]+$ ]] && (( file_stamp > 0 )); then
-    (( file_stamp < $(now_ms) - keep_days * 86400000 )) && return 0
-    local pruned_through=0
-    [[ -s $pruned_through_file ]] && pruned_through=$(<"$pruned_through_file")
-    [[ $pruned_through =~ ^[0-9]+$ ]] && (( file_stamp <= pruned_through )) && return 0
-  fi
-
-  if [[ -s $cleared_at_file ]]; then
-    local cleared_at
-    cleared_at=$(<"$cleared_at_file")
-    if [[ $cleared_at =~ ^[0-9]+$ && $file_stamp =~ ^[0-9]+$ ]] && (( cleared_at > 0 && file_stamp > 0 && file_stamp <= cleared_at )); then
-      return 0
+  existing=$(grep -F "\"key\":\"$key\"" "$archive" | head -n 1)
+  # I2: a row in the archive always takes its update. I1 for absent keys:
+  # ts-id keys by their stamp (clear line, age, watermark); stock keys by the
+  # tombstone checked above, plus the clear line and age by source ts, which
+  # only ever exclude more.
+  if [[ -z $existing ]]; then
+    stamp_excluded "$key" && return 0
+    if [[ $key == stock-* && $file_stamp =~ ^[0-9]+$ ]] && (( file_stamp > 0 )); then
+      (( file_stamp <= $(cleared_line) )) && return 0
+      (( file_stamp < $(now_ms) - keep_days * 86400000 )) && return 0
     fi
   fi
 
@@ -327,7 +395,6 @@ ingest_json() {
     file_src=${file_src#file://}
     [[ -n $file_src ]] && file_action=$(screenshot_action "$exec_src" "$file_src")
   fi
-  existing=$(grep -F "\"key\":\"$key\"" "$archive" | head -n 1)
   # An in-place stock update changes ts; keep the first arrival for unread state.
   if [[ $key == stock-* && -n $existing ]]; then
     source_json=$(jq -c --argjson stamp "$(jq '.timestamp' <<< "$existing")" '.timestamp = $stamp' <<< "$source_json") || return 1
@@ -431,6 +498,7 @@ sync_all() {
     ingest_file "$file" || return 1
   done
   apply_handled
+  trim_stock_tombstones
 }
 
 # Foamy's handled journal (contract v2): notifications clicked or acted on there.
@@ -462,9 +530,7 @@ prune() {
     fi
   fi
 
-  if [[ -s $dismissed_file ]]; then
-    tail -n 2000 "$dismissed_file" > "$dismissed_file.tmp" 2>/dev/null && mv -f "$dismissed_file.tmp" "$dismissed_file"
-  fi
+  trim_tombstones
 
   [[ -s $archive ]] || return 0
 
@@ -488,22 +554,27 @@ prune() {
   local verdict
   if ! verdict=$(jq -Rsc --argjson cutoff "$cutoff" --argjson max "$max_items" '
       [split("\n")[] | fromjson? // empty | select(type == "object" and .key)] as $rows
-      | ($rows | map(select((.timestamp // 0) >= $cutoff)) | sort_by(.timestamp // 0)) as $fresh
+      | ($rows | map(select((.timestamp // 0) >= $cutoff)) | sort_by((.timestamp // 0), .key)) as $fresh
       | ($fresh | if length > $max then .[length - $max:] else . end) as $kept
       | ($kept | map(.key) | INDEX(.)) as $keep
       | {kept: $kept, dropped: [$rows[] | select($keep[.key] == null) | {key, timestamp: (.timestamp // 0)}]}
+      | .top = (.dropped | max_by([.timestamp, .key]) // null)
     ' "$archive" 2>/dev/null); then
     return 0
   fi
   kept=$(jq -c '.kept[]' <<< "$verdict") || return 0
   dropped=$(jq -r '.dropped[].key' <<< "$verdict") || return 0
-  local through previous=0
-  through=$(jq '[.dropped[].timestamp | numbers] | max // 0' <<< "$verdict") || through=0
-  [[ -s $pruned_through_file ]] && previous=$(<"$pruned_through_file")
-  [[ $previous =~ ^[0-9]+$ ]] || previous=0
-  if [[ $through =~ ^[0-9]+$ ]] && (( through > previous )); then
-    printf '%s\n' "$through" > "$pruned_through_file.tmp" && mv -f "$pruned_through_file.tmp" "$pruned_through_file"
+  # I3: the watermark only rises (rank order).
+  local top_ts top_key wm_ts wm_key
+  top_ts=$(jq -r '.top.timestamp // empty' <<< "$verdict") top_key=$(jq -r '.top.key // empty' <<< "$verdict")
+  read -r wm_ts wm_key <<< "$(watermark)"
+  if [[ $top_ts =~ ^[0-9]+$ && -n $top_key ]] && ! rank_le "$top_ts" "$top_key" "$wm_ts" "${wm_key:-}"; then
+    printf '%s %s\n' "$top_ts" "$top_key" > "$pruned_through_file.tmp" && mv -f "$pruned_through_file.tmp" "$pruned_through_file"
   fi
+  # I1 for stock keys: their source ts moves, so retention tombstones them.
+  jq -r '.dropped[] | select(.key | startswith("stock-")) | "\(.key) \(.timestamp)"' <<< "$verdict" > "$archive.stones" || return 0
+  [[ -s $archive.stones ]] && add_tombstones "$archive.stones"
+  rm -f -- "$archive.stones"
 
   printf '%s\n' "$kept" | grep -v '^$' > "$archive.tmp" || true
   mv -f "$archive.tmp" "$archive"
@@ -525,6 +596,39 @@ prune() {
     done
   fi
   return 0
+}
+
+# Drop ts-id tombstones whose stamp now covers the key (clear line, age,
+# watermark); stock tombstones are trimmed by sync_all against the sources.
+trim_tombstones() {
+  [[ -s $dismissed_file ]] || return 0
+  local cutoff cleared wm_ts wm_key
+  cutoff=$(( $(now_ms) - keep_days * 86400000 ))
+  cleared=$(cleared_line)
+  read -r wm_ts wm_key <<< "$(watermark)"
+  LC_ALL=C awk -v cutoff="$cutoff" -v cleared="$cleared" -v wts="$wm_ts" -v wkey="${wm_key:-}" '
+    match($1, /^[0-9]+-[0-9]+$/) {
+      ts = substr($1, 1, index($1, "-") - 1) + 0
+      if (ts <= cleared || ts < cutoff || ts < wts + 0 || (ts == wts + 0 && $1 <= wkey)) next
+    }
+    { print }' "$dismissed_file" > "$dismissed_file.tmp" && mv -f "$dismissed_file.tmp" "$dismissed_file"
+}
+
+# Drop stock tombstones for keys no source file holds any more (I1 needs a
+# tombstone only while a copy exists), at least an hour after the removal.
+trim_stock_tombstones() {
+  [[ $source_kind == stock && -s $dismissed_file ]] || return 0
+  grep -q '^stock-' "$dismissed_file" || return 0
+  local present file
+  present=$(mktemp) || return 0
+  for file in "$src_dir/live.json" "$src_dir/history.json"; do
+    [[ -s $file ]] || continue
+    python3 "$preview_policy_dir/read-stock-notifications.py" --keys "$file" >> "$present" || { rm -f -- "$present"; return 0; }
+  done
+  awk -v grace=$(( $(now_ms) - 3600000 )) 'FILENAME == ARGV[1] { here[$1] = 1; next }
+    ($1 ~ /^stock-/ && !($1 in here) && ($3 + 0) < grace) { next } { print }' \
+    "$present" "$dismissed_file" > "$dismissed_file.tmp" && mv -f "$dismissed_file.tmp" "$dismissed_file"
+  rm -f -- "$present"
 }
 
 # Retention work only when a limit can have been crossed: more rows than the
@@ -752,16 +856,25 @@ remove_keys() {
   # One locked rewrite avoids spawning a process and scanning the archive per card.
   jq -Rc --args '($ARGS.positional | INDEX(.)) as $keys | fromjson? | select($keys[.key] == null)' \
     -- "$@" < "$archive" > "$archive.tmp" || return 1
-  # Each tombstone once: the handled journal and the `handled` IPC can both report a key.
-  local fresh
-  fresh=$(printf '%s\n' "$@" | grep -vxF -f "$dismissed_file" 2>/dev/null) || true
-  [[ -z $fresh ]] || printf '%s\n' "$fresh" >> "$dismissed_file" || return 1
-  mv -f "$archive.tmp" "$archive" || return 1
+  # Tombstones with the archived ts (a key not archived yet: its stamp, or 0),
+  # each written once: the handled journal and the `handled` IPC can both report a key.
+  jq -Rr --args '($ARGS.positional | INDEX(.)) as $keys | fromjson? | select($keys[.key] != null) | "\(.key) \(.timestamp // 0)"' \
+    -- "$@" < "$archive" > "$archive.stones" || return 1
+  local key stamps=()
   for key in "$@"; do
-    # Only our own copies: the source asks its daemon over IPC (releaseHistory).
-    rm -f -- "$images/$key-appIcon" "$images/$key-image" "$images/$key-preview" \
-      "$images/$key-appIcon.png" "$images/$key-image.png" "$images/$key-preview.png" || return 1
+    [[ $key =~ ^([0-9]+)-[0-9]+$ ]] && stamps+=("$key ${BASH_REMATCH[1]}") || stamps+=("$key 0")
   done
+  printf '%s\n' "${stamps[@]}" >> "$archive.stones"
+  add_tombstones "$archive.stones" || return 1
+  rm -f -- "$archive.stones"
+  mv -f "$archive.tmp" "$archive" || return 1
+  # Only our own copies: the source asks its daemon over IPC (releaseHistory).
+  local copies=()
+  for key in "$@"; do
+    copies+=("$images/$key-appIcon" "$images/$key-image" "$images/$key-preview" \
+      "$images/$key-appIcon.png" "$images/$key-image.png" "$images/$key-preview.png")
+  done
+  rm -f -- "${copies[@]}" || return 1
 }
 
 # Clear deletes: every archived row up to now and its retained images go.
@@ -774,6 +887,11 @@ clear_all() {
   [[ -s $archive ]] || return 0
   kept=$(jq -Rc --argjson cut "$stamp" 'fromjson? // empty | select((.timestamp // 0) > $cut)' "$archive") || return 1
   dropped=$(jq -Rr --argjson cut "$stamp" 'fromjson? // empty | select((.timestamp // 0) <= $cut) | .key' "$archive") || return 1
+  # I1 for stock keys (their source ts moves past the clear line on updates).
+  jq -Rr --argjson cut "$stamp" 'fromjson? // empty | select((.timestamp // 0) <= $cut and (.key | startswith("stock-"))) | "\(.key) \(.timestamp // 0)"' \
+    "$archive" > "$archive.stones" || return 1
+  [[ -s $archive.stones ]] && { add_tombstones "$archive.stones" || return 1; }
+  rm -f -- "$archive.stones"
   printf '%s\n' "$kept" | grep -v '^$' > "$archive.tmp" || true
   mv -f "$archive.tmp" "$archive" || return 1
   while IFS= read -r key; do
