@@ -13,7 +13,9 @@ function service() {
     pendingRemovalKeys: [], activeRemovalKeys: [], removalError: "",
     removeProc: { running: false, command: [] },
     entriesReset() {}, entryAdded() {}, storeCommand(args) { return args },
-    Quickshell: { execDetached() {} }
+    Quickshell: { execDetached() {} },
+    quietRemovalKeys: {}, foamySource: true, peer: { call() {} },
+    searchQuery: "", listLimit: 500, hasMore: false, unreadSource: [], reloadArchive: { restart() {} }
   })
   context.root = context
   for (const name of ["remove", "removeMany", "startRemoval", "absorb", "visibleEntries"]) {
@@ -96,16 +98,22 @@ test("failed dismissal releases only failed tombstones and reloads for retry", (
 
 test("callback cleanup runs only after durable dismissal and batches exact keys", () => {
  const state=service(),calls=[]
- state.Quickshell.execDetached=argv=>calls.push(Array.from(argv))
+ // Contract v2: Foamy is asked over its IPC (PeerIpc), never by deleting its files.
+ state.peer.call=(target,method,args)=>calls.push([target,method,...args])
  const start=source.indexOf("  function releaseNotificationActions(")
  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
  const keys=Array.from({length:101},(_,i)=>`${i+1}-1`)
  state.releaseNotificationActions(keys)
  assert.equal(calls.length,2)
- assert.equal(calls[0][4].split(',').length,100)
- assert.deepEqual(calls[1],["omarchy-shell","-q","foamy.notifications","releaseHistory","101-1"])
+ assert.equal(calls[0][2].split(',').length,100)
+ assert.deepEqual(calls[1],["foamy.notifications","releaseHistory","101-1"])
  state.activeRemovalKeys=['100-1'];state.removeErrors={text:''};state.exitCode=0;state.exitStatus=0
  const handler=source.indexOf("    onExited: function(exitCode, exitStatus) {",source.indexOf("    id: removeProc"))
  vm.runInContext(source.slice(source.indexOf("{",handler)+1,source.indexOf("\n    }",handler)),state)
- assert.equal(calls[2][4],"100-1")
+ assert.equal(calls[2][2],"100-1")
+ // Keys Foamy itself reported as handled are not sent back to it.
+ state.quietRemovalKeys={'100-2':true};state.activeRemovalKeys=['100-2']
+ vm.runInContext(source.slice(source.indexOf("{",handler)+1,source.indexOf("\n    }",handler)),state)
+ assert.equal(calls.length,3)
+ state.foamySource=false;state.releaseNotificationActions(['1-1']);assert.equal(calls.length,3)
 })

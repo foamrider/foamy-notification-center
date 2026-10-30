@@ -1,10 +1,11 @@
-import ".." as PluginLanguage
 import QtQuick
 import Quickshell
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
-import "../Translations.js" as Translations
+// Not "Translations": 4.5 qs.Commons has a Translations type, and the clash breaks loading.
+import "../Translations.js" as CenterText
+import "../kit"
 
 Item {
   id: root
@@ -24,12 +25,14 @@ Item {
 
   implicitHeight: Math.max(Style.space(root.compact ? 32 : 44), labels.implicitHeight + Style.space(root.compact ? 8 : 20))
   readonly property bool expandable: group.entries.length > 1
+  readonly property string storeImages: "file://" + (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/omarchy-notification-center/images/"
   readonly property string iconSource: {
     var value = String(group.appIcon || "")
     if (!value) return ""
-    if (value.indexOf("file://") === 0 || value.indexOf("image://") === 0) return value
-    if (value.charAt(0) === "/") return Util.fileUrl(value)
-    return Quickshell.iconPath(value, true)
+    // Only the archive's own normalized images or a theme icon name; never a
+    // provider URL or an arbitrary path from a (tampered) archive.
+    if (value.indexOf(root.storeImages) === 0 && value.indexOf("/..") < 0) return value
+    return /^[A-Za-z0-9_.-]+$/.test(value) ? Quickshell.iconPath(value, true) : ""
   }
 
   HoverHandler { id: hover; onHoveredChanged: if (hovered) root.pointerUsed() }
@@ -45,7 +48,7 @@ Item {
     color: "transparent"
     border.width: root.hasCursor && !root.dismissHasCursor ? 1 : 0
     border.color: Commons.Color.accent
-    radius: Style.cornerRadius * 2
+    radius: FoamyStyle.radius
   }
   MouseArea {
     id: headingMouse
@@ -101,7 +104,7 @@ Item {
     anchors.rightMargin: Style.space(9)
     anchors.verticalCenter: parent.verticalCenter
     textFormat: Text.PlainText
-    text: root.group.app === "Unknown app" ? PluginLanguage.FoamyI18n.t("Unknown app") : (root.group.label || root.group.app)
+    text: root.group.app === "Unknown app" ? FoamyI18n.t("Unknown app") : (root.group.label || root.group.app)
     elide: Text.ElideRight
     color: root.foreground
     font.family: root.fontFamily
@@ -123,7 +126,7 @@ Item {
     }
     Text {
       textFormat: Text.PlainText
-      text: PluginLanguage.FoamyI18n.number(root.group.entries.length) + " · " + Translations.relativeTime(root.group.timestamp, root.now, PluginLanguage.FoamyI18n.t)
+      text: FoamyI18n.number(root.group.entries.length) + " · " + CenterText.relativeTime(root.group.timestamp, root.now, FoamyI18n.t)
       color: Util.alpha(root.foreground, 0.65)
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
@@ -141,7 +144,7 @@ Item {
     foreground: root.foreground
     hasCursor: root.dismissHasCursor
     opacity: hover.hovered || root.hasCursor ? 1 : 0
-    tooltipText: PluginLanguage.FoamyI18n.t(root.group.entries.length === 1 ? "Dismiss 1 notification" : "Dismiss %1 notifications", root.group.entries.length)
+    tooltipText: FoamyI18n.t(root.group.entries.length === 1 ? "Dismiss 1 notification" : "Dismiss %1 notifications", root.group.entries.length)
     onClicked: { root.pointerUsed(); root.removeRequested() }
   }
 }

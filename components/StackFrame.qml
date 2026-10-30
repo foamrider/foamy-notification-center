@@ -1,12 +1,12 @@
-import ".." as PluginLanguage
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
+import "../kit"
 
 // Separate list rows share one card outline while remaining independently virtualized.
 Canvas {
   id: root
-  transform: Scale { origin.x: root.width / 2; xScale: PluginLanguage.FoamyI18n.rightToLeft ? -1 : 1 }
+  transform: Scale { origin.x: root.width / 2; xScale: FoamyI18n.rightToLeft ? -1 : 1 }
   property bool first: false
   property bool last: false
   property bool critical: false
@@ -14,7 +14,7 @@ Canvas {
   property color foreground: Commons.Color.foreground
   readonly property color outline: Util.alpha(foreground, 0.18)
   readonly property color urgent: Commons.Color.urgent
-  readonly property real corner: Math.min(Style.cornerRadius * 2, width / 2, height / 2)
+  readonly property real corner: Math.min(FoamyStyle.radius, width / 2, height / 2)
   readonly property real leading: critical ? Style.space(3) : 1
 
   onWidthChanged: requestPaint()

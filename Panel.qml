@@ -14,15 +14,17 @@ import "." as Plugin
 import "Model.js" as Model
 import "BrowserIdentity.js" as BrowserIdentity
 import "Preferences.js" as Preferences
+import "kit/FoamyPrefs.js" as Prefs
 import "components"
+import "kit"
 
 // A notification center for Omarchy: everything you were sent, still there
 // when you go back for it.
 //
-// Omarchy already writes every notification to disk: one JSON file per popup
-// under ~/.local/state/omarchy/notifications/, moved into history/ when it
-// leaves the screen. That is where these come from, and nothing here writes to
-// those directories. What it is not is a history you can read: it holds ten
+// The notification daemon writes every notification to disk (stock Omarchy
+// under ~/.local/state/omarchy/notifications/, Foamy Notifications wherever its
+// `storeInfo` IPC says). That is where these come from, read-only: nothing here
+// writes to or deletes from those directories. What it is not is a history you can read: it holds ten
 // files, deletes the eleventh, and deletes the icon it was keeping for it at
 // the same time. Ten is the right number for a service whose job is replaying
 // the toasts you just missed, and far too few for the question this panel
@@ -50,6 +52,8 @@ Ui.Panel {
   }
 
   moduleName: "foamy.notification-center"
+  // The popup, for the foamy-kit preview harness (preview/Preview.qml).
+  readonly property alias popupPanel: popup
   ipcTarget: "foamy.notification-center"
 
   component SnoozeItem: Controls.MenuItem {
@@ -65,7 +69,7 @@ Ui.Panel {
       wrapMode: Text.WordWrap
       verticalAlignment: Text.AlignVCenter
     }
-    background: Rectangle { color: snoozeItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: Style.cornerRadius * 2 }
+    background: Rectangle { color: snoozeItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: FoamyStyle.radius }
   }
 
   readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH")
@@ -111,7 +115,8 @@ Ui.Panel {
   }
   property var pendingPreferences: ({})
   property var preferenceActive: null
-  readonly property string preferencesHelper: decodeURIComponent(Qt.resolvedUrl("bin/notification-preferences.py").toString().replace(/^file:\/\//, ""))
+  // Foamy Notifications owns its settings: read and saved over its IPC.
+  property bool awaitingPeerSave: false
 
   function openSettings() {
     moreMenu.close()
@@ -127,23 +132,37 @@ Ui.Panel {
     Qt.callLater(function() { if (root.opened) moreButton.forceActiveFocus() })
   }
   function reloadPopupPreferences() {
-    if (!editingSettings || popupSettingsLoading || preferenceActive !== null) return
+    if (!editingSettings || popupSettingsLoading || preferenceActive !== null || !store) return
     popupSettingsLoading = true
-    preferencesRead.running = true
+    peer.call("foamy.notifications", "preferences", [], function(ok, output) {
+      try {
+        if (!ok) throw Error("Foamy Notifications is not answering")
+        root.applyPopupPreferences(output)
+      } catch (error) {
+        root.popupSettingsAvailable = false
+        root.popupSettings = ({})
+      }
+      root.popupSettingsLoading = false
+      Qt.callLater(root.flushPreferences)
+    })
   }
   function applyPopupPreferences(raw) {
     var result = JSON.parse(raw)
-    if (!result || result.ok !== true || typeof result.available !== "boolean" || !result.settings || typeof result.settings !== "object") throw Error("Invalid settings response")
-    if (result.available) Preferences.popupFields.forEach(function(field) {
+    if (!result || !result.settings || typeof result.settings !== "object") throw Error("Invalid settings response")
+    var values = {}
+    Preferences.popupFields.forEach(function(field) {
       if (!Preferences.valid("popups", field.key, result.settings[field.key])) throw Error("Invalid popup setting")
+      values[field.key] = result.settings[field.key]
     })
-    popupSettingsAvailable = result.available
-    popupSettings = result.settings
+    if (result.settings.browserGrouping === "none") values.groupDuplicates = false
+    popupSettingsAvailable = true
+    popupSettings = values
+    return result
   }
   function savePreference(scope, key, value) {
     if (!Preferences.valid(scope, key, value)) { settingsError = tr("Invalid setting."); return }
     settingsError = ""
-    // Serialize edits across the widget and service; collapse queued edits to the same key.
+    // Serialize edits; collapse queued edits to the same key.
     pendingPreferences[scope + ":" + key] = {scope:scope,key:key,value:value}
     flushPreferences()
   }
@@ -154,64 +173,53 @@ Ui.Panel {
     var next = pendingPreferences[keys[0]]
     delete pendingPreferences[keys[0]]
     preferenceActive = next
-    preferencesSave.command = Preferences.saveCommand(next.scope, next.key, next.value, preferencesHelper)
-    preferencesSave.running = true
+    if (next.scope === "popups") {
+      // Leading space: JSON stays out of the IPC CLI's option parser on 4.0.
+      peer.call("foamy.notifications", "setPreference", [next.key, " " + JSON.stringify(next.value)], function(ok, output) {
+        if (ok && String(output).trim() === "saving") root.awaitingPeerSave = true
+        else root.finishPreference(false)
+      })
+      return
+    }
+    var result = Prefs.save(root.bar, root.moduleName, Preferences.centerFields, root.settings, next.key, next.value)
+    if (!result.ok) { finishPreference(false); return }
+    if (result.command.length) { preferencesSave.command = result.command; preferencesSave.running = true }
+    else finishPreference(true)
   }
-  function finishPreference(code, status, output) {
-    var active = preferenceActive
-    if (!active) return
-    try {
-      if (code !== 0 || status !== 0) throw Error("Settings command failed")
-      if (active.scope === "popups") applyPopupPreferences(output)
-      else if (output.trim() !== "ok") throw Error("Widget settings command failed")
-    } catch (error) {
+  function finishPreference(ok) {
+    if (!preferenceActive) return
+    if (!ok) {
       settingsError = tr("Could not save settings. Try again.")
-      console.warn("Foamy Notification Center: settings save failed for", active.scope, active.key)
+      console.warn("Foamy Notification Center: settings save failed for", preferenceActive.scope, preferenceActive.key)
     }
     preferenceActive = null
+    awaitingPeerSave = false
     Qt.callLater(function() { root.flushPreferences(); root.reloadPopupPreferences() })
   }
+  Connections {
+    target: root.store
+    function onPeerPreferencesChanged() {
+      if (!root.awaitingPeerSave) { root.reloadPopupPreferences(); return }
+      peer.call("foamy.notifications", "preferences", [], function(ok, output) {
+        var result = null
+        try { result = ok ? root.applyPopupPreferences(output) : null } catch (e) { result = null }
+        if (result && result.saving) return
+        root.finishPreference(!!result && !result.saveError)
+      })
+    }
+  }
+  PeerIpc { id: peer }
   Process {
     id: preferencesSave
-    stdout: StdioCollector { id: preferenceOutput; waitForEnd: true }
-    onExited: function(code, status) { root.finishPreference(code, status, preferenceOutput.text) }
+    stdout: StdioCollector {}
+    onExited: function(code, status) { root.finishPreference(code === 0 && status === 0) }
   }
   Timer {
     interval: 5000
     running: root.preferenceActive !== null
     onTriggered: {
       if (preferencesSave.running) preferencesSave.signal(9)
-      else root.finishPreference(1, 0, "")
-    }
-  }
-  Process {
-    id: preferencesRead
-    command: ["python3", root.preferencesHelper, "read"]
-    stdout: StdioCollector { id: preferenceReadOutput; waitForEnd: true }
-    onExited: function(code, status) {
-      try {
-        if (code !== 0 || status !== 0) throw Error("Settings read failed: " + code + "/" + status)
-        root.applyPopupPreferences(preferenceReadOutput.text)
-      } catch (error) {
-        root.popupSettingsAvailable = false
-        root.settingsError = root.tr("Could not read Foamy Notifications settings. Reopen Settings to retry.")
-        console.warn("Foamy Notification Center: popup settings read failed", String(error))
-      }
-      root.popupSettingsLoading = false
-      Qt.callLater(root.flushPreferences)
-    }
-  }
-  Timer {
-    interval: 5000
-    running: root.popupSettingsLoading
-    onTriggered: {
-      if (preferencesRead.running) preferencesRead.signal(9)
-      else {
-        root.popupSettingsLoading = false
-        root.popupSettingsAvailable = false
-        root.settingsError = root.tr("Could not read Foamy Notifications settings. Reopen Settings to retry.")
-        Qt.callLater(root.flushPreferences)
-      }
+      else root.finishPreference(false)
     }
   }
   FileView {
@@ -266,6 +274,8 @@ Ui.Panel {
   property double now: Date.now()
 
   readonly property int unread: store ? store.unread : 0
+  // More unread than the loaded page holds.
+  readonly property bool unreadCapped: !!store && store.unreadCapped
   readonly property bool hasCriticalUnread: store ? store.hasCriticalUnread : false
   readonly property double lastSeen: store ? store.lastSeen : 0
 
@@ -285,6 +295,7 @@ Ui.Panel {
   function endSearch() {
     searching = false
     filter = ""
+    if (store) store.searchQuery = ""
     if (search) { search.text = ""; search.pasteError = "" }
     Qt.callLater(function() { if (root.opened && keyCatcher) keyCatcher.forceActiveFocus() })
   }
@@ -506,7 +517,7 @@ Ui.Panel {
       anchors.centerIn: parent
       // Past ninety-nine the number has stopped being information and the
       // badge is only saying "a lot", which it can say in three characters.
-      text: root.unread > 99 ? FoamyI18n.number(99) + "+" : FoamyI18n.number(root.unread)
+      text: root.unread > 99 || root.unreadCapped ? FoamyI18n.number(Math.min(99, root.unread)) + "+" : FoamyI18n.number(root.unread)
       font.family: root.fontFamily
       font.pixelSize: Math.max(8, Style.font.caption - Style.space(3))
       font.bold: true
@@ -542,50 +553,33 @@ Ui.Panel {
       }
     }
   }
-  NotificationPopup {
+  // foamy-kit FoamyPopup: the stock qs.Ui.KeyboardPanel (4.0 and 4.5, so 4.5's
+  // full-screen bar window places the card under the bar) with the foamy surface.
+  FoamyPopup {
     id: popup
     objectName: "notificationCenterPopup"
     // Anchored to a point past the right edge of the screen rather than to the
     // bell. KeyboardPanel clamps its card inside the screen, so an anchor out
     // there always resolves to hard against the right edge, whatever the bar
-    // has been rearranged into since. This is the one panel in the bar with a
-    // fixed home: a notification center that opened in a different place
-    // depending on how many widgets were to its left would be a notification
-    // center you have to look for.
+    // has been rearranged into since.
     anchorItem: rightAnchor
     bar: root.bar
     owner: root
     open: root.opened
     focusTarget: root.editingSettings ? settingsPane : keyCatcher
-    padding: 0
-    borderSpec: Border.flat(Qt.alpha(Commons.Color.popups.text, 0.15), 1)
     contentWidth: popup.fittedContentWidth(Style.space(root.panelWidth))
-    // fittedContentHeight() clamps against availableCardHeight, which collapses
-    // to its 120px minimum under a screen-sized bar window (see
-    // usableCardHeight below), so the same fit is done here against the
-    // corrected ceiling: the content plus the card insets, never taller than
-    // the space the screen actually has.
     contentHeight: Math.round(Math.min(
       Math.max(popup.verticalContentInset, content.implicitHeight + Style.space(10) + popup.verticalContentInset),
       popup.usableCardHeight))
 
     Behavior on contentHeight {
       enabled: root.opened
-      NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+      NumberAnimation { duration: FoamyMotion.slider; easing.type: Easing.OutCubic }
     }
 
-    // The stock omarchy bar window is only as tall as the bar strip, so the
-    // screen minus that window is the space a panel has. Some bars draw their
-    // strip inside a screen-sized window instead, which makes KeyboardPanel
-    // mistake the whole screen for the bar and collapse to its 120px safety
-    // minimum - a card a few entries tall no matter how much room there is.
-    // Measure the strip itself when the window is screen-sized; both bars
-    // expose barSize, so this works under either host.
-    readonly property real usableCardHeight: {
-      if (barH >= screenH && root.bar && Number(root.bar.barSize) > 0)
-        return Math.max(120, screenH - (Number(root.bar.barSize) + gap + margin))
-      return availableCardHeight
-    }
+    // The host's own geometry: on 4.5 the stock KeyboardPanel measures the bar
+    // strip, not the full-screen bar window.
+    readonly property real usableCardHeight: availableCardHeight
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
@@ -663,7 +657,7 @@ Ui.Panel {
             anchors.rightMargin: Style.space(8)
             opacity: root.searching ? 0 : 1
             visible: opacity > 0
-            Behavior on opacity { NumberAnimation { duration: 100 } }
+            Behavior on opacity { NumberAnimation { duration: FoamyMotion.duration(100) } }
             anchors.verticalCenter: parent.verticalCenter
             spacing: Style.space(2)
             Text {
@@ -728,7 +722,7 @@ Ui.Panel {
             padding: Style.space(5)
             closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
             onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) moreButton.forceActiveFocus() })
-            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: Style.cornerRadius * 2 }
+            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: FoamyStyle.radius }
             Controls.MenuItem {
               id: muteItem
               objectName: "notificationMute"
@@ -740,12 +734,15 @@ Ui.Panel {
                 NotificationAction { iconName: root.dnd ? "bellOff" : "bell"; size: Style.space(24); foreground: root.dnd ? Commons.Color.accent : root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
                 Text { text: muteItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: Style.font.caption; color: root.foreground; Layout.fillWidth: true; wrapMode: Text.WordWrap }
               }
-              background: Rectangle { color: muteItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: Style.cornerRadius * 2 }
+              background: Rectangle { color: muteItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: FoamyStyle.radius }
               onTriggered: root.toggleDnd()
             }
             SnoozeItem {
               text: root.tr("Snooze notifications")
-              enabled: !!root.store && root.store.snoozeAvailable && !root.store.snoozeBusy
+              // Hidden, not disabled, where the daemon has no timed snooze (stock 4.0 and 4.5-rc2).
+              visible: !!root.store && root.store.snoozeAvailable
+              height: visible ? implicitHeight : 0
+              enabled: visible && !root.store.snoozeBusy
               onTriggered: Qt.callLater(function() { snoozeMenu.open() })
             }
             Controls.MenuItem {
@@ -758,7 +755,7 @@ Ui.Panel {
                 NotificationAction { iconName: "settings"; size: Style.space(24); foreground: root.foreground; enabled: false; opacity: 1; Accessible.ignored: true }
                 Text { text: settingsItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: Style.font.caption; color: root.foreground; Layout.fillWidth: true }
               }
-              background: Rectangle { color: settingsItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: Style.cornerRadius * 2 }
+              background: Rectangle { color: settingsItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: FoamyStyle.radius }
               onTriggered: root.openSettings()
             }
           }
@@ -774,7 +771,7 @@ Ui.Panel {
             padding: Style.space(5)
             enabled: !!root.store && root.store.snoozeAvailable && !root.store.snoozeBusy
             closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
-            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: Style.cornerRadius * 2 }
+            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: Border.flat(Qt.alpha(root.foreground, 0.15), 1); radius: FoamyStyle.radius }
             onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) moreButton.forceActiveFocus() })
             SnoozeItem { text: root.tr("30 minutes"); onTriggered: root.store.snoozeAll(30) }
             SnoozeItem { text: root.tr("1 hour"); onTriggered: root.store.snoozeAll(60) }
@@ -789,14 +786,14 @@ Ui.Panel {
             anchors.verticalCenter: parent.verticalCenter
             width: root.searching ? Math.max(0, parent.width - actions.width - Style.space(32)) : Style.space(32)
             height: Style.space(32)
-            radius: Style.cornerRadius * 2
+            radius: FoamyStyle.radius
             color: root.searching ? Qt.alpha(root.foreground, 0.055) : "transparent"
             border.width: search.inputActiveFocus ? 1 : 0
             border.color: Commons.Color.accent
             // Clipping this rounded surface cuts off its antialiased focus outline.
             antialiasing: true
             border.pixelAligned: false
-            Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+            Behavior on width { NumberAnimation { duration: FoamyMotion.duration(160); easing.type: Easing.OutCubic } }
 
             NotificationAction {
               anchors.left: parent.left
@@ -822,7 +819,7 @@ Ui.Panel {
               font.pixelSize: Style.font.caption
               padding: 0
               background: Item {}
-              onTextChanged: root.filter = text
+              onTextChanged: { root.filter = text; if (root.store) root.store.searchQuery = text.trim().slice(0, 256) }
               translate: root.tr
               onKeyPressed: function(event) {
                 if (event.key === Qt.Key_Escape) { event.accepted = true; root.endSearch() }
@@ -879,6 +876,8 @@ Ui.Panel {
               // Construct only visible rows when restoring the detached model.
               cacheBuffer: 0
               wheelStep: Style.space(96)
+              // Paging: reaching the end loads the next 500 (up to maxItems).
+              onAtYEndChanged: if (atYEnd && root.store && root.store.hasMore) root.store.loadMore()
               scrollbarWidth: Style.space(6)
               scrollbarInset: Style.space(2)
               // The flattened model keeps expanded stacks within the same virtualized list.
@@ -916,9 +915,9 @@ Ui.Panel {
                 }
                 SequentialAnimation {
                   id: exitMotion
-                  NumberAnimation { target: delegateRoot; property: "opacity"; to: 0; duration: 120; easing.type: Easing.OutCubic }
+                  NumberAnimation { target: delegateRoot; property: "opacity"; to: 0; duration: FoamyMotion.duration(120); easing.type: Easing.OutCubic }
                   // Let ListView lay out the shrinking space, including its scroll extent.
-                  NumberAnimation { target: delegateRoot; property: "height"; to: 0; duration: 140; easing.type: Easing.OutCubic }
+                  NumberAnimation { target: delegateRoot; property: "height"; to: 0; duration: FoamyMotion.duration(140); easing.type: Easing.OutCubic }
                 }
                 width: list.width
                 height: rowLoader.implicitHeight

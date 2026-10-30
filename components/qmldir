@@ -1,0 +1,9 @@
+BrowserIcons 1.0 BrowserIcons.qml
+NotificationAction 1.0 NotificationAction.qml
+NotificationList 1.0 NotificationList.qml
+NotificationRow 1.0 NotificationRow.qml
+NotificationStackHeader 1.0 NotificationStackHeader.qml
+PeerIpc 1.0 PeerIpc.qml
+SettingsDropdown 1.0 SettingsDropdown.qml
+SettingsField 1.0 SettingsField.qml
+StackFrame 1.0 StackFrame.qml

@@ -4,6 +4,7 @@ import Quickshell.Io
 import "." as Plugin
 import "Model.js" as Model
 import "components"
+import "kit"
 
 // The archive, mounted once for the shell.
 //
@@ -27,7 +28,19 @@ Item {
   property int keepDays: 30
   property int maxItems: 1000
   property bool showPreview: true
+  // Paging: the list loads listLimit rows (pages of pageSize, up to maxItems);
+  // hasMore says the archive holds more. A search runs in the store over the
+  // whole archive, not just the loaded page.
   property int pageSize: 500
+  property int listLimit: pageSize
+  property bool hasMore: false
+  property string searchQuery: ""
+  onSearchQueryChanged: reloadArchive.restart()
+  function loadMore() {
+    if (!hasMore || listLimit >= maxItems) return
+    listLimit = Math.min(maxItems, listLimit + pageSize)
+    load()
+  }
 
   BrowserIcons { id: browserIcons; onUpdated: root.browserIconsUpdated() }
   signal browserIconsUpdated()
@@ -51,18 +64,74 @@ Item {
 
   readonly property bool watching: watchProc.running
 
-  readonly property var unreadState: Model.unreadState(entries, lastSeen)
+  // Unread state comes from the unfiltered newest page, never from search results.
+  property var unreadSource: []
+  readonly property var unreadState: Model.unreadState(unreadSource, lastSeen)
   readonly property int unread: unreadState.unread
+  // Every loaded row is unread and more exist: the badge says "N+".
+  readonly property bool unreadCapped: hasMore && unread >= unreadSource.length && unread > 0
   readonly property bool hasCriticalUnread: unreadState.hasCriticalUnread
 
   readonly property string script:
     Qt.resolvedUrl("bin/notification-center").toString().replace(/^file:\/\//, "")
 
-  readonly property var storeEnvironment: ({
-    "NC_KEEP_DAYS": String(root.keepDays),
-    "NC_MAX_ITEMS": String(root.maxItems),
-    "NC_PREVIEWS": root.showPreview ? "1" : "0"
-  })
+  // ------------------------------------------------ the notification source
+  //
+  // Contract v2 with foamy.notifications (README "Foamy Notifications contract"):
+  // its file locations come from `storeInfo` over IPC; they are read-only here.
+  // Without Foamy the source is stock Omarchy (4.0 files or 4.5 arrays).
+  property string sourceKind: ""
+  property var sourceInfo: ({})
+  PeerIpc { id: peer }
+  readonly property bool foamySource: sourceKind === "foamy" || sourceKind === "legacy"
+
+  function resolveSource() {
+    peer.call("foamy.notifications", "storeInfo", [], function(ok, output) {
+      var info = null
+      try { info = ok ? JSON.parse(output) : null } catch (e) { info = null }
+      if (info && info.layout === "foamy-files" && Number(info.version) >= 2) {
+        if (!info.ready) { sourceRetry.restart(); return }
+        root.useSource("foamy", info)
+        return
+      }
+      // An older Foamy answers ping but has no storeInfo: its 4.0-layout files.
+      peer.call("foamy.notifications", "ping", [], function(pinged, answer) {
+        root.useSource(pinged && String(answer).trim() === "ok" ? "legacy" : "stock", {})
+      })
+    })
+  }
+  Timer { id: sourceRetry; interval: 2000; onTriggered: root.resolveSource() }
+
+  function useSource(kind, info) {
+    var same = kind === sourceKind && JSON.stringify(info) === JSON.stringify(sourceInfo)
+    sourceKind = kind
+    sourceInfo = info
+    if (same && watchProc.running) return
+    sourceRestartPending = true
+    if (watchProc.running) watchProc.running = false
+    else { restartWatch.interval = 50; restartWatch.restart() }
+  }
+
+  readonly property var storeEnvironment: {
+    var env = {
+      "NC_KEEP_DAYS": String(root.keepDays),
+      "NC_MAX_ITEMS": String(root.maxItems),
+      "NC_PREVIEWS": root.showPreview ? "1" : "0",
+      "NC_SOURCE": root.sourceKind || "stock"
+    }
+    if (root.sourceKind === "foamy") {
+      env.NC_SRC_DIR = String(root.sourceInfo.popups || "")
+      env.NC_SRC_HISTORY = String(root.sourceInfo.history || "")
+      env.NC_HANDLED = String(root.sourceInfo.handled || "")
+      env.NC_STATE_FILE = String(root.sourceInfo.state || "")
+    } else if (root.sourceKind === "legacy") {
+      // Foamy before contract v2 kept the 4.0 layout under XDG_STATE_HOME.
+      var state = Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state"
+      env.NC_SRC_DIR = state + "/omarchy/notifications"
+      env.NC_STATE_FILE = state + "/omarchy/notifications.json"
+    }
+    return env
+  }
 
   property string focusError: ""
   property var focusEntry: null
@@ -157,7 +226,8 @@ Item {
     loadPending = false
     listRevision = archiveRevision
     listLoadCount++
-    listProc.command = root.storeCommand(["list", String(root.pageSize)])
+    // One row past the page says whether there is more.
+    listProc.command = root.storeCommand(["list", String(root.listLimit + 1), root.searchQuery])
     listProc.running = true
   }
 
@@ -179,12 +249,16 @@ Item {
     removeMany([key])
   }
 
-  function removeMany(keys) {
+  signal peerPreferencesChanged()
+  property var quietRemovalKeys: ({})
+
+  function removeMany(keys, handledByPeer) {
     var queued = pendingRemovalKeys.slice()
     for (var i = 0; i < keys.length; i++) {
       var key = String(keys[i] || "")
       if (!key || removedKeys[key]) continue
       removedKeys[key] = true
+      if (handledByPeer) quietRemovalKeys[key] = true
       queued.push(key)
     }
     if (queued.length === pendingRemovalKeys.length) return
@@ -215,17 +289,19 @@ Item {
         root.removalError = "Could not dismiss notifications. Try again."
         console.warn("Notification dismissal failed:", removeErrors.text)
         root.load()
-      } else root.releaseNotificationActions(root.activeRemovalKeys)
+      } else root.releaseNotificationActions(root.activeRemovalKeys.filter(function(key) { return !root.quietRemovalKeys[key] }))
+      for (var j = 0; j < root.activeRemovalKeys.length; j++) delete root.quietRemovalKeys[root.activeRemovalKeys[j]]
       root.activeRemovalKeys = []
       root.startRemoval()
     }
   }
 
+  // Foamy releases callbacks and drops its own copies; we never delete its files.
   function releaseNotificationActions(keys) {
-    // Stock and older daemons have no retained actions; cleanup is optional IPC.
+    if (!foamySource) return
     keys = keys.filter(function(key) { return /^[0-9]+-[0-9]+$/.test(key) })
-    for (var i = 0; i < keys.length; i += 100)
-      Quickshell.execDetached(["omarchy-shell", "-q", "foamy.notifications", "releaseHistory", keys.slice(i, i + 100).join(",")])
+    for (var i = 0; i < keys.length && i < 1000; i += 100)
+      peer.call("foamy.notifications", "releaseHistory", [keys.slice(i, i + 100).join(",")])
   }
 
   // Ordinary plugins use the public IPC commands, not the bar-only service proxy.
@@ -238,11 +314,12 @@ Item {
   readonly property bool snoozeBusy: snoozeProc.running
   property string snoozeError: ""
 
+  // Capability, not version: stock 4.5-rc2 and 4.0 have no `snoozes`, so the menu is hidden there.
   function snoozeAll(minutes) {
     if (!snoozeAvailable || snoozeProc.running) return
     snoozeError = ""
     snoozeProc.minutes = minutes
-    // Stock 4.5 toggles snoozeAll: clear the old global timer before setting one.
+    // Clear the old global timer before setting a new one.
     snoozeProc.command = ["omarchy-shell", "notifications", "unsnooze", minutes > 0 ? "*" : ""]
     snoozeProc.running = true
   }
@@ -285,7 +362,8 @@ Item {
 
   function refreshDnd() {
     if (dndProc.running) { dndRefresh.restart(); return }
-    dndProc.command = ["omarchy-shell", "notifications", "dndState"]
+    // isDnd exists on stock 4.0, stock 4.5 and Foamy; dndState was removed in 4.5.
+    dndProc.command = ["omarchy-shell", "notifications", "isDnd"]
     dndProc.running = true
   }
 
@@ -320,12 +398,26 @@ Item {
   // Detached, like remove and seed above it: a clear that arrives while the
   // previous one is still running used to return early and never happen, so
   // the list came back on the next sync and the button looked broken.
+  // Clear all deletes the archived rows and images, then asks Foamy to drop its
+  // copies up to the same moment (newer arrivals survive).
   function clearAll() {
     entries = []
+    unreadSource = []
     entriesReset()
-    // Release callbacks only after durable clearing, without catching newer arrivals.
-    Quickshell.execDetached(["bash", "-c", '"$1" clear && omarchy-shell -q foamy.notifications releaseHistoryBefore "$2"',
-      "--", root.script, String(Date.now())])
+    var cut = String(Date.now())
+    clearProc.cut = cut
+    if (!clearProc.running) clearProc.running = true
+  }
+  Process {
+    id: clearProc
+    property string cut: ""
+    command: [root.script, "clear"]
+    environment: root.storeEnvironment
+    onExited: function(code, status) {
+      if (code === 0 && status === 0) { if (root.foamySource) peer.call("foamy.notifications", "releaseHistoryBefore", [cut]) }
+      else root.removalError = "Could not clear notifications. Try again."
+      root.load()
+    }
   }
 
   function absorb(line) {
@@ -341,6 +433,7 @@ Item {
     if (entry && entry.event === "storeChanged") { archiveRevision++; reloadArchive.restart(); return }
     if (entry && entry.event === "dndChanged") { dndRefresh.restart(); return }
     if (entry && entry.event === "seenChanged") { root.readSeen(); return }
+    if (entry && entry.event === "pruned") { root.releaseNotificationActions(entry.keys || []); return }
     if (!entry || !entry.key) return
     if (removedKeys[String(entry.key)]) return
     for (var i = 0; i < entries.length; i++) {
@@ -355,9 +448,11 @@ Item {
     }
     archiveRevision++
 
+    if (searchQuery) { reloadArchive.restart(); return }
     var next = [entry].concat(entries)
-    if (next.length > pageSize) next = next.slice(0, pageSize)
+    if (next.length > listLimit) { next = next.slice(0, listLimit); hasMore = true }
     entries = next
+    unreadSource = next
     entryAdded(entry)
   }
 
@@ -375,9 +470,7 @@ Item {
     onFileChanged: {
       reload()
       // A daemon switch must re-resolve the source without restarting the center.
-      root.sourceRestartPending = true
-      if (watchProc.running) watchProc.running = false
-      else { restartWatch.interval = 100; restartWatch.restart() }
+      root.resolveSource()
     }
   }
 
@@ -385,7 +478,8 @@ Item {
     id: watchProc
     command: root.storeCommand(["watch"])
     environment: root.storeEnvironment
-    running: true
+    // Started once the source is resolved (Component.onCompleted).
+    running: false
     stdout: SplitParser {
       onRead: function(line) { root.absorb(line) }
     }
@@ -399,7 +493,7 @@ Item {
   Timer {
     id: restartWatch
     interval: 30000
-    onTriggered: { root.sourceRestartPending = false; if (!watchProc.running) watchProc.running = true }
+    onTriggered: { root.sourceRestartPending = false; if (!watchProc.running && root.sourceKind) watchProc.running = true }
   }
 
   Timer { id: reloadArchive; interval: 75; onTriggered: root.load() }
@@ -421,7 +515,9 @@ Item {
         } catch (e) { root.loadError = "Invalid notification history response."; return }
         if (!Array.isArray(data)) { root.loadError = "Invalid notification history response."; return }
         root.loadError = ""
-        data = root.visibleEntries(data)
+        root.hasMore = data.length > root.listLimit
+        data = root.visibleEntries(data.slice(0, root.listLimit))
+        if (!root.searchQuery) root.unreadSource = data
         var wasLoaded = root.loaded
         root.loaded = true
         if (wasLoaded && !root.differsFrom(data)) return
@@ -451,6 +547,7 @@ Item {
     Plugin.ServiceRegistry.instance = root
     readSeen()
     load()
+    resolveSource()
     dndRefresh.restart()
   }
 
@@ -460,7 +557,7 @@ Item {
   }
 
   // Popup actions use public IPC because plugins cannot call each other's services.
-  IpcHandler {
+  FoamyIpc {
     // The panel owns foamy.notification-center (open/close); the store needs a distinct target.
     target: "foamy.notification-center.store"
     function remove(keysCsv: string): string {
@@ -471,19 +568,26 @@ Item {
       root.removeMany(keys)
       return "ok"
     }
+    // Foamy handled these (its journal is already durable): remove them durably
+    // here too, without asking Foamy to release them again.
     function handled(keysCsv: string): string {
       var keys = keysCsv.split(",")
       if (!Array.isArray(keys) || keys.length > 100 || keys.some(function(key) {
-        return typeof key !== "string" || !/^([0-9]+-[0-9]+|stock-[A-Za-z0-9_-]{1,120})$/.test(key)
+        return typeof key !== "string" || !/^[0-9]+-[0-9]+$/.test(key)
       })) return "error: invalid keys"
-      for (var i = 0; i < keys.length; i++) root.removedKeys[keys[i]] = true
-      root.entries = root.visibleEntries(root.entries)
-      root.entriesReset()
+      root.removeMany(keys, true)
+      return "ok"
+    }
+    // Foamy started, migrated or changed its settings: re-read over IPC.
+    function peerChanged(what: string): string {
+      if (what === "store") root.resolveSource()
+      else if (what === "preferences") root.peerPreferencesChanged()
+      else return "error: unknown"
       return "ok"
     }
   }
 
-  IpcHandler {
+  FoamyIpc {
     target: "foamy.notification-center.test"
 
     function seed(count: int): string {
@@ -517,7 +621,10 @@ Item {
         doNotDisturb: root.doNotDisturb,
         dndKnown: root.dndKnown,
         dndBusy: root.dndBusy,
-        dndError: root.dndError
+        dndError: root.dndError,
+        source: root.sourceKind,
+        hasMore: root.hasMore,
+        listLimit: root.listLimit
       })
     }
   }

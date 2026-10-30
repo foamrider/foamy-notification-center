@@ -1,10 +1,10 @@
-import ".." as PluginLanguage
 // Adapted from Omarchy Quattro Ui/Dropdown.qml; see LICENSE-OMARCHY.
 import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../kit"
 
 // Themed single-select dropdown. Trigger row paints with the kit's focus
 // chrome; the popup anchors below and uses Commons.Color.popups.background +
@@ -22,7 +22,7 @@ import qs.Ui as Ui
 Item {
   id: root
 
-  property real cornerRadius: Style.cornerRadius * 2
+  property real cornerRadius: FoamyStyle.radius
 
   property string label: ""
   property string value: ""
@@ -179,7 +179,7 @@ Item {
 
         contentItem: ListView {
           id: optionList
-          LayoutMirroring.enabled: PluginLanguage.FoamyI18n.rightToLeft
+          LayoutMirroring.enabled: FoamyI18n.rightToLeft
           LayoutMirroring.childrenInherit: true
           spacing: Style.spacing.labelGap
 

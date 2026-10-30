@@ -1,8 +1,8 @@
-import ".." as PluginLanguage
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
+import "../kit"
 
 Rectangle {
   id: root
@@ -19,7 +19,7 @@ Rectangle {
 
   implicitWidth: size
   implicitHeight: size
-  radius: Style.cornerRadius * 2
+  radius: FoamyStyle.radius
   color: highlighted ? Qt.alpha(hoverForeground, 0.08) : "transparent"
   opacity: enabled ? 1 : 0.4
   border.width: activeFocus ? 1 : 0
@@ -33,7 +33,7 @@ Rectangle {
   Keys.onSpacePressed: if (enabled) clicked()
 
   Image {
-    mirror: root.iconName === "back" && PluginLanguage.FoamyI18n.rightToLeft
+    mirror: root.iconName === "back" && FoamyI18n.rightToLeft
     anchors.centerIn: parent
     width: root.iconSize
     height: width
@@ -62,6 +62,6 @@ Rectangle {
   PanelToolTip {
     visible: mouse.containsMouse && root.tooltipText !== ""
     text: root.tooltipText
-    fontFamily: "sans-serif"
+    fontFamily: FoamyStyle.fontFamily
   }
 }

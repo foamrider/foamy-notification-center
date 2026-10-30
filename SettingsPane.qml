@@ -7,6 +7,7 @@ import qs.Commons
 import qs.Commons as Commons
 import "Preferences.js" as Preferences
 import "components"
+import "kit"
 
 Item {
   id: root
@@ -63,8 +64,8 @@ Item {
         tooltipText: root.tr("Back")
         onClicked: root.back()
       }
-      Text { horizontalAlignment: Text.AlignLeft; text: root.tr("Settings"); color: root.secondary; font.family: "sans-serif"; font.pixelSize: Style.space(13); Layout.fillWidth: true }
-      Text { visible: root.saving; text: root.tr("Saving…"); color: root.secondary; font.family: "sans-serif"; font.pixelSize: Style.space(11) }
+      Text { horizontalAlignment: Text.AlignLeft; text: root.tr("Settings"); color: root.secondary; font.family: FoamyStyle.fontFamily; font.pixelSize: Style.space(13); Layout.fillWidth: true }
+      Text { visible: root.saving; text: root.tr("Saving…"); color: root.secondary; font.family: FoamyStyle.fontFamily; font.pixelSize: Style.space(11) }
     }
   }
   Flickable {
@@ -95,7 +96,7 @@ Item {
         textFormat: Text.PlainText
         wrapMode: Text.WordWrap
         color: Commons.Color.urgent
-        font.family: "sans-serif"
+        font.family: FoamyStyle.fontFamily
         font.pixelSize: Style.space(12)
         Accessible.role: Accessible.AlertMessage
       }
@@ -106,7 +107,7 @@ Item {
           required property var modelData
           width: root.width - root.padding * 2
           spacing: Style.space(14)
-          Text { text: root.tr(section.modelData.label); color: root.secondary; font.family: "sans-serif"; font.pixelSize: Style.space(13) }
+          Text { text: root.tr(section.modelData.label); color: root.secondary; font.family: FoamyStyle.fontFamily; font.pixelSize: Style.space(13) }
           Text {
             objectName: section.modelData.scope + "-availability"
             width: parent.width
@@ -115,7 +116,7 @@ Item {
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Qt.tint(Commons.Color.popups.background, Qt.alpha(Commons.Color.popups.text, 0.55))
-            font.family: "sans-serif"
+            font.family: FoamyStyle.fontFamily
             font.pixelSize: Style.space(12)
           }
           Repeater {

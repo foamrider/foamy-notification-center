@@ -46,7 +46,7 @@ try:
  ipc('notifications','toggleDnd');wait(lambda:status()['doNotDisturb'])
  ipc('notifications','toggleDnd');wait(lambda:not status()['doNotDisturb'])
  ipc('review','mark');wait(lambda:status()['unread']==0)
- ipc('review','toggle');wait(lambda:status()['doNotDisturb']);assert ipc('notifications','dndState')=='on'
+ ipc('review','toggle');wait(lambda:status()['doNotDisturb']);assert ipc('notifications','isDnd')=='on'
  send('Stock silenced');wait(lambda:status()['entries']==2)
  ipc('review','toggle');wait(lambda:not status()['doNotDisturb'])
  ipc('foamy.notification-center.test','clear');wait(lambda:status()['entries']==0)
