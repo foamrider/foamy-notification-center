@@ -1,4 +1,4 @@
-// foamy-kit 0.3.1 90b1a10f5f5005c94031f36fef0ad3d8e705cf4e13372dd8362ef4579e0a93df — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.2 90b1a10f5f5005c94031f36fef0ad3d8e705cf4e13372dd8362ef4579e0a93df — do not edit; change foamy-kit and run sync
 // Loads a foamy-kit QML JavaScript library (".pragma library") in node, for
 // plugin unit tests. require() can't: ".pragma library" is not JavaScript.
 //
