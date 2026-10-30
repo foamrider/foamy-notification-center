@@ -265,6 +265,7 @@ Item {
     // Capture exact keys before watcher updates; later arrivals from the same app survive.
     pendingRemovalKeys = queued
     entries = visibleEntries(entries)
+    unreadSource = visibleEntries(unreadSource)
     entriesReset()
     startRemoval()
   }
@@ -297,30 +298,45 @@ Item {
   }
 
   // Foamy releases callbacks and drops its own copies; we never delete its files.
-  // Batches of 100 go one at a time (FoamyPeerIpc runs at most 8 CLI calls on 4.0);
-  // a failed batch stays queued and is retried, since these keys are already
-  // gone from the archive and no later prune would ask again.
-  property var releaseQueue: []
-  property bool releaseBusy: false
+  // Keys go to Foamy 100 at a time, one call in flight (FoamyPeerIpc runs at
+  // most 8 CLI calls on 4.0). Pending keys are kept, deduplicated and compacted
+  // into full batches; the in-flight batch is removed only when Foamy answers
+  // "ok", and a failed one is retried. These keys are already gone from the
+  // archive, so no later prune would ask again. The bound (50,000 keys) is far
+  // above the largest archive (10,000).
+  property var releasePending: []
+  property var releaseInFlight: []
+  readonly property int releaseLimit: 50000
   function releaseNotificationActions(keys) {
     if (!foamySource) return
-    keys = keys.filter(function(key) { return /^[0-9]+-[0-9]+$/.test(key) })
-    var queue = releaseQueue.slice()
-    for (var i = 0; i < keys.length; i += 100) queue.push(keys.slice(i, i + 100).join(","))
-    // Bounded: 100 batches (10,000 keys) covers maxItems.
-    releaseQueue = queue.slice(-100)
+    var pending = releasePending.slice(), seen = ({})
+    for (var p = 0; p < pending.length; p++) seen[pending[p]] = true
+    for (var i = 0; i < keys.length; i++) {
+      var key = String(keys[i] || "")
+      if (!/^[0-9]+-[0-9]+$/.test(key) || seen[key]) continue
+      if (pending.length >= releaseLimit) { console.warn("Notification release queue is full; Foamy keeps", keys.length - i, "copies until its own history trim"); break }
+      seen[key] = true
+      pending.push(key)
+    }
+    releasePending = pending
     pumpReleases()
   }
   function pumpReleases() {
-    if (releaseBusy || !releaseQueue.length || releaseRetry.running) return
-    releaseBusy = true
-    peer.call("foamy.notifications", "releaseHistory", [releaseQueue[0]], function(ok, output) {
-      root.releaseBusy = false
+    if (releaseInFlight.length || !releasePending.length || releaseRetry.running) return
+    var batch = releasePending.slice(0, 100)
+    releaseInFlight = batch
+    peer.call("foamy.notifications", "releaseHistory", [batch.join(",")], function(ok, output) {
       if (ok && String(output).trim() === "ok") {
-        root.releaseQueue = root.releaseQueue.slice(1)
+        var done = ({})
+        for (var i = 0; i < batch.length; i++) done[batch[i]] = true
+        root.releasePending = root.releasePending.filter(function(key) { return !done[key] })
+        root.releaseInFlight = []
         root.pumpReleases()
-      } else if (root.foamySource) releaseRetry.restart()
-      else root.releaseQueue = []
+      } else {
+        root.releaseInFlight = []
+        if (root.foamySource) releaseRetry.restart()
+        else root.releasePending = []
+      }
     })
   }
   Timer { id: releaseRetry; interval: 5000; onTriggered: root.pumpReleases() }
@@ -467,6 +483,8 @@ Item {
     if (entry && entry.event === "rewatch") { root.sourceRestartPending = true; return }
     if (!entry || !entry.key) return
     if (removedKeys[String(entry.key)]) return
+    // The unread badge follows the unfiltered newest page, search or not.
+    absorbUnread(entry)
     for (var i = 0; i < entries.length; i++) {
       if (entries[i].key !== entry.key) continue
       if (JSON.stringify(entries[i]) === JSON.stringify(entry)) return
@@ -483,8 +501,22 @@ Item {
     var next = [entry].concat(entries)
     if (next.length > listLimit) { next = next.slice(0, listLimit); hasMore = true }
     entries = next
-    unreadSource = next
     entryAdded(entry)
+  }
+
+  // Keep the unfiltered unread source current independently of the (possibly
+  // filtered) list: replace an updated row in place, or add a new one on top.
+  function absorbUnread(entry) {
+    var source = unreadSource.slice()
+    for (var i = 0; i < source.length; i++) {
+      if (source[i].key !== entry.key) continue
+      if (JSON.stringify(source[i]) === JSON.stringify(entry)) return
+      source[i] = entry
+      unreadSource = source
+      return
+    }
+    source.unshift(entry)
+    unreadSource = source.length > listLimit ? source.slice(0, listLimit) : source
   }
 
   function visibleEntries(data) {

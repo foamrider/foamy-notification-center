@@ -18,7 +18,7 @@ function service() {
     searchQuery: "", listLimit: 500, hasMore: false, unreadSource: [], reloadArchive: { restart() {} }
   })
   context.root = context
-  for (const name of ["remove", "removeMany", "startRemoval", "absorb", "visibleEntries"]) {
+  for (const name of ["remove", "removeMany", "startRemoval", "absorb", "absorbUnread", "visibleEntries"]) {
     const start = source.indexOf(`  function ${name}(`)
     assert.notEqual(start, -1)
     const end = source.indexOf("\n  }", start) + 4
@@ -99,7 +99,7 @@ test("failed dismissal releases only failed tombstones and reloads for retry", (
 test("callback cleanup runs only after durable dismissal and batches exact keys, one batch at a time", () => {
  const state=service(),calls=[]
  let answer=true
- state.releaseQueue=[];state.releaseBusy=false;state.releaseRetry={running:false,restart(){this.running=true}}
+ state.releasePending=[];state.releaseInFlight=[];state.releaseLimit=50000;state.releaseRetry={running:false,restart(){this.running=true}}
  // Contract v2: Foamy is asked over its IPC (FoamyPeerIpc), never by deleting its files.
  state.peer.call=(target,method,args,done)=>{calls.push([target,method,...args]);done(answer,answer?'ok':'')}
  for(const name of ["releaseNotificationActions","pumpReleases"]) {
@@ -114,9 +114,9 @@ test("callback cleanup runs only after durable dismissal and batches exact keys,
  assert.deepEqual(calls[10],["foamy.notifications","releaseHistory","1001-1"])
  // A failed batch stays queued for a retry instead of being dropped.
  answer=false;state.releaseNotificationActions(['5-5'])
- assert.equal(state.releaseQueue.length,1);assert.equal(state.releaseRetry.running,true)
+ assert.equal(state.releasePending.length,1);assert.equal(state.releaseRetry.running,true)
  answer=true;state.releaseRetry.running=false;state.pumpReleases()
- assert.equal(state.releaseQueue.length,0)
+ assert.equal(state.releasePending.length,0)
  state.activeRemovalKeys=['100-1'];state.removeErrors={text:''};state.exitCode=0;state.exitStatus=0
  const handler=source.indexOf("    onExited: function(exitCode, exitStatus) {",source.indexOf("    id: removeProc"))
  const before=calls.length
@@ -143,4 +143,37 @@ test("a second Clear all while one runs is queued, not dropped", () => {
  vm.runInContext("(function(){"+body+"})()",ctx)
  assert.equal(ctx.running,true,"the queued clear runs after the active one")
  assert.equal(ctx.root.clearPending,false)
+})
+
+test("single-key releases are compacted and the in-flight batch is never lost", () => {
+ const state=service(),calls=[],answers=[]
+ state.releasePending=[];state.releaseInFlight=[];state.releaseLimit=50000;state.releaseRetry={running:false,restart(){this.running=true}}
+ // Foamy answers later: callbacks are held until released below.
+ state.peer.call=(target,method,args,done)=>{calls.push(args[0].split(","));answers.push(done)}
+ for(const name of ["releaseNotificationActions","pumpReleases"]) {
+  const start=source.indexOf(`  function ${name}(`)
+  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ }
+ for(let i=1;i<=101;i++) state.releaseNotificationActions([`${i}-1`])
+ assert.equal(calls.length,1);assert.deepEqual(calls[0],["1-1"])
+ answers.shift()(true,"ok")
+ // The other 100 single-key requests go out as one full batch, nothing skipped.
+ assert.deepEqual(calls[1],Array.from({length:100},(_,i)=>`${i+2}-1`))
+ answers.shift()(false,"")
+ assert.equal(state.releasePending.length,100,"a failed batch stays pending")
+ state.releaseRetry.running=false;state.pumpReleases();answers.shift()(true,"ok")
+ assert.equal(state.releasePending.length,0)
+})
+
+test("the unread badge stays current while a search filters the list", () => {
+ const state=service()
+ state.searchQuery="needle";state.unreadSource=[{key:"1-1",timestamp:1}];state.entries=[]
+ for(const name of ["absorbUnread"]) {
+  const start=source.indexOf(`  function ${name}(`)
+  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ }
+ state.absorb(JSON.stringify({key:"2-2",timestamp:2,urgency:2,summary:"critical"}))
+ assert.deepEqual(Array.from(state.unreadSource,r=>r.key),["2-2","1-1"])
+ state.removeMany(["1-1"])
+ assert.deepEqual(Array.from(state.unreadSource,r=>r.key),["2-2"])
 })
