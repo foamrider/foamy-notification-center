@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <policymap>
-  <!-- Bound each archived image decode; never spill its pixel cache to disk. -->
+  <!-- Bound each notification image decode; never spill its pixel cache to disk. -->
   <policy domain="resource" name="memory" value="128MiB"/>
   <policy domain="resource" name="map" value="0"/>
   <policy domain="resource" name="disk" value="0"/>
