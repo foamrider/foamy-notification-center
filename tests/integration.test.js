@@ -173,3 +173,11 @@ test('a dismissal tombstone outlives any number of older rows while its source c
  f.run('prune');f.run('sync')
  assert.ok(!f.run('list','5000').some(r=>r.key===key),'the dismissed notification came back')
 })
+test('lowering then raising the age limit never brings back a dismissed notification',t=>{
+ const f=fixture(t),ts=Date.now()-2*86400000,key=`${ts}-1`
+ fs.writeFileSync(path.join(f.source,'history',`${key}.json`),JSON.stringify({timestamp:ts,originalId:1,app:'T',summary:'old'}))
+ const run=(days,...args)=>{const r=spawnSync(script,args,{env:{...f.env,NC_KEEP_DAYS:String(days)},encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ run(30,'sync');run(30,'remove',key);run(1,'prune');run(30,'sync')
+ assert.deepEqual(run(30,'list'),[])
+ assert.match(fs.readFileSync(path.join(f.store,'dismissed'),'utf8'),new RegExp(`^${key} `,'m'),'the tombstone outlives the age limit while the source copy exists')
+})

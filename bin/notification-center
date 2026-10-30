@@ -29,6 +29,8 @@ source_kind=${NC_SOURCE:-stock}
 src_dir=${NC_SRC_DIR:-$HOME/.local/state/omarchy/notifications}
 src_history=${NC_SRC_HISTORY:-$src_dir/history}
 source_state_dir=$(dirname "$src_dir")
+# Which source a tombstone was written under: absence is only meaningful there.
+src_tag=$(printf '%s' "$src_dir" | cksum) src_tag=${src_tag%% *}
 handled_file=${NC_HANDLED:-}
 if [[ -n ${NC_STATE_FILE:-} ]]; then
   dnd_files=("$NC_STATE_FILE")
@@ -66,14 +68,28 @@ pruned_through_file="$store/pruned_through"
 #    clear line and ranked above the watermark is archived on the next sync.
 #
 # How I1 is enforced for keys absent from the archive:
-#  - ts-id keys: by their immutable stamp: at or below cleared_at, older than
-#    keep_days, or ranked at or below the watermark; else by a tombstone.
+#  - ts-id keys: by a durable exclusion of their immutable stamp (at or below
+#    cleared_at, or ranked at or below the watermark), else by a tombstone.
+#    The age limit also skips old copies at ingest, but it is NOT durable:
+#    keep_days can be raised later, so it never stands in for a tombstone.
 #  - stock-… keys: by a tombstone only (their source ts moves), so every
 #    removal of a stock key (dismiss, clear, retention) writes one.
-# Tombstones ("KEY TS REMOVED_AT") are dropped only when that guarantee no
-# longer needs them: a ts-id key once its stamp is covered as above; a stock
-# key once a full sync finds it in no source file (and an hour has passed, so
-# a removal that raced its first write keeps its tombstone).
+# Durable exclusions only ever widen: the watermark only rises and cleared_at
+# is never deleted (a newer clear moves it forward).
+#
+# Tombstone lifetime ("KEY TS REMOVED_AT SOURCE"): a tombstone may be dropped only
+# when no current or future sync from any source can re-introduce its key:
+#  - a ts-id key covered by a durable exclusion (cleared_at, watermark), or
+#  - a key that a full sync of the source it was removed under (SOURCE tag)
+#    finds in no source file, an hour or more after its removal (a removal can
+#    race the source's first write). A different source (the center can switch
+#    daemons) says nothing about the key, and a missing source directory never
+#    counts as "absent".
+#    Sources never recreate a key once its file is gone (Foamy and stock 4.0
+#    delete or trim history; stock 4.5 rewrites bounded arrays).
+# Sources that keep copies after a dismissal (stock 4.0 per-file history,
+# stock 4.5 arrays; Foamy until its releaseHistory runs) therefore keep the
+# tombstone alive for as long as the copy exists.
 
 # How much is kept. Both are ceilings and the tighter one wins: 30 days of a
 # quiet week is a shorter list than 1000 notifications, and 1000 notifications
@@ -154,12 +170,12 @@ stamp_excluded() {
   rank_le "$stamp" "$key" "$wm_ts" "${wm_key:-}"
 }
 
-# Tombstones for keys (one line each, written once): KEY TS REMOVED_AT.
+# Tombstones for keys (one line each, written once): KEY TS REMOVED_AT SOURCE.
 # $1: file of "KEY TS" lines.
 add_tombstones() {
   local now
   now=$(now_ms)
-  awk -v now="$now" 'FILENAME == ARGV[1] { seen[$1] = 1; next } ($1 != "" && !($1 in seen)) { seen[$1] = 1; print $1, ($2 == "" ? 0 : $2), now }' \
+  awk -v now="$now" -v tag="$src_tag" 'FILENAME == ARGV[1] { seen[$1] = 1; next } ($1 != "" && !($1 in seen)) { seen[$1] = 1; print $1, ($2 == "" ? 0 : $2), now, tag }' \
     "$dismissed_file" "$1" >> "$dismissed_file"
 }
 
@@ -498,7 +514,7 @@ sync_all() {
     ingest_file "$file" || return 1
   done
   apply_handled
-  trim_stock_tombstones
+  trim_absent_tombstones
 }
 
 # Foamy's handled journal (contract v2): notifications clicked or acted on there.
@@ -522,14 +538,7 @@ prune() {
   local cutoff kept dropped
   cutoff=$(( $(now_ms) - keep_days * 86400000 ))
 
-  if [[ -s $cleared_at_file ]]; then
-    local cleared_at
-    cleared_at=$(cat "$cleared_at_file" 2>/dev/null || echo 0)
-    if [[ $cleared_at =~ ^[0-9]+$ ]] && (( cleared_at < cutoff )); then
-      rm -f -- "$cleared_at_file"
-    fi
-  fi
-
+  # cleared_at is a durable exclusion: kept even once older than the age limit.
   trim_tombstones
 
   [[ -s $archive ]] || return 0
@@ -598,51 +607,55 @@ prune() {
   return 0
 }
 
-# Drop ts-id tombstones whose stamp now covers the key (clear line, age,
-# watermark); stock tombstones are trimmed by sync_all against the sources.
+# Drop ts-id tombstones a durable exclusion now covers (clear line, watermark).
+# Never the age limit: keep_days can be raised again.
 trim_tombstones() {
   [[ -s $dismissed_file ]] || return 0
-  local cutoff cleared wm_ts wm_key
-  cutoff=$(( $(now_ms) - keep_days * 86400000 ))
+  local cleared wm_ts wm_key
   cleared=$(cleared_line)
   read -r wm_ts wm_key <<< "$(watermark)"
-  LC_ALL=C awk -v cutoff="$cutoff" -v cleared="$cleared" -v wts="$wm_ts" -v wkey="${wm_key:-}" '
+  LC_ALL=C awk -v cleared="$cleared" -v wts="$wm_ts" -v wkey="${wm_key:-}" '
     match($1, /^[0-9]+-[0-9]+$/) {
       ts = substr($1, 1, index($1, "-") - 1) + 0
-      if (ts <= cleared || ts < cutoff || ts < wts + 0 || (ts == wts + 0 && $1 <= wkey)) next
+      if (ts <= cleared || ts < wts + 0 || (ts == wts + 0 && $1 <= wkey)) next
     }
     { print }' "$dismissed_file" > "$dismissed_file.tmp" && mv -f "$dismissed_file.tmp" "$dismissed_file"
 }
 
-# Drop stock tombstones for keys no source file holds any more (I1 needs a
-# tombstone only while a copy exists), at least an hour after the removal.
-trim_stock_tombstones() {
-  [[ $source_kind == stock && -s $dismissed_file ]] || return 0
-  grep -q '^stock-' "$dismissed_file" || return 0
+# Drop tombstones (any source kind) for keys no source file holds any more, at
+# least an hour after the removal. Runs after a complete sync of the source.
+trim_absent_tombstones() {
+  [[ -s $dismissed_file && -d $src_dir ]] || return 0
   local present file
   present=$(mktemp) || return 0
-  for file in "$src_dir/live.json" "$src_dir/history.json"; do
-    [[ -s $file ]] || continue
-    python3 "$preview_policy_dir/read-stock-notifications.py" --keys "$file" >> "$present" || { rm -f -- "$present"; return 0; }
-  done
-  awk -v grace=$(( $(now_ms) - 3600000 )) 'FILENAME == ARGV[1] { here[$1] = 1; next }
-    ($1 ~ /^stock-/ && !($1 in here) && ($3 + 0) < grace) { next } { print }' \
+  # ts-id keys: one file per notification, live or history.
+  for file in "$src_dir"/*.json "$src_history"/*.json; do
+    [[ -e $file ]] || continue
+    file=${file##*/}
+    printf '%s\n' "${file%.json}"
+  done > "$present"
+  if [[ $source_kind == stock ]]; then
+    for file in "$src_dir/live.json" "$src_dir/history.json"; do
+      [[ -s $file ]] || continue
+      python3 "$preview_policy_dir/read-stock-notifications.py" --keys "$file" >> "$present" || { rm -f -- "$present"; return 0; }
+    done
+  fi
+  awk -v grace=$(( $(now_ms) - 3600000 )) -v tag="$src_tag" 'FILENAME == ARGV[1] { here[$1] = 1; next }
+    ($4 == tag && !($1 in here) && ($3 + 0) < grace) { next } { print }' \
     "$present" "$dismissed_file" > "$dismissed_file.tmp" && mv -f "$dismissed_file.tmp" "$dismissed_file"
   rm -f -- "$present"
 }
 
 # Retention work only when a limit can have been crossed: more rows than the
-# ceiling, or an oldest row past the age cutoff. Rows are appended in arrival
-# order, so the first line is the oldest.
+# ceiling, or any row past the age cutoff.
 prune_needed() {
   [[ -s $archive ]] || return 1
-  local count first stamp
-  count=$(wc -l < "$archive")
-  (( count > max_items )) && return 0
-  IFS= read -r first < "$archive" || return 1
-  [[ $first =~ \"timestamp\":([0-9]+) ]] || return 0
-  stamp=${BASH_REMATCH[1]}
-  (( stamp < $(now_ms) - keep_days * 86400000 ))
+  # One pass: more rows than the ceiling, or any row older than the age limit.
+  # Rows arrive out of timestamp order, so the first line is not the oldest.
+  awk -v max="$max_items" -v cutoff=$(( $(now_ms) - keep_days * 86400000 )) '
+    { n++ }
+    match($0, /"timestamp":[0-9]+/) { if (substr($0, RSTART + 12, RLENGTH - 12) + 0 < cutoff) old = 1 }
+    END { exit !(n > max || old) }' "$archive"
 }
 
 # ---------------------------------------------------------------- commands
