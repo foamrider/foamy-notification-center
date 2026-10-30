@@ -5,9 +5,13 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import hostenv
 
 source = Path(__file__).resolve().parents[1]
-omarchy = Path(os.environ.get('OMARCHY_PATH', '/usr/share/omarchy'))
+# OMARCHY_PATH (or OMARCHY_TEST_ROOT) names the host tree; only its QML and data are loaded.
+if not os.environ.get('OMARCHY_TEST_ROOT') and os.environ.get('OMARCHY_PATH'):
+    os.environ['OMARCHY_TEST_ROOT'] = os.environ['OMARCHY_PATH']
+omarchy = hostenv.root()
 native = (omarchy / 'shell/Commons/Translations.qml').exists()
 catalog = json.loads((source / 'i18n/no.json').read_text())
 key = next(k for k, v in catalog.items() if k != v and '%' not in k and '{' not in k)
@@ -56,13 +60,15 @@ ShellRoot {
 '''
     qml = qml.replace('LANGUAGE_FILE', json.dumps(str(language))).replace('TRANSLATED', json.dumps(catalog[key])).replace('KEY', json.dumps(key)).replace('NATIVE', str(native).lower())
     (app / 'shell.qml').write_text(qml)
-    env = dict(os.environ, OMARCHY_PATH=str(omarchy), OMARCHY_LANGUAGE_FILE=str(language),
+    env = dict(os.environ, OMARCHY_LANGUAGE_FILE=str(language),
                XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen',
                QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
     env.pop('WAYLAND_DISPLAY', None)
+    env.update(hostenv.make(base, app))
     result = subprocess.run(['quickshell', '-p', str(app), '--no-color'], env=env,
                             capture_output=True, text=True, timeout=10)
     output = result.stdout + result.stderr
+    hostenv.check(env, output)
     if result.returncode or 'I18N_RUNTIME_PASS' not in output or any(e in output for e in ['ReferenceError', 'TypeError', 'Unable to assign']):
         raise AssertionError(output)
     print(source.name, '4.5 live no/ar/en' if native else '4.0 English fallback', 'passed')
