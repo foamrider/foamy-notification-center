@@ -347,7 +347,27 @@ Item {
       }
     })
   }
-  Timer { id: releaseRetry; interval: 5000; onTriggered: root.pumpReleases() }
+  Timer { id: releaseRetry; interval: 5000; onTriggered: { root.pumpReleases(); root.pumpReleaseBefore() } }
+
+  // Clear all's cutoff for Foamy, retried like key batches: Foamy answers
+  // "busy" when its persistence queue refused the drop. Only the newest cutoff matters.
+  property double releaseBeforeCut: 0
+  property bool releaseBeforeBusy: false
+  function releaseBefore(cut) {
+    releaseBeforeCut = Math.max(releaseBeforeCut, Number(cut) || 0)
+    pumpReleaseBefore()
+  }
+  function pumpReleaseBefore() {
+    if (!releaseBeforeCut || releaseBeforeBusy || releaseRetry.running) return
+    var cut = releaseBeforeCut
+    releaseBeforeBusy = true
+    peer.call("foamy.notifications", "releaseHistoryBefore", [String(cut)], function(ok, output) {
+      root.releaseBeforeBusy = false
+      if (ok && String(output).trim() === "ok") { if (root.releaseBeforeCut === cut) root.releaseBeforeCut = 0 }
+      else if (root.foamySource) releaseRetry.restart()
+      else root.releaseBeforeCut = 0
+    })
+  }
 
   // Ordinary plugins use the public IPC commands, not the bar-only service proxy.
   property bool doNotDisturb: false
@@ -461,7 +481,7 @@ Item {
     command: [root.script, "clear"]
     environment: root.storeEnvironment
     onExited: function(code, status) {
-      if (code === 0 && status === 0) { if (root.foamySource) peer.call("foamy.notifications", "releaseHistoryBefore", [cut]) }
+      if (code === 0 && status === 0) { if (root.foamySource) root.releaseBefore(cut) }
       else root.removalError = "Could not clear notifications. Try again."
       if (root.clearPending) {
         root.clearPending = false

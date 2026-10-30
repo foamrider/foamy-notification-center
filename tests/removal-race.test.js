@@ -177,3 +177,18 @@ test("the unread badge stays current while a search filters the list", () => {
  state.removeMany(["1-1"])
  assert.deepEqual(Array.from(state.unreadSource,r=>r.key),["2-2"])
 })
+
+test("Clear all's release to Foamy is retried while Foamy answers busy", () => {
+ const state=service(),calls=[]
+ let answer="busy"
+ state.releaseBeforeCut=0;state.releaseBeforeBusy=false;state.releaseRetry={running:false,restart(){this.running=true}}
+ state.peer.call=(target,method,args,done)=>{calls.push(args[0]);done(true,answer)}
+ for(const name of ["releaseBefore","pumpReleaseBefore"]) {
+  const start=source.indexOf(`  function ${name}(`)
+  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ }
+ state.releaseBefore("1000")
+ assert.deepEqual(calls,["1000"]);assert.equal(state.releaseRetry.running,true);assert.equal(state.releaseBeforeCut,1000)
+ answer="ok";state.releaseRetry.running=false;state.releaseBefore("900")
+ assert.deepEqual(calls,["1000","1000"],"the newest cutoff is kept");assert.equal(state.releaseBeforeCut,0)
+})
