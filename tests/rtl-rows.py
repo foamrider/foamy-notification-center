@@ -10,7 +10,7 @@ app = base / 'app'
 app.mkdir()
 for name in ['Commons', 'Ui']:
     # OMARCHY_TEST_ROOT selects the host shell (an extracted 4.5 tree); default 4.0.6.
-    (app / name).symlink_to(os.environ.get('OMARCHY_TEST_ROOT', '/usr/share/omarchy') + '/shell/' + name)
+    (app / name).symlink_to((os.environ.get('OMARCHY_TEST_ROOT') or '/usr/share/omarchy') + '/shell/' + name)
 (app / 'plugin').symlink_to(source)
 runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)

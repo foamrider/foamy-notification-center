@@ -980,7 +980,6 @@ Ui.Panel {
             saving: root.preferenceActive !== null
             page: settingsPane
             onSave: function(scope, key, value) { root.savePreference(scope, key, value) }
-            onPasteFailed: function(message) { root.settingsError = message }
           }
         }
       }

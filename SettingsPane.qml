@@ -21,7 +21,6 @@ Column {
   // The enclosing FoamySettingsPage, to keep focused fields visible.
   property Item page: null
   signal save(string scope, string key, var value)
-  signal pasteFailed(string message)
   spacing: FoamyStyle.sectionGap
 
   function current(scope, key) {
@@ -84,46 +83,18 @@ Column {
           }
           Component {
             id: numberField
-            RowLayout {
-              id: numberRow
-              spacing: FoamyStyle.gap
-              Text {
-                Layout.fillWidth: true
-                text: FoamyI18n.t(field.modelData.label)
-                textFormat: Text.PlainText
-                wrapMode: Text.WordWrap
-                color: FoamyPalette.text
-                font.family: FoamyStyle.fontFamily
-                font.pixelSize: FoamyStyle.font.body
-              }
-              SafeTextField {
-                id: input
-                objectName: field.scope + "-" + field.modelData.key
-                Layout.preferredWidth: Style.space(76)
-                implicitHeight: FoamyStyle.controlHeight
-                horizontalAlignment: Text.AlignRight
-                text: String(root.current(field.scope, field.modelData.key))
-                translate: FoamyI18n.t
-                Accessible.name: FoamyI18n.t(field.modelData.label)
-                onPasteErrorChanged: if (pasteError !== "") root.pasteFailed(pasteError)
-                onInputActiveFocusChanged: if (inputActiveFocus && root.page) root.page.keepVisible(numberRow)
-                function commit() {
-                  var value = Number(text.trim())
-                  if (/^[0-9]+$/.test(text.trim()) && Preferences.valid(field.scope, field.modelData.key, value)) {
-                    if (value !== root.current(field.scope, field.modelData.key)) root.save(field.scope, field.modelData.key, value)
-                  } else text = String(root.current(field.scope, field.modelData.key))
-                }
-                onEditingFinished: commit()
-                onAccepted: commit()
-                // Escape cancels the edit: restore the saved value first and keep
-                // the key, so the page does not close and the focus loss that
-                // follows has nothing new to save. A second Escape leaves Settings.
-                onKeyPressed: function(event) {
-                  if (event.key !== Qt.Key_Escape) return
-                  event.accepted = true
-                  text = String(root.current(field.scope, field.modelData.key))
-                  if (root.page) root.page.focusBack()
-                }
+            // kit FoamyNumberField: shows the setting (following external changes
+            // while not being edited), commits a valid changed number once on
+            // Enter/focus-out, and Escape restores the value and stays on the page.
+            FoamyNumberField {
+              objectName: field.scope + "-" + field.modelData.key
+              label: FoamyI18n.t(field.modelData.label)
+              value: root.current(field.scope, field.modelData.key)
+              from: field.modelData.min
+              to: field.modelData.max
+              stepSize: field.modelData.step || 1
+              onCommitted: function(next) {
+                if (Preferences.valid(field.scope, field.modelData.key, next)) root.save(field.scope, field.modelData.key, next)
               }
             }
           }
