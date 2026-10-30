@@ -5,9 +5,9 @@ source=Path(__file__).resolve().parents[1]
 base=Path(tempfile.mkdtemp(prefix='foamy-center-motion-'));app=base/'app';app.mkdir()
 (app/'Commons').symlink_to('/usr/share/omarchy/shell/Commons',target_is_directory=True)
 # Include the plugin translator without registering unrelated fixture types.
-(app / 'FoamyI18n.qml').symlink_to(source / 'FoamyI18n.qml')
+(app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
 (app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
-(app / 'qmldir').write_text('singleton FoamyI18n 1.0 FoamyI18n.qml\n')
+for name in ['Markup.js','BrowserIdentity.js']: (app / name).symlink_to(source / name)
 (app/'Ui').symlink_to('/usr/share/omarchy/shell/Ui',target_is_directory=True)
 (app/'components').symlink_to(source/'components',target_is_directory=True)
 for name in ['Model.js','Translations.js']:(app/name).symlink_to(source/name)
@@ -18,6 +18,7 @@ import QtTest
 import Quickshell
 import qs.Commons
 import "components"
+import "kit"
 import "Model.js" as Model
 ShellRoot {
  id:root

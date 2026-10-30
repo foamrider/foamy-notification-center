@@ -16,14 +16,13 @@ with tempfile.TemporaryDirectory(prefix='foamy-language-test-') as directory:
     app = base / 'app'
     app.mkdir()
     plugin = app / 'plugin'
-    plugin.mkdir()
-    shutil.copy(source / 'FoamyI18n.qml', plugin)
-    shutil.copytree(source / 'i18n', plugin / 'i18n')
-    (plugin / 'qmldir').write_text('singleton FoamyI18n 1.0 FoamyI18n.qml\n')
+    # The kit's FoamyI18n reads catalogs from ../i18n relative to kit/.
+    shutil.copytree(source / 'kit', plugin)
+    shutil.copytree(source / 'i18n', app / 'i18n')
     # The added catalog entry exists only in this fixture, never in a release.
-    en = json.loads((plugin / 'i18n/en.json').read_text())
+    en = json.loads((app / 'i18n/en.json').read_text())
     en['English only'] = 'English only'
-    (plugin / 'i18n/en.json').write_text(json.dumps(en))
+    (app / 'i18n/en.json').write_text(json.dumps(en))
     (app / 'Commons').symlink_to(omarchy / 'shell/Commons', target_is_directory=True)
     language = base / 'language'
     language.write_text('no')

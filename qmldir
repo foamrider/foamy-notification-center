@@ -1,6 +1,4 @@
 singleton ServiceRegistry 1.0 ServiceRegistry.qml
-NotificationPopup 1.0 NotificationPopup.qml
 SettingsPane 1.0 SettingsPane.qml
-singleton FoamyI18n 1.0 FoamyI18n.qml
 Panel 1.0 Panel.qml
 Service 1.0 Service.qml

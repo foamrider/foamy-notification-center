@@ -2,10 +2,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '../FoamyI18n.qml'), 'utf8');
-const start = source.indexOf('  function t(');
-const end = source.indexOf('\n  function number', start);
-const scope = vm.createContext({backend: null});
+const source = fs.readFileSync(path.join(__dirname, '../kit/FoamyI18n.qml'), 'utf8');
+// The kit's FoamyI18n (kit/): englishText, substitute, t, tn and number.
+const start = source.indexOf('  function englishText(');
+const end = source.lastIndexOf('\n}');
+const scope = vm.createContext({backend: null, english: {}});
+scope.root = scope;
 vm.runInContext(source.slice(start, end), scope);
 const en = require('../i18n/en.json');
 const no = require('../i18n/no.json');

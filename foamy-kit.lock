@@ -1,0 +1,18 @@
+# foamy-kit.lock: written by foamy-kit sync.sh; do not edit.
+# Hashes are of each file's body (the file without its stamp line);
+# notices are hashed whole. tests/kit-check.sh verifies them.
+version 0.1.0
+source 95168f22901b
+components FoamyI18n,FoamyIpc,FoamyMotion,FoamyPalette,FoamyPopup,FoamyPrefs,FoamyStyle,SafeTextField
+e2f6c278c7432824fd946f47c487edbcca3aa2341adb20f621c5dbaff6f12899  kit/FoamyI18n.qml
+5a372861e53b40a49d0d97cc2796f89231337a9c40700f26a0fcb694d70d2a9b  kit/FoamyIpc.qml
+88966e4860766563e117b5a202e707a3ea65339a190ce676b13bd75767c129c0  kit/FoamyIpcResolver.js
+79218200ee2dbe5d1bdfd6ef41768bce029e136f8640f8f5f0833a97d8371d5a  kit/FoamyMotion.qml
+5f4459d510118119c216d5d57fa1e9a87d2ec2459b49e70dcf3344a179922bd9  kit/FoamyPalette.qml
+4cc32a18ce81fa161d0e47c2e93299eac63f9871fd9de69832192d44e5277f03  kit/FoamyPopup.qml
+1673920bcb77b1d1b7519713fadc127e6942de1ad0e18c2fd7685e38e8d91e66  kit/FoamyPrefs.js
+0b0cb02b422d999bd0658bf0a4710084c3f69ac299695a507655de6d9a9ce1c2  kit/FoamyStyle.qml
+5ce350d31debd5711dbd72766149f4098a9976dc5aef10c55f47d3ed4dd14136  kit/SafeTextField.qml
+5084c8e33fd38e0ba57b1cf2b732cd04a4985d714583f7445e45419d95ae3118  kit/clipboard.sh
+356a8967e89b607db7565ec0c51d1da19e0e40d75e894f8ece9925b783e32e46  kit/qmldir
+7cea4426bc12828c7fa8242d275c4b2de44283c163ee2ae7786a175a44f91e77  tests/kit-check.sh
