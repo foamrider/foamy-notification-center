@@ -759,16 +759,24 @@ cmd_watch() {
   (( ready )) || die "notification watcher failed to start"
   cmd_sync
   printf '%s\n' '{"event":"storeChanged"}'
-  local status
+  local status wait
+  # Retention runs on a wall-clock deadline (hourly by default), not an idle
+  # timeout: `read -t` restarts with every event, so steady traffic (seen
+  # writes, DND, unchanged sources) would otherwise starve it forever.
+  local interval=${NC_RETENTION_INTERVAL:-3600}
+  [[ $interval =~ ^[0-9]+$ ]] && (( interval > 0 )) || interval=3600
+  local next_retention=$(( EPOCHSECONDS + interval ))
   while true; do
-    # The hourly timeout is the retention timer: limits hold while nothing arrives.
-    IFS='|' read -r -t 3600 event file <&3
-    status=$?
-    if (( status > 128 )); then
+    wait=$(( next_retention - EPOCHSECONDS ))
+    if (( wait <= 0 )); then
       with_lock prune || die "cannot apply notification retention"
       printf '%s\n' '{"event":"storeChanged"}'
+      next_retention=$(( EPOCHSECONDS + interval ))
       continue
     fi
+    IFS='|' read -r -t "$wait" event file <&3
+    status=$?
+    (( status > 128 )) && continue
     (( status == 0 )) || break
     if [[ $event == *DELETE_SELF* || $event == *MOVE_SELF* ]]; then
       die "notification source changed; reconnecting"

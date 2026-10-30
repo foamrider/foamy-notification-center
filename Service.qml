@@ -112,6 +112,14 @@ Item {
     else { restartWatch.interval = 50; restartWatch.restart() }
   }
 
+  // The watcher reads every archive setting (keepDays, maxItems, previews) and
+  // the source from its environment once, at start: any change restarts it
+  // (debounced), even when the daemon/source itself did not change.
+  onStoreEnvironmentChanged: if (watchProc.running) {
+    sourceRestartPending = true
+    watchProc.running = false
+  }
+
   readonly property var storeEnvironment: {
     var env = {
       "NC_KEEP_DAYS": String(root.keepDays),

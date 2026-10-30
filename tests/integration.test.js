@@ -181,3 +181,33 @@ test('lowering then raising the age limit never brings back a dismissed notifica
  assert.deepEqual(run(30,'list'),[])
  assert.match(fs.readFileSync(path.join(f.store,'dismissed'),'utf8'),new RegExp(`^${key} `,'m'),'the tombstone outlives the age limit while the source copy exists')
 })
+test('retention runs on its deadline while events keep arriving (30-minute events over 3 hours, time scaled 1:1800)',async t=>{
+ // Interval 2 s stands for the hourly deadline; an event every second stands for every 30 minutes.
+ const f=fixture(t),events=[],watch=spawn(script,['watch'],{env:{...f.env,NC_RETENTION_INTERVAL:'2',NC_KEEP_DAYS:'1'}})
+ let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
+ t.after(()=>watch.kill())
+ const until=async fn=>{const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))}}
+ await until(()=>events.some(e=>e.event==='storeChanged'))
+ const archive=path.join(f.store,'archive.jsonl'),expired=JSON.stringify({key:'5000-1',timestamp:5000,summary:'expired'})
+ fs.appendFileSync(archive,expired+'\n')
+ let gone=false
+ for(let i=0;i<6&&!gone;i++){
+  fs.writeFileSync(path.join(f.store,'seen'),String(Date.now()))   // steady traffic (panel opened)
+  await new Promise(r=>setTimeout(r,1000))
+  gone=!fs.readFileSync(archive,'utf8').includes('"expired"')
+ }
+ assert.ok(gone,'retention never ran while events kept arriving')
+})
+test('any archive-setting change restarts the running watcher, even without a source change',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const start=source.indexOf('  onStoreEnvironmentChanged: if (watchProc.running) {');assert.ok(start>=0)
+ const body=source.slice(source.indexOf('{',start)+1,source.indexOf('\n  }',start))
+ const ctx=vm.createContext({watchProc:{running:true},sourceRestartPending:false})
+ vm.runInContext(body,ctx)
+ assert.equal(ctx.watchProc.running,false);assert.equal(ctx.sourceRestartPending,true)
+ // Every value the watcher reads is in that environment.
+ const env=source.slice(source.indexOf('  readonly property var storeEnvironment: {'),source.indexOf('\n  }\n',source.indexOf('  readonly property var storeEnvironment: {')))
+ for(const name of ['NC_KEEP_DAYS','NC_MAX_ITEMS','NC_PREVIEWS','NC_SOURCE','NC_SRC_DIR','NC_SRC_HISTORY','NC_HANDLED','NC_STATE_FILE']) assert.ok(env.includes(name),name)
+ const script=fs.readFileSync(path.join(__dirname,'../bin/notification-center'),'utf8')
+ for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL'].includes(name)) assert.ok(env.includes(name),`watcher reads ${name} but the service does not pass it`)
+})
