@@ -1,4 +1,4 @@
-// foamy-kit 0.3.3 dc9fa4a470494b87550314bf840121ae124fef5f929ea7ce276fc86ca1eb58a1 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.4 e8ac5bbe9a79ea4202f637017e7eb9e438f41bbfcf43a5c91f372e8190af7d91 — do not edit; change foamy-kit and run sync
 import QtQuick
 import Quickshell.Io
 import "FoamyPrefs.js" as Prefs
@@ -113,6 +113,10 @@ QtObject {
     var hadPrevious = key in pending
     var previous = pending[key]
     setPending(key, value)
+    // 4.5 reflects an inline save synchronously: `settings` already changed
+    // inside Prefs.save(), before this value became pending, so settle now or
+    // it would mask later outside changes and be written back by the next save.
+    pending = Prefs.settle(settings, pending)
     if (result.inline) {
       saved(key, value)
       Qt.callLater(advance)

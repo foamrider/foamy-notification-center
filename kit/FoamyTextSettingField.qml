@@ -1,4 +1,4 @@
-// foamy-kit 0.3.3 c959bcc318627747dc9e5d7f148e48403516c36c17556e9ae3a63f12daf651b5 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.4 4ebaf1a8016ef697c172fe1342ea87bad6bc83f339a103e6d5396d96a8829881 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // A free-text settings field that never fights the setting it shows: the
@@ -37,6 +37,9 @@ Item {
   property string lastCommitted: ""
   property bool hasCommitted: false
 
+  // A refused paste (too large, timed out, not plain text): shown in the
+  // field's error line and emitted for callers with their own error area.
+  signal pasteFailed(string message)
   signal committed(string value)
 
   implicitWidth: FoamyStyle.popupWidth - FoamyStyle.padding * 2
@@ -45,6 +48,16 @@ Item {
   function show() {
     field.text = value            // the internal editor, never `value`
     dirty = false
+  }
+
+  // Tell the field its last commit was not saved: it shows `value` again
+  // (unless a newer draft is being edited) and the same input can be
+  // committed again. Wire it to the save's failure, e.g.
+  // FoamyPrefsQueue.onFailed: if (key === "x") field.saveFailed()
+  function saveFailed() {
+    lastCommitted = ""
+    hasCommitted = false
+    if (!dirty) show()
   }
 
   function cancelEdit() {
@@ -121,9 +134,10 @@ Item {
     }
 
     Text {
-      visible: root.errorText !== ""
+      readonly property string message: root.errorText !== "" ? root.errorText : (root.field.pasteError !== "" ? FoamyI18n.t(root.field.pasteError) : "")
+      visible: message !== ""
       width: parent.width
-      text: root.errorText
+      text: message
       textFormat: Text.PlainText
       horizontalAlignment: Text.AlignLeft
       wrapMode: Text.WordWrap
@@ -131,7 +145,7 @@ Item {
       font.family: FoamyStyle.fontFamily
       font.pixelSize: FoamyStyle.font.caption
       Accessible.role: Accessible.AlertMessage
-      Accessible.name: root.errorText
+      Accessible.name: message
     }
   }
 }

@@ -1,4 +1,4 @@
-// foamy-kit 0.3.3 0ecdc982a91f3a115d3b50f2555bace0396f4d7e77ac795b3e59e05f49e5a033 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.4 0defffe5286c48e543e18dc79d64fb11590ff4869dd5bf1fb361728abad33f99 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls as Controls
 import Quickshell.Io
@@ -274,7 +274,8 @@ Flickable {
                 root.contentX = Math.min(root.contentWidth - root.width, right - root.width);
         }
         onTextChanged: {
-            var limit = Math.max(0, Math.min(32767, root.maximumLength));
+            var wanted = root.maximumLength;
+            var limit = wanted > 32767 ? 32767 : (wanted > 0 ? wanted : 0);
             if (length > limit)
                 remove(limit, length);
             root.revision++;
@@ -296,8 +297,16 @@ Flickable {
     }
 
     Component.onCompleted: editorReady = true
-    onMaximumLengthChanged: if (editor.length > Math.max(0, maximumLength))
-        editor.remove(Math.max(0, maximumLength), editor.length)
+    // Runs when maximumLength changes after creation only, and uses no JS
+    // globals: this can fire while a page is being built or torn down (a
+    // settings state switch), when the global object may already be gone.
+    onMaximumLengthChanged: {
+        if (!editorReady)
+            return;
+        var limit = maximumLength > 0 ? maximumLength : 0;
+        if (editor.length > limit)
+            editor.remove(limit, editor.length);
+    }
     Component.onDestruction: cancelPaste()
     onActiveFocusChanged: if (activeFocus)
         editor.forceActiveFocus()
