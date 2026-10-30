@@ -16,7 +16,8 @@ base = Path(tempfile.mkdtemp(prefix='foamy-browser-ui-'))
 app = base / 'app'
 app.mkdir()
 for name in ['Commons', 'Ui']:
-    (app / name).symlink_to('/usr/share/omarchy/shell/' + name, target_is_directory=True)
+    # OMARCHY_TEST_ROOT selects the host shell (an extracted 4.5 tree); default 4.0.6.
+    (app / name).symlink_to(os.environ.get('OMARCHY_TEST_ROOT', '/usr/share/omarchy') + '/shell/' + name, target_is_directory=True)
 (app / 'plugin').symlink_to(source, target_is_directory=True)
 failed_helper = (source / 'components/BrowserIcons.qml').read_text().replace('import "../BrowserIdentity.js"', 'import "plugin/BrowserIdentity.js"')
 failed_helper = failed_helper.replace('    command: ["python3", Qt.resolvedUrl("../bin/browser-favicon.py").toString().replace(/^file:\\/\\//, "")]', '    command: ["/nonexistent/foamy-favicon-test-helper"]')
@@ -37,6 +38,14 @@ browser = sqlite3.connect(database)
 browser.execute('PRAGMA locking_mode=EXCLUSIVE')
 browser.execute('BEGIN EXCLUSIVE')
 browser.commit()
+
+# Stack headers accept only theme names or the archive's own normalized images
+# (a tampered archive must not name arbitrary files or image providers), so the
+# fixture's app icon lives where the archive keeps its copies.
+archive_icon = home / '.local/state/omarchy-notification-center/images/1000-1-appIcon.png'
+archive_icon.parent.mkdir(parents=True)
+archive_icon.write_bytes(png())
+app_icon = ('"' + archive_icon.as_uri() + '"') if center else 'Qt.resolvedUrl("fallback.svg").toString()'
 
 widget = '''NotificationStackHeader {
       id: card; x: 20; y: 20; width: 420
@@ -67,7 +76,7 @@ MODEL_IMPORT
 ShellRoot {
   id: root
   MODEL_PROPERTIES
-  property var entry:({key:"1000-1",timestamp:1000,app:"Vivaldi",body:"teams.example.com\\nNew message",appIcon:Qt.resolvedUrl("fallback.svg").toString()})
+  property var entry:({key:"1000-1",timestamp:1000,app:"Vivaldi",body:"teams.example.com\\nNew message",appIcon:APP_ICON})
   property string overrideSource:"resolved"
   readonly property string iconSource:overrideSource==="resolved" ? resolver.source(IDENTITY_ENTRY) : overrideSource
   BrowserIcons { id:resolver }
@@ -108,7 +117,7 @@ MODEL_CHECK
     }
   }
 }
-'''.replace('WIDGET', widget).replace('MODEL_IMPORT', model_import).replace('MODEL_PROPERTIES', model_properties).replace('IDENTITY_ENTRY', identity_entry).replace('MODEL_CHECK', model_check))
+'''.replace('WIDGET', widget).replace('MODEL_IMPORT', model_import).replace('MODEL_PROPERTIES', model_properties).replace('IDENTITY_ENTRY', identity_entry).replace('MODEL_CHECK', model_check).replace('APP_ICON', app_icon))
 runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)
 # A temporary HOME must not invoke Python through a user's runtime-manager shim.

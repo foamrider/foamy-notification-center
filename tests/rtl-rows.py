@@ -9,14 +9,15 @@ base = Path(tempfile.mkdtemp(prefix='foamy-center-rtl-'))
 app = base / 'app'
 app.mkdir()
 for name in ['Commons', 'Ui']:
-    (app / name).symlink_to('/usr/share/omarchy/shell/' + name)
+    # OMARCHY_TEST_ROOT selects the host shell (an extracted 4.5 tree); default 4.0.6.
+    (app / name).symlink_to(os.environ.get('OMARCHY_TEST_ROOT', '/usr/share/omarchy') + '/shell/' + name)
 (app / 'plugin').symlink_to(source)
 runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)
 (app / 'shell.qml').write_text('''import QtQuick
 import QtTest
 import Quickshell
-import "plugin" as Plugin
+import "plugin/kit" as Kit
 import "plugin/components" as Components
 ShellRoot {
  QtObject { id: translator; property string language: "en"; property bool rightToLeft: false; property string formatLocale: "en-US"; function t(key,fallback) { return fallback } function number(value) { return String(value) } }
@@ -25,7 +26,7 @@ ShellRoot {
   Components.NotificationRow {
    id: row; width: 420; height: implicitHeight; expanded: true; hasCursor: true; first: true; last: true; groupCritical: true
    entry: ({summary:"A long message that must stay outside the dismiss button",body:"A longer body with enough text to wrap at narrow widths without entering the dismiss hit area.",timestamp:1}); now: 100000
-   LayoutMirroring.enabled: Plugin.FoamyI18n.rightToLeft
+   LayoutMirroring.enabled: Kit.FoamyI18n.rightToLeft
    LayoutMirroring.childrenInherit: true
    property int removed: 0
    onRemoveRequested: removed++
@@ -34,7 +35,7 @@ ShellRoot {
   TestCase {
    id: test; property bool ready: false; when: ready; name:"NotificationRowDirection"
    function test_direction() {
-    Plugin.FoamyI18n.backend=translator;
+    Kit.FoamyI18n.backend=translator;
     var texts=findChild(row,"notificationRowText"), dismiss=findChild(row,"notificationRowDismiss");
     verify(texts!==null && dismiss!==null);
     for(var rtl of [false,true]) {
@@ -48,7 +49,7 @@ ShellRoot {
       var done=false;row.grabToImage(function(result){verify(result.saveToFile(Qt.resolvedUrl((rtl?"rtl-":"ltr-")+width+".png").toString().replace("file://","")));done=true});tryVerify(function(){return done});
      }
     }
-    Plugin.FoamyI18n.backend=null;
+    Kit.FoamyI18n.backend=null;
    }
    onCompletedChanged: if(completed)console.log("RTL_ROWS",qtest_results.passCount,"passed",qtest_results.failCount,"failed")
   }
