@@ -248,10 +248,13 @@ Item {
     seenProc.running = true
   }
 
+  // The stamp is taken when the panel is opened. One opened while a write runs
+  // is kept and written afterwards (it used to be dropped from disk).
+  property string seenPending: ""
   function markSeen() {
     var stamp = Date.now()
     root.lastSeen = stamp
-    if (markProc.running) return
+    if (markProc.running) { seenPending = String(stamp); return }
     markProc.command = root.storeCommand(["seen", String(stamp)])
     markProc.running = true
   }
@@ -478,12 +481,14 @@ Item {
     entries = []
     unreadSource = []
     entriesReset()
-    // A clear requested while one runs runs again afterwards, with its own cutoff.
-    if (clearProc.running) { clearPending = true; return }
-    clearProc.cut = String(Date.now())
+    // The cutoff is the moment of the click. A clear requested while one runs
+    // runs afterwards with its own click-time cutoff (the latest request wins).
+    var cut = String(Date.now())
+    if (clearProc.running) { clearPendingCut = cut; return }
+    clearProc.cut = cut
     clearProc.running = true
   }
-  property bool clearPending: false
+  property string clearPendingCut: ""
   Process {
     id: clearProc
     property string cut: ""
@@ -493,9 +498,9 @@ Item {
     onExited: function(code, status) {
       if (code === 0 && status === 0) { if (root.foamySource) root.releaseBefore(cut) }
       else root.removalError = "Could not clear notifications. Try again."
-      if (root.clearPending) {
-        root.clearPending = false
-        cut = String(Date.now())
+      if (root.clearPendingCut) {
+        cut = root.clearPendingCut
+        root.clearPendingCut = ""
         running = true
         return
       }
@@ -642,7 +647,16 @@ Item {
     }
   }
 
-  Process { id: markProc; environment: root.storeEnvironment }
+  Process {
+    id: markProc
+    environment: root.storeEnvironment
+    onExited: {
+      if (!root.seenPending) return
+      command = root.storeCommand(["seen", root.seenPending])
+      root.seenPending = ""
+      running = true
+    }
+  }
 
   Component.onCompleted: {
     Plugin.ServiceRegistry.instance = root

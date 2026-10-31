@@ -129,20 +129,31 @@ test("callback cleanup runs only after durable dismissal and batches exact keys,
  state.foamySource=false;state.releaseNotificationActions(['1-1']);assert.equal(calls.length,before+1)
 })
 
-test("a second Clear all while one runs is queued, not dropped", () => {
- const state=service()
- state.clearProc={running:true,cut:""};state.clearPending=false;state.unreadSource=[]
+test("a queued Clear all keeps its own click-time cutoff (requests at 1000 and 2000, first clear ends at 3000)", () => {
+ const state=service(),started=[]
+ let clock=1000
+ const FakeDate={now:()=>clock}
+ state.Date=FakeDate
+ state.clearProc={running:false,cut:"",set running_(v){}}
+ state.clearPendingCut="";state.unreadSource=[]
+ // clearProc starts when running is set; record each start's cutoff.
+ Object.defineProperty(state.clearProc,"running",{get(){return this._r||false},set(v){this._r=v;if(v)started.push(this.cut)}})
  const start=source.indexOf("  function clearAll(")
  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
- state.clearAll()
- assert.equal(state.clearPending,true)
+ state.clearAll()                       // click at 1000
+ clock=2000;state.clearAll()            // click at 2000 while the first runs
+ assert.deepEqual(started,["1000"]);assert.equal(state.clearPendingCut,"2000")
+ clock=3000                             // the first clear exits at 3000
  const exit=source.indexOf("    onExited: function(code, status) {",source.indexOf("    id: clearProc"))
  const body=source.slice(source.indexOf("{",exit)+1,source.indexOf("\n    }",exit))
- const proc={cut:"1",running:false}
- const ctx=vm.createContext({code:0,status:0,cut:"1",running:false,root:{foamySource:false,clearPending:true,load(){ctx.loaded=true}},peer:{call(){}},String,Date})
+ const proc=state.clearProc;proc._r=false
+ const ctx=vm.createContext({code:0,status:0,Date:FakeDate,String,root:state,peer:{call(){}}})
+ Object.defineProperty(ctx,"cut",{get(){return proc.cut},set(v){proc.cut=v}})
+ Object.defineProperty(ctx,"running",{get(){return proc.running},set(v){proc.running=v}})
+ state.foamySource=false;state.load=()=>{}
  vm.runInContext("(function(){"+body+"})()",ctx)
- assert.equal(ctx.running,true,"the queued clear runs after the active one")
- assert.equal(ctx.root.clearPending,false)
+ assert.deepEqual(started,["1000","2000"],"the queued clear uses its click-time cutoff, not the exit time")
+ assert.equal(state.clearPendingCut,"")
 })
 
 test("single-key releases are compacted and the in-flight batch is never lost", () => {

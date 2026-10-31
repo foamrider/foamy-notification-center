@@ -282,7 +282,26 @@ test('every store process the service launches gets the resolved store environme
  const store=blocks.filter(b=>/id: (removeProc|clearProc|watchProc|listProc|seenProc|markProc)\b/.test(b)||/root\.script|storeCommand/.test(b))
  assert.ok(store.length>=4)
  for(const b of store) assert.match(b,/environment: root\.storeEnvironment/,b.split('\n')[1])
- assert.ok(source.includes('Process { id: markProc; environment: root.storeEnvironment }'))
+ assert.match(source,/id: markProc\n    environment: root\.storeEnvironment/)
  // Commands are built from values captured when the work was requested.
  assert.match(source,/command: \[root\.script, "clear", cut\]/)
+})
+test('a seen stamp taken while a write runs is written afterwards, not dropped',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const fn=source.slice(source.indexOf('  function markSeen() {'),source.indexOf('\n  }',source.indexOf('  function markSeen() {'))+4)
+ let clock=10
+ const commands=[],proc={running:false,command:[]}
+ const ctx=vm.createContext({Date:{now:()=>clock},String,root:null,markProc:proc,seenPending:''})
+ ctx.root=ctx;ctx.storeCommand=a=>a
+ Object.defineProperty(proc,'running',{get(){return this._r||false},set(v){this._r=v;if(v)commands.push(this.command[1])}})
+ vm.runInContext(fn,ctx)
+ ctx.markSeen();clock=20;ctx.markSeen()
+ assert.deepEqual(commands,['10']);assert.equal(ctx.seenPending,'20')
+ const exit=source.slice(source.indexOf('{',source.indexOf('onExited: {',source.indexOf('id: markProc')))+1,source.indexOf('\n    }',source.indexOf('id: markProc')))
+ proc._r=false
+ const ectx=vm.createContext({root:ctx})
+ Object.defineProperty(ectx,'command',{get(){return proc.command},set(v){proc.command=v}})
+ Object.defineProperty(ectx,'running',{get(){return proc.running},set(v){proc.running=v}})
+ vm.runInContext('(function(){'+exit+'})()',ectx)
+ assert.deepEqual(commands,['10','20']);assert.equal(ctx.seenPending,'')
 })
