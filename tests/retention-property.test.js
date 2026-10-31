@@ -30,6 +30,8 @@ for (const seed of [7, 42, 1337, 2024, 99]) {
     }
     const sources = new Map()          // key -> {ts, summary, file}
     const removed = new Set(), pruned = new Set()
+    // The clear line: everything at or before it (also later arrivals) stays out for good.
+    let clearedThrough = 0
     let id = 0, archived = new Map()
     const write = key => { const s = sources.get(key); fs.writeFileSync(s.file, JSON.stringify({ timestamp: s.ts, originalId: Number(key.split('-')[1]), app: 'P', summary: s.summary })) }
     for (let step = 0; step < 70; step++) {
@@ -50,7 +52,16 @@ for (const seed of [7, 42, 1337, 2024, 99]) {
         const kept = new Map(run({}, 'list', '1000').map(row => [row.key, row]))
         for (const key of archived.keys()) if (!kept.has(key) && !removed.has(key)) pruned.add(key)
         archived = kept
-      } else if (op < 0.76) {
+      } else if (op < 0.68) {
+        // Clear all with the cutoff captured at the click: rows at or before it go for good,
+        // later rows (arriving between the click and the clear) survive.
+        const stamps = [...sources.values()].map(v => v.ts).sort((a, b) => a - b)
+        const cut = stamps[Math.floor(random() * stamps.length)]
+        run({}, 'clear', String(cut))
+        clearedThrough = Math.max(clearedThrough, cut)
+        for (const [key, v] of sources) if (v.ts <= cut) removed.add(key)
+        archived = new Map(run({}, 'list', '1000').map(row => [row.key, row]))
+      } else if (op < 0.78) {
         // Dismiss an archived row, or a source row before its first ingestion.
         // Often the newest of the old (two-day) rows: the case an age-only tombstone rule gets wrong.
         const old = [...archived.keys()].filter(k => sources.get(k).ts < Date.now() - DAY).sort((a, b) => sources.get(a).ts - sources.get(b).ts)
@@ -68,6 +79,7 @@ for (const seed of [7, 42, 1337, 2024, 99]) {
         const rank = key => ({ key, ts: sources.get(key).ts })
         // I1: removed stays removed.
         for (const key of [...removed, ...pruned]) assert.ok(!archived.has(key), `step ${step}: ${key} came back`)
+        for (const [key, v] of sources) if (v.ts <= clearedThrough) assert.ok(!archived.has(key), `step ${step}: ${key} is behind the clear line`)
         // I2: rows still archived carry their source's latest content.
         for (const [key, row] of archived) assert.equal(row.summary, sources.get(key).summary, `step ${step}: ${key} missed an update`)
         // I3: within the limit; everything kept outranks everything pruned.
@@ -79,14 +91,14 @@ for (const seed of [7, 42, 1337, 2024, 99]) {
         for (const key of sources.keys()) {
           if (removed.has(key) || pruned.has(key) || archived.has(key)) continue
           // Too old for this sync's age limit and never archived: not pruned, may enter later.
-          if (!before.has(key) && sources.get(key).ts < cutoff) continue
+          if (!before.has(key) && (sources.get(key).ts < cutoff || sources.get(key).ts <= clearedThrough)) continue
           const wm = watermark()
           if (before.has(key) || archived.size >= max || (wm && rankLe(rank(key), wm))) pruned.add(key)
         }
         for (const p of pruned) for (const a of archived.keys()) assert.ok(!rankLe(rank(a), rank(p)), `step ${step}: ${a} ranks below pruned ${p}`)
         // I4: with room to spare, every eligible source row is archived.
         if (archived.size < max) for (const key of sources.keys())
-          if (!removed.has(key) && !pruned.has(key) && sources.get(key).ts >= cutoff) assert.ok(archived.has(key), `step ${step}: ${key} never entered`)
+          if (!removed.has(key) && !pruned.has(key) && sources.get(key).ts >= cutoff && sources.get(key).ts > clearedThrough) assert.ok(archived.has(key), `step ${step}: ${key} never entered`)
       }
     }
   })

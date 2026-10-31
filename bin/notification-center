@@ -804,7 +804,8 @@ cmd_watch() {
     elif [[ -n $handled_file && $file == "$handled_file" ]]; then
       [[ $event == *DELETE* ]] || { with_lock apply_handled || die "cannot update notification archive"; }
     elif [[ $event == *ISDIR* ]] && source_path_appeared "$file"; then
-      with_lock sync_and_prune >/dev/null 2>&1 || true
+      # Keep the stream: ingested rows and `pruned` events must reach the service.
+      with_lock sync_and_prune || die "cannot update notification archive"
       printf '%s\n' '{"event":"rewatch"}'
       exit 0
     elif [[ $event == CREATE* ]]; then
@@ -916,9 +917,14 @@ remove_keys() {
 # The cleared_at line stays so read-only sources (stock 4.5's history.json)
 # are not ingested again; Foamy is asked to drop its own copies over IPC.
 clear_all() {
-  local stamp kept dropped key
-  stamp=$(now_ms)
-  printf '%s\n' "$stamp" > "$cleared_at_file"
+  local stamp kept dropped key now previous
+  # The cutoff the caller captured (the moment of the click; the same one it
+  # sends Foamy), never a later one taken after the lock: rows arriving in
+  # between stay, here as in Foamy. The clear line only ever rises.
+  now=$(now_ms) stamp=${1:-$now}
+  [[ $stamp =~ ^[0-9]{1,16}$ ]] && (( stamp <= now )) || stamp=$now
+  previous=$(cleared_line)
+  (( previous > stamp )) || printf '%s\n' "$stamp" > "$cleared_at_file"
   [[ -s $archive ]] || return 0
   kept=$(jq -Rc --argjson cut "$stamp" 'fromjson? // empty | select((.timestamp // 0) > $cut)' "$archive") || return 1
   dropped=$(jq -Rr --argjson cut "$stamp" 'fromjson? // empty | select((.timestamp // 0) <= $cut) | .key' "$archive") || return 1
@@ -938,7 +944,8 @@ clear_all() {
 
 cmd_clear() {
   ensure_store
-  with_lock clear_all
+  [[ -z ${1:-} || $1 =~ ^[0-9]{1,16}$ ]] || die "clear cutoff must be a millisecond timestamp"
+  with_lock clear_all "${1:-}"
   printf '{"ok":true,"cleared":true}\n'
 }
 
@@ -1068,7 +1075,7 @@ case ${1:-} in
   watch)  shift; cmd_watch ;;
   list)   shift; cmd_list "${1:-200}" "${2:-}" ;;
   remove) shift; cmd_remove "$@" ;;
-  clear)  shift; cmd_clear ;;
+  clear)  shift; cmd_clear "${1:-}" ;;
   seen)   shift; cmd_seen "$@" ;;
   unread) shift; cmd_unread ;;
   seed)   shift; cmd_seed "${1:-25}" ;;
@@ -1085,7 +1092,7 @@ notification-center: the store behind the Omarchy notification center
   sync               catch up on anything not archived yet
   list [LIMIT] [Q]   the archive as JSON, newest first (default 200), optionally matching Q
   remove KEY...      drop the specified notifications
-  clear              delete all of them (and their images)
+  clear [MS]         delete all of them up to MS (default now), and their images
   seen [MS]          read or set when the center was last opened
   unread             how many arrived since then
   seed [N]           fill the archive with test traffic

@@ -249,3 +249,40 @@ test('any archive-setting change restarts the running watcher, even without a so
  const script=fs.readFileSync(path.join(__dirname,'../bin/notification-center'),'utf8')
  for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL'].includes(name)) assert.ok(env.includes(name),`watcher reads ${name} but the service does not pass it`)
 })
+test('Clear all uses the cutoff captured at the click, so later arrivals survive (as in Foamy)',t=>{
+ const f=fixture(t);f.run('list')
+ const now=Date.now()
+ fs.writeFileSync(path.join(f.store,'archive.jsonl'),[{key:`${now-5000}-1`,timestamp:now-5000,summary:'before'},{key:`${now-1000}-2`,timestamp:now-1000,summary:'after the click'}].map(JSON.stringify).join('\n')+'\n')
+ f.run('clear',String(now-3000))
+ assert.deepEqual(f.run('list').map(r=>r.summary),['after the click'])
+ assert.equal(fs.readFileSync(path.join(f.store,'cleared_at'),'utf8').trim(),String(now-3000))
+ // An older cutoff never lowers the clear line.
+ f.run('clear',String(now-4000));assert.equal(fs.readFileSync(path.join(f.store,'cleared_at'),'utf8').trim(),String(now-3000))
+ const bad=spawnSync(script,['clear','../x'],{env:f.env,encoding:'utf8'});assert.notEqual(bad.status,0)
+})
+test('a rewatch after a source directory appears keeps its pruned events',async t=>{
+ const f=fixture(t),late=path.join(f.dir,'late','popups'),now=Date.now()
+ const env={...f.env,NC_SOURCE:'foamy',NC_MAX_ITEMS:'2',NC_SRC_DIR:late,NC_SRC_HISTORY:path.join(f.dir,'late','history')}
+ fs.mkdirSync(f.store,{recursive:true})
+ fs.writeFileSync(path.join(f.store,'archive.jsonl'),[1,2].map(i=>JSON.stringify({key:`${now-9000+i}-${i}`,timestamp:now-9000+i,summary:'old '+i})).join('\n')+'\n')
+ const events=[],watch=spawn(script,['watch'],{env})
+ let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
+ t.after(()=>watch.kill())
+ const until=async fn=>{const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))}}
+ await until(()=>events.some(e=>e.event==='storeChanged'))
+ fs.mkdirSync(late,{recursive:true});fs.writeFileSync(path.join(late,`${now}-7.json`),JSON.stringify({timestamp:now,originalId:7,app:'Late',summary:'new'}))
+ await until(()=>events.some(e=>e.event==='rewatch'))
+ const pruned=events.filter(e=>e.event==='pruned').flatMap(e=>e.keys)
+ assert.deepEqual(pruned,[`${now-8999}-1`],'the dropped Foamy key reaches the service for releaseHistory')
+})
+test('every store process the service launches gets the resolved store environment',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ // Each Process whose command runs the store script (root.script / storeCommand).
+ const blocks=source.split(/\n  Process \{/).slice(1).map(b=>b.slice(0,b.indexOf('\n  }')))
+ const store=blocks.filter(b=>/id: (removeProc|clearProc|watchProc|listProc|seenProc|markProc)\b/.test(b)||/root\.script|storeCommand/.test(b))
+ assert.ok(store.length>=4)
+ for(const b of store) assert.match(b,/environment: root\.storeEnvironment/,b.split('\n')[1])
+ assert.ok(source.includes('Process { id: markProc; environment: root.storeEnvironment }'))
+ // Commands are built from values captured when the work was requested.
+ assert.match(source,/command: \[root\.script, "clear", cut\]/)
+})

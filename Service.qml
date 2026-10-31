@@ -292,6 +292,8 @@ Item {
 
   Process {
     id: removeProc
+    // The resolved source (tombstone source tag) and limits, like every store process.
+    environment: root.storeEnvironment
     stderr: StdioCollector { id: removeErrors }
     onExited: function(exitCode, exitStatus) {
       if (exitCode !== 0 || exitStatus !== 0) {
@@ -485,7 +487,8 @@ Item {
   Process {
     id: clearProc
     property string cut: ""
-    command: [root.script, "clear"]
+    // The cutoff captured at the click goes to the script and to Foamy alike.
+    command: [root.script, "clear", cut]
     environment: root.storeEnvironment
     onExited: function(code, status) {
       if (code === 0 && status === 0) { if (root.foamySource) root.releaseBefore(cut) }
