@@ -1,4 +1,4 @@
-// foamy-kit 0.4.0 0cdd515336db1689fa7ab6f088e650cba651b3f249aad67e4539324e17bf8d3f — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.2 4a41e34e4016ff77806d7adc747f5c645e421d12b0f673a58173aa135b6bd0ad — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -61,11 +61,16 @@ ColumnLayout {
 
   spacing: FoamyStyle.gapSmall
 
+  // The heading line is as tall as the title, like a plain section title, so
+  // the gap to what follows (a section description) is the same; the (i)
+  // button is taller and overhangs it evenly above and below.
   RowLayout {
+    id: headerRow
     visible: root.showHeader
     Layout.fillWidth: true
     spacing: FoamyStyle.gapSmall
     Text {
+      id: titleText
       visible: root.title !== ""
       text: root.title
       textFormat: Text.PlainText
@@ -76,25 +81,30 @@ ColumnLayout {
       Accessible.role: Accessible.Heading
       Layout.alignment: Qt.AlignVCenter
     }
-    FoamyAction {
-      id: infoButton
-      objectName: "foamyInfoButton"
-      implicitWidth: FoamyStyle.iconSize + FoamyStyle.gapSmall * 2 + 2
-      implicitHeight: implicitWidth
-      iconName: "info"
-      iconSize: FoamyStyle.iconSize - 2
-      focusable: root.focusable
-      hasCursor: root.buttonHasCursor
-      foreground: root.expanded ? FoamyPalette.text : FoamyPalette.secondaryText
-      color: active && (root.expanded || hasCursor || hovered || activeFocus) ? FoamyPalette.hoverFill : "transparent"
-      tooltipText: ""
-      Accessible.name: root.buttonTooltip
-      Accessible.checkable: true
-      Accessible.checked: root.expanded
-      Keys.onEscapePressed: function(event) { if (root.expanded) { root.close(); event.accepted = true } else event.accepted = false }
+    Item {
       Layout.alignment: Qt.AlignVCenter
-      onClicked: root.toggle()
-      onHoveredChanged: root.buttonHovered(hovered)
+      implicitWidth: infoButton.implicitWidth
+      implicitHeight: titleText.visible ? titleText.implicitHeight : infoButton.implicitHeight
+      FoamyAction {
+        id: infoButton
+        objectName: "foamyInfoButton"
+        anchors.centerIn: parent
+        implicitWidth: FoamyStyle.iconSize + FoamyStyle.gapSmall * 2 + 2
+        implicitHeight: implicitWidth
+        iconName: "info"
+        iconSize: FoamyStyle.iconSize - 2
+        focusable: root.focusable
+        hasCursor: root.buttonHasCursor
+        foreground: root.expanded ? FoamyPalette.text : FoamyPalette.secondaryText
+        color: active && (root.expanded || hasCursor || hovered || activeFocus) ? FoamyPalette.hoverFill : "transparent"
+        tooltipText: ""
+        Accessible.name: root.buttonTooltip
+        Accessible.checkable: true
+        Accessible.checked: root.expanded
+        Keys.onEscapePressed: function(event) { if (root.expanded) { root.close(); event.accepted = true } else event.accepted = false }
+        onClicked: root.toggle()
+        onHoveredChanged: root.buttonHovered(hovered)
+      }
     }
     Item { Layout.fillWidth: true }
   }
@@ -105,6 +115,8 @@ ColumnLayout {
     visible: root.expanded
     opacity: visible ? 1 : 0
     Layout.fillWidth: true
+    // Clear of the (i) where it overhangs the heading line.
+    Layout.topMargin: root.showHeader ? Math.max(0, Math.ceil((infoButton.height - headerRow.height) / 2)) : 0
     implicitHeight: noteText.implicitHeight + FoamyStyle.rowPadding * 2
     radius: FoamyStyle.radius
     color: FoamyPalette.noteFill

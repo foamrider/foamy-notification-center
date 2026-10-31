@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.4.0 4ef879065729b119638b636e2d145f76eeb24c59533c2d036892b1540d865a53 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.2 9d5c3cc3a8a9a2f4d7bf5a3758e20852635bf88c321b84f17d1d2e09d24e5748 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -87,6 +87,10 @@ QtObject {
   // The unit column beside numeric settings fields ("%", "°C", "ms", "min"):
   // fixed, so stacked fields line up whatever their units.
   readonly property int unitWidth: Style.space(32)
+  // The compact (row) form's unit column: just the short symbol ("%", "°C",
+  // "px"), end-aligned, so the unit ends on the row's trailing edge like a
+  // switch or a compact dropdown.
+  readonly property int unitWidthCompact: Style.space(18)
   readonly property int controlPaddingX: Style.space(10)
   readonly property int actionSize: Style.space(28)
   readonly property int iconSize: Style.space(15)

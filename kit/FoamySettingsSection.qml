@@ -1,4 +1,4 @@
-// foamy-kit 0.4.0 a8561bdc802e047b45f876efaef064db7bc6b0d6a2fa5e8d98b89247ddf188bd — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.2 8cdbb9c29ea18347ca78e37895688ee44c32c521868aaecfbe99e11f8255b073 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // A titled group of settings rows. Titles are sentence case ("Bar", "Refresh").
@@ -30,6 +30,7 @@ Column {
     text: root.info
   }
   Text {
+    objectName: "foamySectionTitle"
     visible: root.title !== "" && root.info === ""
     width: parent.width
     text: root.title
@@ -43,6 +44,7 @@ Column {
     Accessible.role: Accessible.Heading
   }
   Text {
+    objectName: "foamySectionDescription"
     visible: root.description !== ""
     width: parent.width
     text: root.description

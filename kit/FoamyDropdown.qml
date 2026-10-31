@@ -1,4 +1,4 @@
-// foamy-kit 0.4.0 cb218e27a81a1607e90dee08a6918b2b93cb78dffaa720c1c0d8d23687055ab1 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.2 b717a528267202710c196f4a67600467b292db64f643a502ea1eebb92df75095 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls
 import qs.Commons
@@ -17,6 +17,16 @@ import qs.Ui
 // caller's binding catches up, the pick is shown (`shownValue`); it gives way
 // as soon as `value` changes, the list is reopened, or after pickHoldMs. A
 // caller that wants an uncontrolled dropdown handles changed() itself.
+//
+// Compact form (`compact: true`), for short choices in settings (enums,
+// intervals; DESIGN.md "Short values use the row form"): one row like a
+// FoamyToggle row, the label (subtitle, normal weight) and an optional
+// `description` on the reading start, the dropdown on the end, sized to its widest option plus
+// the chevron (`compactNaturalWidth`), at most `compactMaxFraction` (half)
+// of the row and eliding beyond; the open list may be wider (up to the row),
+// growing toward the label. Same row height as toggle rows and compact
+// FoamyNumberFields, so their trailing controls line up. RTL mirrors it.
+//   FoamyDropdown { width: parent.width; compact: true; label: FoamyI18n.t("Mouse wheel"); value: …; options: […]; onChanged: … }
 //
 //   FoamyDropdown {
 //     label: FoamyI18n.t("Refresh every")
@@ -66,6 +76,18 @@ Item {
   property int rowHeight: FoamyStyle.controlHeight
   property int popupRowHeight: Style.spacing.popupRowHeight
   property bool showLabel: true
+  // The row form (see above). `description` shows under the label there.
+  property bool compact: false
+  property string description: ""
+  property real compactMaxFraction: 0.5
+  // Label → chevron at its widest option (plain-text width; a labelDelegate
+  // drawing something wider sets compactWidth).
+  readonly property real compactNaturalWidth: !compact ? 0 : Math.ceil(widestLabel()) + FoamyStyle.controlPaddingX
+    + Style.spacing.md + FoamyStyle.iconSize + Style.spacing.controlGap + FoamyStyle.borderWidth * 4
+  property real compactWidth: compactNaturalWidth
+  readonly property real compactTriggerWidth: Math.max(FoamyStyle.controlHeight * 2,
+    Math.min(compactWidth, Math.floor(width * compactMaxFraction)))
+  readonly property alias triggerItem: trigger
 
   // Panel-cursor flag. When true, the trigger renders the shared
   // hover-cursor state. Active Qt focus defaults to the same visuals.
@@ -101,6 +123,12 @@ Item {
   }
   function optionLabel(o) {
     return (o && typeof o === "object") ? String(o.label) : String(o)
+  }
+  function widestLabel() {
+    var widest = 0
+    for (var i = 0; i < options.length; i++)
+      widest = Math.max(widest, labelMetrics.advanceWidth(optionLabel(options[i])))
+    return Math.max(widest, labelMetrics.advanceWidth(currentLabel()))
   }
   function currentLabel() {
     for (var i = 0; i < options.length; i++) {
@@ -140,22 +168,66 @@ Item {
     }
   }
 
+  FontMetrics {
+    id: labelMetrics
+    font.family: root.fontFamily
+    font.pixelSize: FoamyStyle.font.body
+  }
+
   Timer {
     id: pickHold
     interval: root.pickHoldMs
     onTriggered: root.pickHeld = false
   }
 
-  implicitWidth: Style.spacing.dropdownWidth
-  implicitHeight: showLabel && label !== "" ? rowHeight + Style.spacing.huge : rowHeight
+  implicitWidth: compact ? FoamyStyle.popupWidth - FoamyStyle.padding * 2 : Style.spacing.dropdownWidth
+  implicitHeight: compact
+    ? Math.max(FoamyStyle.rowHeight + FoamyStyle.gapSmall, rowHeight, rowText.implicitHeight + FoamyStyle.gap * 2)
+    : (showLabel && label !== "" ? rowHeight + Style.spacing.huge : rowHeight)
+
+  // Compact: the label and description on the start, in the toggle row style.
+  Column {
+    id: rowText
+    objectName: "foamyDropdownRowText"
+    visible: root.compact
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.rightMargin: trigger.width + FoamyStyle.gapLarge
+    anchors.verticalCenter: parent.verticalCenter
+    spacing: FoamyStyle.gapTiny
+    Text {
+      visible: root.showLabel && root.label !== ""
+      width: parent.width
+      text: root.label
+      textFormat: Text.PlainText
+      horizontalAlignment: Text.AlignLeft
+      wrapMode: Text.WordWrap
+      color: root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: FoamyStyle.font.subtitle
+    }
+    Text {
+      visible: root.description !== ""
+      width: parent.width
+      text: root.description
+      textFormat: Text.PlainText
+      horizontalAlignment: Text.AlignLeft
+      wrapMode: Text.WordWrap
+      color: FoamyPalette.secondaryText
+      font.family: root.fontFamily
+      font.pixelSize: FoamyStyle.font.bodySmall
+    }
+  }
 
   Column {
-    anchors.fill: parent
+    anchors.left: parent.left
+    anchors.right: parent.right
+    y: root.compact ? Math.round((root.height - root.rowHeight) / 2) : 0
     spacing: Style.spacing.labelGap
 
     Text {
       textFormat: Text.PlainText
-      visible: root.showLabel && root.label !== ""
+      visible: !root.compact && root.showLabel && root.label !== ""
       width: parent.width
       horizontalAlignment: Text.AlignLeft
       text: root.label
@@ -167,7 +239,9 @@ Item {
 
     BorderSurface {
       id: trigger
-      width: parent.width
+      // The end of the row (mirrored in RTL); full width outside compact.
+      anchors.right: parent.right
+      width: root.compact ? root.compactTriggerWidth : parent.width
       height: root.rowHeight
       radius: root.cornerRadius
 
@@ -179,6 +253,9 @@ Item {
       borderSpec: _borderSpec
 
       activeFocusOnTab: true
+      Accessible.role: Accessible.ComboBox
+      Accessible.name: root.Accessible.name !== "" ? root.Accessible.name : root.label
+      Accessible.description: root.description
 
       HoverHandler {
         id: triggerHover
@@ -227,9 +304,14 @@ Item {
 
       Popup {
         id: popup
-        x: 0
+        // A compact trigger may be narrower than its options: the list grows
+        // toward the label (left in LTR, right in RTL), up to the row.
+        readonly property real naturalWidth: !root.compact ? 0 : Math.ceil(root.widestLabel()) + FoamyStyle.controlPaddingX * 2
+          + leftPadding + rightPadding
+        readonly property bool onRowEnd: trigger.x + trigger.width / 2 > root.width / 2
+        x: root.compact && onRowEnd ? trigger.width - width : 0
         y: trigger.height + Style.spacing.xxs
-        width: trigger.width
+        width: root.compact ? Math.max(trigger.width, Math.min(naturalWidth, root.width)) : trigger.width
         implicitHeight: Math.min(root.options.length * root.popupRowHeight + Math.max(0, root.options.length - 1) * Style.spacing.labelGap + Style.spacing.xxs,
                                  root.popupRowHeight * 8 + 7 * Style.spacing.labelGap + Style.spacing.xxs)
         padding: Style.spacing.hairline

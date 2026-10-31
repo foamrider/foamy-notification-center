@@ -1,4 +1,4 @@
-// foamy-kit 0.4.0 72ac2ceee44304b1c1602ddbffdf4290b69d31d191241f6c0dc0b813306d5e9d — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.2 2927c0c2f4281cc06f6b7b3e837fe8dd97d07c3769e2c9356541891693121aa4 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -31,7 +31,10 @@ import QtQuick.Layouts
 // label on the reading start, a narrow field sized to the longest value
 // (`to`/`from` with `decimals`; override with `compactDigits`), the unit
 // after it, all on one row; stacked compact fields line their fields and
-// units up. The error line stays under the row.
+// units up. The error line stays under the row. The row is as tall as a
+// FoamyToggle row and a compact FoamyDropdown (`rowHeight + gapSmall`), so a
+// list mixing them reads as one; `description` (compact only) goes under the
+// label as in those rows.
 //   FoamyNumberField { width: parent.width; compact: true; label: FoamyI18n.t("CPU"); unit: "%"; value: …; from: 1; to: 100; onCommitted: … }
 Item {
   id: root
@@ -43,11 +46,13 @@ Item {
   property int decimals: 0
   property string label: ""
   property string unit: ""
+  property string description: ""
   // The unit sits in a fixed column so stacked fields line up whatever their
   // units. A unitless field among fields with units: set reserveUnit. Units
   // wider than the column ("seconds") widen it: prefer short symbols, or give
-  // every field in the section the same larger unitWidth.
-  property real unitWidth: FoamyStyle.unitWidth
+  // every field in the section the same larger unitWidth. Compact: a narrow
+  // column with the unit end-aligned, so it ends on the row's trailing edge.
+  property real unitWidth: compact ? FoamyStyle.unitWidthCompact : FoamyStyle.unitWidth
   property bool reserveUnit: false
   property bool hasCursor: false
   property bool compact: false
@@ -191,23 +196,46 @@ Item {
     }
 
     RowLayout {
+      id: fieldRow
       width: parent.width
+      // Compact: the settings row height (toggle rows, compact dropdowns).
+      height: root.compact ? Math.max(FoamyStyle.rowHeight + FoamyStyle.gapSmall, rowText.implicitHeight + FoamyStyle.gap * 2, implicitHeight) : implicitHeight
       spacing: FoamyStyle.gap
 
-      // Compact: the label shares the row, in the settings row style.
-      Text {
-        visible: root.compact && root.label !== ""
+      // Compact: the label (and description) share the row, in the settings row style.
+      Column {
+        id: rowText
+        objectName: "foamyNumberRowText"
+        visible: root.compact && (root.label !== "" || root.description !== "")
         Layout.fillWidth: true
+        Layout.preferredWidth: 1
         Layout.alignment: Qt.AlignVCenter
-        text: root.label
-        textFormat: Text.PlainText
-        horizontalAlignment: Text.AlignLeft
-        elide: Text.ElideRight
-        color: FoamyPalette.text
-        font.family: FoamyStyle.fontFamily
-        font.pixelSize: FoamyStyle.font.subtitle
+        Layout.rightMargin: FoamyStyle.gapLarge - FoamyStyle.gap
+        spacing: FoamyStyle.gapTiny
+        Text {
+          visible: root.label !== ""
+          width: parent.width
+          text: root.label
+          textFormat: Text.PlainText
+          horizontalAlignment: Text.AlignLeft
+          wrapMode: Text.WordWrap
+          color: FoamyPalette.text
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.subtitle
+        }
+        Text {
+          visible: root.description !== ""
+          width: parent.width
+          text: root.description
+          textFormat: Text.PlainText
+          horizontalAlignment: Text.AlignLeft
+          wrapMode: Text.WordWrap
+          color: FoamyPalette.secondaryText
+          font.family: FoamyStyle.fontFamily
+          font.pixelSize: FoamyStyle.font.bodySmall
+        }
       }
-      Item { visible: root.compact && root.label === ""; Layout.fillWidth: true }
+      Item { visible: root.compact && root.label === "" && root.description === ""; Layout.fillWidth: true }
 
       SafeTextField {
         id: field
@@ -218,6 +246,7 @@ Item {
         maximumLength: root.compact ? Math.max(root.compactDigits, 1) + 2 : 24
         horizontalAlignment: root.compact ? Text.AlignRight : Text.AlignLeft
         Accessible.name: root.label
+        Accessible.description: root.description
         onTextEdited: { root.dirty = true; root.errorText = ""; root.lastCommitted = ""; root.hasCommitted = false }
         onPasteErrorChanged: if (pasteError !== "") root.pasteFailed(FoamyI18n.t(pasteError))
         onAccepted: root.commitEdit(false)
@@ -230,7 +259,7 @@ Item {
         visible: root.unit !== "" || root.reserveUnit
         text: root.unit
         textFormat: Text.PlainText
-        horizontalAlignment: Text.AlignLeft
+        horizontalAlignment: root.compact ? Text.AlignRight : Text.AlignLeft
         Layout.preferredWidth: Math.max(root.unitWidth, implicitWidth)
         Layout.minimumWidth: root.unitWidth
         color: FoamyPalette.secondaryText

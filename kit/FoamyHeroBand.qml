@@ -1,4 +1,4 @@
-// foamy-kit 0.4.0 7c39048a160d267178d3006f0c8663b887a4a0dfdd9eb9c43a53ab7cd454e4f2 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.2 f89145274930cdd9fe3c71970c4c4afa0d6167f4cfc163e69736373aebe4a8ea — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -56,6 +56,8 @@ Item {
 
   // --- title row (FoamyHeader) ---------------------------------------------------
   property string iconName: ""
+  property string iconGlyph: ""          // FoamyHeader.iconGlyph: a font glyph instead of iconName
+  property string iconFamily: FoamyStyle.monoFamily
   property string title: ""
   property string meta: ""
   property bool showSettings: true
@@ -332,6 +334,8 @@ Item {
     bottomPadding: 0
     showTitle: !band.centered
     iconName: band.iconName
+    iconGlyph: band.iconGlyph
+    iconFamily: band.iconFamily
     title: band.title
     meta: band.meta
     showSettings: band.showSettings

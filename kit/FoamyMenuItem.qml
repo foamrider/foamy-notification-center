@@ -1,4 +1,4 @@
-// foamy-kit 0.4.0 cfe84fbb27e412da43a3ad4652cd17d0bb071e81119a0e4565fca7fcb1dda488 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.2 cfe84fbb27e412da43a3ad4652cd17d0bb071e81119a0e4565fca7fcb1dda488 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // One entry of a FoamyMenu (and of FoamyHeader/FoamyHeroBand `menuItems`).
