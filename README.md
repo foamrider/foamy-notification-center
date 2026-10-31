@@ -234,6 +234,8 @@ the plugin directory are retained unless you remove them separately.
 
 ## License
 
+`kit/` holds shared components copied from [foamy-kit](https://github.com/foamrider/foamy-kit); edit them there, not here.
+
 [MIT](LICENSE). Based on [Omarchy Notification Center](https://github.com/jankeesvw/omarchy-notification-center).
 Omarchy and Lucide notices are in [LICENSE-OMARCHY](LICENSE-OMARCHY) and
 [LICENSE-LUCIDE](LICENSE-LUCIDE).
