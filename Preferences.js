@@ -11,7 +11,7 @@ var centerFields = [
 ]
 var popupFields = [
   {key:"offerSnoozeWhenSharing",type:"boolean",label:"Offer snooze when sharing the screen",defaultValue:true},
-  {key:"dndSilenceCritical",type:"boolean",label:"Do Not Disturb also silences critical alerts",defaultValue:false},
+  {key:"dndSilenceCritical",type:"boolean",label:"Do not disturb also silences critical alerts",defaultValue:false},
   {key:"groupDuplicates",type:"boolean",label:"Group duplicate notifications",defaultValue:true},
   {key:"useBrowserFavicons",type:"boolean",label:"Use website favicons",defaultValue:true},
   {key:"compact",type:"boolean",label:"Compact view",defaultValue:true},

@@ -8,8 +8,8 @@ import "kit"
 
 // The center's settings sections, placed inside the kit FoamySettingsPage
 // (back, "Settings", "Saving…", error line, scrolling, Esc). Center settings
-// belong to this widget; the "Foamy Notifications" section is owned by that
-// plugin and saved through its IPC (Panel.savePreference).
+// belong to this widget; the "Pop-up notifications" section is owned by Foamy
+// Notifications and saved through its IPC (Panel.savePreference).
 Column {
   id: root
   required property var settings
@@ -33,13 +33,18 @@ Column {
   }
 
   Repeater {
-    model: [{scope: "center", title: "Notification center", fields: Preferences.centerFields},
-            {scope: "popups", title: "Foamy Notifications", fields: Preferences.popupFields}]
+    // Two scopes with look-alike rows (favicons, compact, pictures): the
+    // headings and descriptions say which one each block changes.
+    model: [{scope: "center", title: "Notification center", fields: Preferences.centerFields,
+             description: "This list: how it groups and shows notifications, and how long it keeps them."},
+            {scope: "popups", title: "Pop-up notifications", fields: Preferences.popupFields,
+             description: "Notifications as they appear on screen (the Foamy Notifications plugin)."}]
     FoamySettingsSection {
       id: section
       required property var modelData
       width: root.width
       title: FoamyI18n.t(section.modelData.title)
+      description: FoamyI18n.t(section.modelData.description)
 
       Text {
         objectName: section.modelData.scope + "-availability"

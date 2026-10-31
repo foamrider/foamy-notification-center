@@ -50,13 +50,15 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
   shown on hover or keyboard selection.
 
 Settings use the same controls as Foamy Bolt and Audio. The **Notification
-Center** section changes this widget's browser grouping, favicons, compact view,
-pictures, retention (days), and maximum archive count. **Foamy Notifications**
-changes the enabled popup service's duplicate grouping, favicons, compact view,
-pictures, normal duration (seconds), and **X removes from history**. That option
+center** section changes this list's browser grouping, favicons, compact view,
+pictures, retention (days), and maximum archive count. **Pop-up notifications**
+changes the enabled Foamy Notifications service's toasts: duplicate grouping,
+favicons, compact view, pictures, normal duration (seconds), and **X removes
+from history**. Favicons, compact view and pictures appear in both sections
+because they are separate settings: one for this list, one for the toasts. That option
 is off by default; when enabled, the popup's X button removes its whole duplicate
 group from history. Right-click still hides the popup and keeps its history.
-**Do Not Disturb also silences critical alerts** is off by default. Enable it
+**Do not disturb also silences critical alerts** is off by default. Enable it
 to send new critical alerts, including Omarchy crash alerts, directly to history
 while DND is active. Transient alerts are not stored. Normal Omarchy action
 feedback and delivery outside DND are unchanged.

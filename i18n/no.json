@@ -18,7 +18,7 @@
   "Maximum notifications": "Maks antall varsler",
   "Group duplicate notifications": "Grupper like varsler",
   "X removes from history": "X fjerner fra historikken",
-  "Do Not Disturb also silences critical alerts": "Ikke forstyrr demper også kritiske varsler",
+  "Do not disturb also silences critical alerts": "Ikke forstyrr demper også kritiske varsler",
   "Normal notification duration (seconds)": "Visningstid for vanlige varsler (sekunder)",
   "Browser": "Nettleser",
   "Hostname": "Vertsnavn",
@@ -64,5 +64,8 @@
   "%1 notifications": {
     "one": "%1 varsel",
     "other": "%1 varsler"
-  }
+  },
+  "This list: how it groups and shows notifications, and how long it keeps them.": "Denne listen: hvordan den grupperer og viser varsler, og hvor lenge de beholdes.",
+  "Pop-up notifications": "Popup-varsler",
+  "Notifications as they appear on screen (the Foamy Notifications plugin).": "Varsler slik de dukker opp på skjermen (utvidelsen Foamy Notifications)."
 }

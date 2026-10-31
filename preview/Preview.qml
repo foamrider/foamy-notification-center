@@ -89,6 +89,17 @@ Item {
     }
   }
 
+  // Settings: Foamy Notifications' answer to the `preferences` IPC (the
+  // "Pop-up notifications" section), fed as soon as the panel stops asking.
+  Timer {
+    interval: 50
+    repeat: true
+    running: preview.previewState === "settings" && !panel.popupSettingsAvailable && !panel.popupSettingsLoading
+    onTriggered: panel.applyPopupPreferences(JSON.stringify({ settings: {
+      offerSnoozeWhenSharing: true, dndSilenceCritical: false, groupDuplicates: true, useBrowserFavicons: true,
+      compact: true, showImages: true, closeButtonRemovesHistory: false, normalTimeoutSec: 8 } }))
+  }
+
   onPreviewStateChanged: Qt.callLater(function() {
     if (previewState === "settings") panel.openSettings()
     else if (panel.editingSettings) panel.closeSettings()
