@@ -6,7 +6,7 @@ var centerFields = [
   {key:"useBrowserFavicons",type:"boolean",label:"Use website favicons",defaultValue:true},
   {key:"compact",type:"boolean",label:"Compact view",defaultValue:false},
   {key:"showPreview",type:"boolean",label:"Show pictures",defaultValue:true},
-  {key:"keepDays",type:"integer",label:"Keep notifications (days)",defaultValue:30,min:1,max:365},
+  {key:"keepDays",type:"integer",label:"Keep notifications",unit:"days",defaultValue:30,min:1,max:365},
   {key:"maxItems",type:"integer",label:"Maximum notifications",defaultValue:1000,min:50,max:10000}
 ]
 var popupFields = [
@@ -17,7 +17,7 @@ var popupFields = [
   {key:"compact",type:"boolean",label:"Compact view",defaultValue:true},
   {key:"showImages",type:"boolean",label:"Show pictures",defaultValue:true},
   {key:"closeButtonRemovesHistory",type:"boolean",label:"X removes from history",defaultValue:false},
-  {key:"normalTimeoutSec",type:"integer",label:"Normal notification duration (seconds)",defaultValue:8,min:1,max:120}
+  {key:"normalTimeoutSec",type:"integer",label:"Normal notification duration",unit:"s",defaultValue:8,min:1,max:120}
 ]
 function field(scope,key) {
   return (scope === "center" ? centerFields : scope === "popups" ? popupFields : []).find(function(f) { return f.key === key }) || null

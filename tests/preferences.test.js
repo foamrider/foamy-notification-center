@@ -12,9 +12,13 @@ test('settings validate integers and booleans without coercion and keep scopes s
 })
 test('saving routes widget and service settings to their existing owners', () => {
 })
-test('units belong to translated labels', () => {
-  assert.equal(I18n.text(P.field('center','keepDays').label,'nb'),'Behold varsler (dager)')
-  assert.equal(I18n.text(P.field('popups','normalTimeoutSec').label,'nb'),'Visningstid for vanlige varsler (sekunder)')
+test('number settings carry a translated unit beside a unit-free label', () => {
+  assert.equal(I18n.text(P.field('center','keepDays').label,'nb'),'Behold varsler')
+  assert.equal(I18n.text(P.field('center','keepDays').unit,'nb'),'dager')
+  assert.equal(I18n.text(P.field('popups','normalTimeoutSec').label,'nb'),'Visningstid for vanlige varsler')
+  assert.equal(I18n.text(P.field('popups','normalTimeoutSec').unit,'nb'),'s')
+  assert.equal(P.field('center','maxItems').unit, undefined)
+  for (const f of [...P.centerFields, ...P.popupFields]) assert.doesNotMatch(f.label, /\(/, f.key)
 })
 test('X history removal is a translated popup setting with a strict boolean', () => {
   assert.equal(P.value('popups',{},'closeButtonRemovesHistory'),false)

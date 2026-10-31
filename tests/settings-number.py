@@ -73,6 +73,21 @@ ShellRoot {
     f.field.focus = false
     compare(pane.saved.length, 2)                           // focus-out does not send it a third time
    }
+   function test_short_values_are_rows() {
+    // DESIGN.md "Short values use the row form": numbers and the grouping
+    // choice are rows as tall as a toggle row, ending on the same edge.
+    var days = editor(), most = findChild(pane, "center-maxItems")
+    var grouping = findChild(pane, "center-browserGrouping"), toggle = findChild(pane, "center-compact")
+    verify(days.compact && most.compact && grouping.compact)
+    compare(days.label, "Keep notifications")
+    compare(days.unit, "days")
+    compare(most.unit, "")
+    for (var row of [days, most, grouping]) {
+     compare(row.height, toggle.height)
+     compare(row.mapToItem(pane, row.width, 0).x, toggle.mapToItem(pane, toggle.width, 0).x)
+    }
+    verify(days.field.width < pane.width / 4)
+   }
    function cleanup() { pane.settings = ({ keepDays: 30, maxItems: 1000 }); pane.saved = []; wait(50) }
    onCompletedChanged: if (completed) console.log("NUMBER_SETTINGS", qtest_results.passCount, "passed", qtest_results.failCount, "failed")
   }
@@ -87,4 +102,4 @@ output = result.stdout + result.stderr
 print('\n'.join(line for line in output.splitlines() if 'NUMBER_SETTINGS' in line or 'FAIL' in line or 'Actual' in line or 'Expected' in line or 'Error' in line))
 import re
 match = re.search(r'NUMBER_SETTINGS (\d+) passed (\d+) failed', output)
-assert match and int(match.group(1)) >= 4 and match.group(2) == '0', output
+assert match and int(match.group(1)) >= 5 and match.group(2) == '0', output

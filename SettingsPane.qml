@@ -80,8 +80,11 @@ Column {
           }
           Component {
             id: choiceField
+            // Short choices: the settings row form (label on the start, dropdown on the end).
             FoamyDropdown {
               objectName: field.scope + "-" + field.modelData.key
+              width: field.width
+              compact: true
               label: FoamyI18n.t(field.modelData.label)
               value: String(root.current(field.scope, field.modelData.key))
               options: field.modelData.options.map(function(option) { return { value: option, label: root.optionLabel(option) } })
@@ -93,10 +96,14 @@ Column {
             // kit FoamyNumberField: shows the setting (following external changes
             // while not being edited), commits a valid changed number once on
             // Enter/focus-out, and Escape restores the value and stays on the page.
+            // The row form: label on the start, a narrow field and its unit on the end.
             FoamyNumberField {
               id: numberEditor
               objectName: field.scope + "-" + field.modelData.key
+              width: field.width
+              compact: true
               label: FoamyI18n.t(field.modelData.label)
+              unit: field.modelData.unit ? FoamyI18n.t(field.modelData.unit) : ""
               value: root.current(field.scope, field.modelData.key)
               from: field.modelData.min
               to: field.modelData.max
