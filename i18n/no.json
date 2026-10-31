@@ -26,7 +26,10 @@
   "Show pictures": "Vis bilder",
   "Do not disturb": "Ikke forstyrr",
   "1 unread": "1 ulest",
-  "%1 unread": "%1 uleste",
+  "%1 unread": {
+    "one": "%1 ulest",
+    "other": "%1 uleste"
+  },
   "Silenced · %1 new": "Dempet · %1 nye",
   "Notifications silenced": "Varsler er dempet",
   "1 new notification": "1 nytt varsel",
@@ -56,5 +59,16 @@
   "4 hours": "4 timer",
   "Resume snoozed notifications": "Gjenoppta midlertidig dempede varsler",
   "Offer snooze when sharing the screen": "Tilby midlertidig demping ved skjermdeling",
-  "Could not change notification snooze. Try again.": "Kunne ikke endre midlertidig varseldemping. Prøv igjen."
+  "Could not change notification snooze. Try again.": "Kunne ikke endre midlertidig varseldemping. Prøv igjen.",
+  "Notification center": "Varselsenter",
+  "%1 notifications": {
+    "one": "%1 varsel",
+    "other": "%1 varsler"
+  },
+  "unread": {
+    "one": "ulest",
+    "other": "uleste"
+  },
+  "Do not disturb is on": "Ikke forstyrr er på",
+  "Notifications are on": "Varsler er på"
 }

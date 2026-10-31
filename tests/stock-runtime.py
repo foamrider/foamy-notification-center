@@ -1,11 +1,14 @@
 import os,json,shutil,tempfile,subprocess,sys,time,signal
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
+import hostenv
 from pathlib import Path
 if '--inside' not in sys.argv:
  raise SystemExit(subprocess.run(['dbus-run-session','--','python3',__file__,'--inside',*sys.argv[1:]],timeout=25).returncode)
 custom='--custom' in sys.argv
 base=Path(tempfile.mkdtemp(prefix='foamy-stock-review-'));app=base/'app';app.mkdir();home=base/'home';home.mkdir();runtime=base/'runtime';runtime.mkdir(mode=0o700)
-for n in ['Commons','Ui']:(app/n).symlink_to(os.environ.get('OMARCHY_TEST_ROOT', '/usr/share/omarchy')+'/shell/'+n,target_is_directory=True)
-shutil.copytree(os.environ.get('OMARCHY_TEST_ROOT', '/usr/share/omarchy')+'/shell/plugins/notifications',app/'stock')
+for n in ['Commons','Ui']:(app/n).symlink_to(hostenv.root()/'shell'/n,target_is_directory=True)
+# The host's stock notifications QML (QML only; no host script is ever run).
+shutil.copytree(hostenv.root()/'shell/plugins/notifications',app/'stock')
 p=app/'stock/Service.qml';s=p.read_text();p.write_text(s[:s.rfind('  Variants {')]+'}\n')
 shutil.copytree(Path(__file__).resolve().parents[1],app/'center',ignore=shutil.ignore_patterns('.git'))
 (app/'shell.qml').write_text('''import QtQuick
@@ -23,8 +26,11 @@ dispatches=base/'dispatches'
 (bin/'hyprctl').write_text("#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\nif sys.argv[1]=='clients':print(Path("+repr(str(clients))+").read_text())\nelse:Path("+repr(str(dispatches))+").write_text('focused')\n")
 (bin/'hyprctl').chmod(0o755)
 state=base/'custom-state' if custom else home/'.local/state'
-env=dict(os.environ,HOME=str(home),XDG_CONFIG_HOME=str(home/'.config'),XDG_STATE_HOME=str(state),XDG_RUNTIME_DIR=str(runtime),PATH=str(bin)+':'+os.environ['PATH'],OMARCHY_PATH=os.environ.get('OMARCHY_TEST_ROOT', '/usr/share/omarchy'),QT_QPA_PLATFORM='offscreen',QT_QUICK_BACKEND='software',QT_QPA_PLATFORMTHEME='basic')
+env=dict(os.environ,HOME=str(home),XDG_CONFIG_HOME=str(home/'.config'),XDG_STATE_HOME=str(state),XDG_RUNTIME_DIR=str(runtime),QT_QPA_PLATFORM='offscreen',QT_QUICK_BACKEND='software',QT_QPA_PLATFORMTHEME='basic')
 for k in ['DISPLAY','WAYLAND_DISPLAY','HYPRLAND_INSTANCE_SIGNATURE']:env.pop(k,None)
+# OMARCHY_PATH exposes only the host's shell/ and default/; omarchy-* are stubs (the stock
+# focus fallback runs the omarchy-hyprland-focus-app test double, never a host script).
+env.update(hostenv.make(base,app));env['PATH']=str(bin)+':'+env['PATH']
 log=(base/'log').open('w');proc=subprocess.Popen(['qs','-p',str(app),'--no-color'],env=env,stdout=log,stderr=log,start_new_session=True)
 def ipc(t,*args):return subprocess.check_output(['qs','ipc','-n','-p',str(app),'call',t,*args],env=env,text=True,timeout=3).strip()
 def status():return json.loads(ipc('foamy.notification-center.test','state'))
@@ -46,7 +52,7 @@ try:
  ipc('notifications','toggleDnd');wait(lambda:status()['doNotDisturb'])
  ipc('notifications','toggleDnd');wait(lambda:not status()['doNotDisturb'])
  ipc('review','mark');wait(lambda:status()['unread']==0)
- ipc('review','toggle');wait(lambda:status()['doNotDisturb']);assert ipc('notifications','dndState')=='on'
+ ipc('review','toggle');wait(lambda:status()['doNotDisturb']);assert ipc('notifications','isDnd')=='on'
  send('Stock silenced');wait(lambda:status()['entries']==2)
  ipc('review','toggle');wait(lambda:not status()['doNotDisturb'])
  ipc('foamy.notification-center.test','clear');wait(lambda:status()['entries']==0)
@@ -58,3 +64,4 @@ try:
  print('PASS stock default-action fallback, failed focus retention and retry; stock: delivery, in-place replacement, dismissal history, read state, DND both ways, silenced history, clear and subsequent arrival; Foamy Notifications absent')
 finally:
  os.killpg(proc.pid,signal.SIGTERM);proc.wait(timeout=3);log.close();print('Evidence:',base)
+ hostenv.check(env,(base/'log').read_text(),(base/'omarchy-calls.log').read_text() if (base/'omarchy-calls.log').exists() else '')

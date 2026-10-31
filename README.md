@@ -40,8 +40,11 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
 - Open **More options (⋯)** to silence/allow notifications or open **Settings**.
   Right-clicking the bar icon also toggles do not disturb.
 - **More options → Snooze notifications** offers 30 minutes, 1 hour, 4 hours,
-  or resume all snoozed senders. This works with current Foamy Notifications or
-  stock Omarchy 4.5. Stock 4.0 keeps DND but has no timed snooze.
+  or resume all snoozed senders. It appears only when the daemon supports timed
+  snooze (Foamy Notifications); stock Omarchy 4.0 and 4.5-rc2 have DND but no
+  timed snooze, so the item is hidden there.
+- Scrolling to the end loads the next 500 notifications; search covers the
+  whole archive, not just the loaded part.
 - Clear all stays next to search. Stack dismissal uses the X icon,
   shown on hover or keyboard selection.
 
@@ -59,16 +62,14 @@ feedback and delivery outside DND are unchanged.
 Hostname/browser stacks belong only to
 the center; popups group exact duplicates with matching actions.
 
-Changes save immediately to each plugin's own `shell.json` entry. Popup settings
-are hidden when Foamy Notifications is unavailable. Its section instead shows
-a muted "Plugin not installed" or "Plugin not enabled" message, using the host's
-installed-plugin registry when available. Opening this panel does not enable it.
-Invalid values and save/read failures are shown in the panel.
-The popup settings helper validates values, preserves unrelated configuration
-and configuration symlinks (including Stow), serializes its own edits, and refuses
-to overwrite a concurrent file change detected before replacement. It does not
-change notification history or the enabled plugin list. The center uses Omarchy's
-existing widget settings IPC. Back or Escape returns from Settings; dropdowns
+Changes save immediately. Center settings save through the host
+(`updateEntryInline`, else `omarchy bar set`). Popup settings are read and
+saved by Foamy Notifications itself over its IPC (`preferences`,
+`setPreference`): the center never edits another plugin's `shell.json` entry.
+Popup settings are hidden when Foamy Notifications is unavailable (or too old
+to answer); its section shows a muted "Plugin not installed" or "Plugin not
+enabled" message. Opening this panel does not enable it. Invalid values and
+save/read failures are shown in the panel. Back or Escape returns from Settings; dropdowns
 and numeric editors consume Escape first to cancel their edit.
 
 Select the desktop language in **Omarchy → Setup → Language**. Existing widget `language` values are ignored.
@@ -125,7 +126,15 @@ arrival and a 120 ms fade on removal. The departed row then collapses over
 140 ms so remaining cards move smoothly. The panel height also animates.
 Message updates retain their card, and scrolling does not replay the entrance.
 
-Keeps up to 1,000 notifications for 30 days by default. Silenced notifications
+Keeps up to 1,000 notifications for 30 days by default. The archive's
+invariants (identity is the key; equal timestamps are ordered by key; removed
+notifications never return while a source still holds a copy; rows still in the
+archive always take updates; what each source can resurrect and how tombstones
+prevent it) are written at the top of `bin/notification-center` and checked by
+the randomised `tests/retention-property.test.js`. Retention is enforced
+when the watcher starts, after new arrivals that cross a limit, and hourly while
+nothing arrives; expired entries never show. **Clear all deletes** the archived
+entries and their images (and asks Foamy Notifications to drop its own copies). Silenced notifications
 remain in history; stock Omarchy exceptions still apply.
 
 The default `clickAction: "Auto"` first tries the current popup action through
@@ -162,16 +171,30 @@ identities stay stable across updates and moves into history; updates do not
 become unread again. Only changed stock rows are ingested. Malformed or oversized
 arrays report a read error rather than silently returning an empty history.
 Stock aggregate files are read-only: center removal/clear affects the center's
-archive, not stock's own history panel or visible popups. Stock 4.5 does not save
+archive, not stock's own history panel or visible popups. Notification text in
+history rows follows stock 4.5 `Markup.oneLine` (entities decoded, markup dropped). Stock 4.5 does not save
 images, so those entries generally have app icons rather than historical avatars.
 Its redacted verification-code placeholders remain redacted.
 
 Updates to an existing notification replace its archived content without creating
 another unread item. The watcher reconciles at startup and after reconnecting,
-then reports source and archive changes. With a custom `XDG_STATE_HOME`, it reads
-stock notifications from `~/.local/state/omarchy` and enabled Foamy notifications
-from `$XDG_STATE_HOME/omarchy`. The archive remains in `XDG_STATE_HOME` in both
-cases. Changing the enabled plugin in `shell.json` reconnects the source watcher. There is no periodic archive polling;
+then reports source and archive changes. Ingesting a notification costs a few
+processes (one `jq` for its fields, one `sha256sum`, the entry write), and
+retention rewrites happen only when a limit can have been crossed.
+
+### Foamy Notifications contract
+
+The two plugins talk over IPC only; neither reads the other's config, runs the
+other's scripts, or writes or deletes the other's files. The center asks
+`foamy.notifications storeInfo` where Foamy's popup/history files and its
+`handled` journal are (read-only here); without an answer it reads stock
+Omarchy (`~/.local/state/omarchy/notifications`, 4.0 files or 4.5 arrays),
+and an older Foamy without `storeInfo` is read at its 4.0 location. Dismissing
+or clearing here asks Foamy (`releaseHistory`, `releaseHistoryBefore`) to drop its
+copies; Foamy reports handled clicks with `foamy.notification-center.store
+handled` and in its journal, and tells the center to re-read with `peerChanged`.
+On 4.5 these calls are answered in-process; on 4.0 through `omarchy-shell`.
+Changing the enabled plugin in `shell.json` re-resolves the source. There is no periodic archive polling;
 opening the panel also requests a fresh list. Reads which overlap newer events
 are retried, and duplicate filesystem events skip retention work.
 
@@ -202,13 +225,16 @@ Removing the plugin leaves stock notifications running. Notification history,
 saved images, and the current do-not-disturb setting remain on disk. The plugin's
 archive and images are under `$XDG_STATE_HOME/omarchy-notification-center`
 (default `~/.local/state/omarchy-notification-center`). Stock notification files
-under `$XDG_STATE_HOME/omarchy/notifications` are also retained. Review these
+(stock under `~/.local/state/omarchy/notifications`, Foamy under
+`~/.local/state/foamy-notifications`) belong to those daemons and are retained. Review these
 directories separately if you want to delete history.
 
 Omarchy manages the plugin entry in `shell.json`. Packages and data outside
 the plugin directory are retained unless you remove them separately.
 
 ## License
+
+`kit/` holds shared components copied from [foamy-kit](https://github.com/foamrider/foamy-kit); edit them there, not here.
 
 [MIT](LICENSE). Based on [Omarchy Notification Center](https://github.com/jankeesvw/omarchy-notification-center).
 Omarchy and Lucide notices are in [LICENSE-OMARCHY](LICENSE-OMARCHY) and
@@ -223,7 +249,8 @@ Stock compatibility can be checked without touching personal history:
 
 ```sh
 node --test tests/*.test.js
-python3 -m unittest discover -s tests -p '*_test.py' -v
+python3 -I -m unittest discover -s tests -p '*_test.py' -v
+bash tests/kit-check.sh
 python3 tests/browser-ui.py
 python3 tests/settings-ui.py
 python3 tests/rtl-rows.py

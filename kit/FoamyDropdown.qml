@@ -1,11 +1,34 @@
-import ".." as PluginLanguage
-// Adapted from Omarchy Quattro Ui/Dropdown.qml; see LICENSE-OMARCHY.
+// foamy-kit 0.3.4 cb218e27a81a1607e90dee08a6918b2b93cb78dffaa720c1c0d8d23687055ab1 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Commons as Commons
-import qs.Ui as Ui
+import qs.Ui
 
+// Adapted from Omarchy Ui/Dropdown.qml (MIT, see LICENSE-OMARCHY) for the
+// foamy look: foamy radius, font and control height, RTL mirroring of the
+// option list (the popup is a separate overlay, so it does not inherit the
+// panel's mirroring), and an optional label delegate.
+//
+// `value` belongs to the caller: bind it to the setting. Selecting an option
+// emits changed(value) and never assigns `value` (upstream does, which
+// destroys the caller's binding, and since popup bodies are kept between
+// opens, later changes to the setting would stop showing). Until the
+// caller's binding catches up, the pick is shown (`shownValue`); it gives way
+// as soon as `value` changes, the list is reopened, or after pickHoldMs. A
+// caller that wants an uncontrolled dropdown handles changed() itself.
+//
+//   FoamyDropdown {
+//     label: FoamyI18n.t("Refresh every")
+//     value: String(Prefs.value(fields, root.settings, "refreshSeconds"))
+//     options: [{ value: "30", label: FoamyI18n.t("30 seconds") }, …]
+//     onChanged: function(v) { root.save("refreshSeconds", Number(v)) }
+//   }
+//
+// labelDelegate: a Component whose root declares `property string text` and
+// `property color color`; it draws the trigger and option labels (e.g. the
+// clock plugin's glyph-and-time split).
+//
 // Themed single-select dropdown. Trigger row paints with the kit's focus
 // chrome; the popup anchors below and uses Commons.Color.popups.background +
 // Commons.Color.popups.border so it reads as a panel surface rather than the
@@ -22,8 +45,6 @@ import qs.Ui as Ui
 Item {
   id: root
 
-  property real cornerRadius: Style.cornerRadius * 2
-
   property string label: ""
   property string value: ""
   property var options: []
@@ -32,9 +53,17 @@ Item {
   property color background: Commons.Color.popups.background
   property color popupBorder: Commons.Color.popups.border
   property color accent: Commons.Color.accent
+  property real cornerRadius: FoamyStyle.radius
+  property Component labelDelegate: null
+  // The option on show: the last pick while the caller's value catches up.
+  readonly property string shownValue: pickHeld ? pickedValue : value
+  property int pickHoldMs: 10000
+  property string pickedValue: ""
+  property bool pickHeld: false
+  onValueChanged: pickHeld = false
   readonly property var popupBorderSpec: Border.localOrSurfaceSpec("popups", "border", popupBorder, Commons.Color.popups.border, Style.normalBorderWidth)
-  property string fontFamily: Style.font.family
-  property int rowHeight: Style.spacing.controlHeight
+  property string fontFamily: FoamyStyle.fontFamily
+  property int rowHeight: FoamyStyle.controlHeight
   property int popupRowHeight: Style.spacing.popupRowHeight
   property bool showLabel: true
 
@@ -50,6 +79,17 @@ Item {
   // cursor.
   readonly property bool popupOpen: popup.opened
   function open() { popup.open() }
+  // Pick an option as the list does: show it and emit changed(), without
+  // touching `value`.
+  function select(v) {
+    v = String(v)
+    if (v !== value) {
+      pickedValue = v
+      pickHeld = true
+      pickHold.restart()
+    }
+    changed(v)
+  }
   function close() { popup.close() }
   function toggle() { popup.opened ? popup.close() : popup.open() }
 
@@ -64,9 +104,46 @@ Item {
   }
   function currentLabel() {
     for (var i = 0; i < options.length; i++) {
-      if (optionValue(options[i]) === value) return optionLabel(options[i])
+      if (optionValue(options[i]) === shownValue) return optionLabel(options[i])
     }
-    return value
+    return shownValue
+  }
+
+  // A label: plain text, or the caller's labelDelegate.
+  component OptionText: Item {
+    id: optionText
+    property string text: ""
+    property color color: root.foreground
+    implicitHeight: plain.implicitHeight
+    clip: true
+    Text {
+      id: plain
+      visible: !root.labelDelegate
+      anchors.fill: parent
+      text: optionText.text
+      textFormat: Text.PlainText
+      horizontalAlignment: Text.AlignLeft
+      verticalAlignment: Text.AlignVCenter
+      color: optionText.color
+      font.family: root.fontFamily
+      font.pixelSize: FoamyStyle.font.body
+      elide: Text.ElideRight
+    }
+    Loader {
+      anchors.fill: parent
+      active: !!root.labelDelegate
+      sourceComponent: root.labelDelegate
+      onLoaded: {
+        item.text = Qt.binding(function() { return optionText.text })
+        item.color = Qt.binding(function() { return optionText.color })
+      }
+    }
+  }
+
+  Timer {
+    id: pickHold
+    interval: root.pickHoldMs
+    onTriggered: root.pickHeld = false
   }
 
   implicitWidth: Style.spacing.dropdownWidth
@@ -78,17 +155,17 @@ Item {
 
     Text {
       textFormat: Text.PlainText
+      visible: root.showLabel && root.label !== ""
       width: parent.width
       horizontalAlignment: Text.AlignLeft
-      visible: root.showLabel && root.label !== ""
       text: root.label
-      color: Qt.darker(root.foreground, 1.4)
+      color: FoamyPalette.secondaryText
       font.family: root.fontFamily
-      font.pixelSize: Style.font.caption
+      font.pixelSize: FoamyStyle.font.bodySmall
       font.bold: true
     }
 
-    Ui.BorderSurface {
+    BorderSurface {
       id: trigger
       width: parent.width
       height: root.rowHeight
@@ -118,29 +195,25 @@ Item {
         }
       }
 
-      Text {
-        textFormat: Text.PlainText
+      OptionText {
         anchors.left: parent.left
         anchors.right: chevron.left
         anchors.verticalCenter: parent.verticalCenter
-        anchors.leftMargin: trigger.borderLeft + Style.spacing.controlPaddingX
+        anchors.leftMargin: trigger.borderLeft + FoamyStyle.controlPaddingX
         anchors.rightMargin: trigger.borderRight + Style.spacing.md
         text: root.currentLabel()
         color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        elide: Text.ElideRight
       }
 
-      Text {
+      FoamyIcon {
         id: chevron
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         anchors.rightMargin: trigger.borderRight + Style.spacing.controlGap
-        text: "󰅀"
-        color: Qt.darker(root.foreground, 1.2)
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
+        width: FoamyStyle.iconSize
+        height: width
+        name: "chevron-down"
+        color: FoamyPalette.secondaryText
       }
 
       MouseArea {
@@ -166,22 +239,23 @@ Item {
         bottomPadding: Border.bottom(root.popupBorderSpec) + Style.spacing.hairline
         focus: true
 
-        background: Ui.BorderSurface {
+        background: BorderSurface {
           color: root.background
           borderSpec: root.popupBorderSpec
           radius: root.cornerRadius
         }
 
         onOpened: {
+          root.pickHeld = false
           optionList.currentIndex = Math.max(0, optionList.indexOfValue(root.value))
           optionList.forceActiveFocus()
         }
 
         contentItem: ListView {
           id: optionList
-          LayoutMirroring.enabled: PluginLanguage.FoamyI18n.rightToLeft
-          LayoutMirroring.childrenInherit: true
           spacing: Style.spacing.labelGap
+          LayoutMirroring.enabled: FoamyI18n.rightToLeft
+          LayoutMirroring.childrenInherit: true
 
           Keys.priority: Keys.BeforeItem
           Keys.onPressed: function(event) {
@@ -211,7 +285,7 @@ Item {
           function selectCurrent() {
             if (currentIndex < 0 || currentIndex >= root.options.length) return
             var v = root.optionValue(root.options[currentIndex])
-            root.changed(v)
+            root.select(v)
             popup.close()
           }
 
@@ -220,24 +294,19 @@ Item {
             required property int index
             width: optionList.width
             height: root.popupRowHeight
-            radius: Math.max(0, root.cornerRadius - popup.leftPadding)
+            radius: FoamyStyle.innerRadius(root.cornerRadius, popup.leftPadding)
             color: index === optionList.currentIndex
               ? Style.hoverFillFor(root.foreground, root.accent)
               : "transparent"
 
-            Text {
-              horizontalAlignment: Text.AlignLeft
-              textFormat: Text.PlainText
+            OptionText {
               anchors.left: parent.left
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.spacing.controlPaddingX
-              anchors.rightMargin: Style.spacing.controlPaddingX
+              anchors.leftMargin: FoamyStyle.controlPaddingX
+              anchors.rightMargin: FoamyStyle.controlPaddingX
               text: root.optionLabel(modelData)
               color: index === optionList.currentIndex ? Style.hoverStateColor(root.foreground, root.accent) : root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-              elide: Text.ElideRight
             }
 
             MouseArea {

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "../kit"
 
 ListView {
   id: root
@@ -37,8 +38,8 @@ ListView {
   add: Transition {
     enabled: root.model === rowModel && root.animateChanges
     ParallelAnimation {
-      NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 180; easing.type: Easing.OutCubic }
-      NumberAnimation { property: "entranceOffset"; from: root.entranceDistance; to: 0; duration: 180; easing.type: Easing.OutCubic }
+      NumberAnimation { property: "opacity"; from: 0; to: 1; duration: FoamyMotion.duration(180); easing.type: Easing.OutCubic }
+      NumberAnimation { property: "entranceOffset"; from: root.entranceDistance; to: 0; duration: FoamyMotion.duration(180); easing.type: Easing.OutCubic }
     }
   }
   populate: add
@@ -46,7 +47,7 @@ ListView {
   // transition can leave Qt's visible range and content-size estimate stale.
   moveDisplaced: Transition {
     enabled: root.model === rowModel && root.animateChanges
-    NumberAnimation { property: "y"; duration: 140; easing.type: Easing.OutCubic }
+    NumberAnimation { property: "y"; duration: FoamyMotion.duration(140); easing.type: Easing.OutCubic }
   }
 
   property real wheelStep: 96
@@ -77,7 +78,7 @@ ListView {
     id: wheelMotion
     target: root
     property: "contentY"
-    duration: 120
+    duration: FoamyMotion.duration(120)
     easing.type: Easing.OutCubic
   }
 

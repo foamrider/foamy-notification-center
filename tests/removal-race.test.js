@@ -13,10 +13,12 @@ function service() {
     pendingRemovalKeys: [], activeRemovalKeys: [], removalError: "",
     removeProc: { running: false, command: [] },
     entriesReset() {}, entryAdded() {}, storeCommand(args) { return args },
-    Quickshell: { execDetached() {} }
+    Quickshell: { execDetached() {} },
+    quietRemovalKeys: {}, foamySource: true, peer: { call() {} },
+    searchQuery: "", listLimit: 500, hasMore: false, unreadSource: [], reloadArchive: { restart() {} }
   })
   context.root = context
-  for (const name of ["remove", "removeMany", "startRemoval", "absorb", "visibleEntries"]) {
+  for (const name of ["remove", "removeMany", "startRemoval", "absorb", "absorbUnread", "visibleEntries"]) {
     const start = source.indexOf(`  function ${name}(`)
     assert.notEqual(start, -1)
     const end = source.indexOf("\n  }", start) + 4
@@ -94,18 +96,126 @@ test("failed dismissal releases only failed tombstones and reloads for retry", (
   assert.deepEqual(Array.from(state.removeProc.command), ["remove", failed.key])
 })
 
-test("callback cleanup runs only after durable dismissal and batches exact keys", () => {
+test("callback cleanup runs only after durable dismissal and batches exact keys, one batch at a time", () => {
  const state=service(),calls=[]
- state.Quickshell.execDetached=argv=>calls.push(Array.from(argv))
- const start=source.indexOf("  function releaseNotificationActions(")
- vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
- const keys=Array.from({length:101},(_,i)=>`${i+1}-1`)
+ let answer=true
+ state.releasePending=[];state.releaseInFlight=[];state.releaseLimit=50000;state.releaseRetry={running:false,restart(){this.running=true}}
+ // Contract v2: Foamy is asked over its IPC (FoamyPeerIpc), never by deleting its files.
+ state.peer.call=(target,method,args,done)=>{calls.push([target,method,...args]);done(answer,answer?'ok':'')}
+ for(const name of ["releaseNotificationActions","pumpReleases"]) {
+  const start=source.indexOf(`  function ${name}(`)
+  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ }
+ const keys=Array.from({length:1001},(_,i)=>`${i+1}-1`)
  state.releaseNotificationActions(keys)
- assert.equal(calls.length,2)
- assert.equal(calls[0][4].split(',').length,100)
- assert.deepEqual(calls[1],["omarchy-shell","-q","foamy.notifications","releaseHistory","101-1"])
+ // All 11 batches go out (more than FoamyPeerIpc's 8 concurrent CLI calls), in order.
+ assert.equal(calls.length,11)
+ assert.equal(calls[0][2].split(',').length,100)
+ assert.deepEqual(calls[10],["foamy.notifications","releaseHistory","1001-1"])
+ // A failed batch stays queued for a retry instead of being dropped.
+ answer=false;state.releaseNotificationActions(['5-5'])
+ assert.equal(state.releasePending.length,1);assert.equal(state.releaseRetry.running,true)
+ answer=true;state.releaseRetry.running=false;state.pumpReleases()
+ assert.equal(state.releasePending.length,0)
  state.activeRemovalKeys=['100-1'];state.removeErrors={text:''};state.exitCode=0;state.exitStatus=0
  const handler=source.indexOf("    onExited: function(exitCode, exitStatus) {",source.indexOf("    id: removeProc"))
+ const before=calls.length
  vm.runInContext(source.slice(source.indexOf("{",handler)+1,source.indexOf("\n    }",handler)),state)
- assert.equal(calls[2][4],"100-1")
+ assert.equal(calls[before][2],"100-1")
+ // Keys Foamy itself reported as handled are not sent back to it.
+ state.quietRemovalKeys={'100-2':true};state.activeRemovalKeys=['100-2']
+ vm.runInContext(source.slice(source.indexOf("{",handler)+1,source.indexOf("\n    }",handler)),state)
+ assert.equal(calls.length,before+1)
+ state.foamySource=false;state.releaseNotificationActions(['1-1']);assert.equal(calls.length,before+1)
+})
+
+test("a queued Clear all keeps its own click-time cutoff (requests at 1000 and 2000, first clear ends at 3000)", () => {
+ const state=service(),started=[]
+ let clock=1000
+ const FakeDate={now:()=>clock}
+ state.Date=FakeDate
+ state.clearProc={running:false,cut:"",set running_(v){}}
+ state.clearPendingCut="";state.unreadSource=[]
+ // clearProc starts when running is set; record each start's cutoff.
+ Object.defineProperty(state.clearProc,"running",{get(){return this._r||false},set(v){this._r=v;if(v)started.push(this.cut)}})
+ const start=source.indexOf("  function clearAll(")
+ vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ state.clearAll()                       // click at 1000
+ clock=2000;state.clearAll()            // click at 2000 while the first runs
+ assert.deepEqual(started,["1000"]);assert.equal(state.clearPendingCut,"2000")
+ clock=3000                             // the first clear exits at 3000
+ const exit=source.indexOf("    onExited: function(code, status) {",source.indexOf("    id: clearProc"))
+ const body=source.slice(source.indexOf("{",exit)+1,source.indexOf("\n    }",exit))
+ const proc=state.clearProc;proc._r=false
+ const ctx=vm.createContext({code:0,status:0,Date:FakeDate,String,root:state,peer:{call(){}}})
+ Object.defineProperty(ctx,"cut",{get(){return proc.cut},set(v){proc.cut=v}})
+ Object.defineProperty(ctx,"running",{get(){return proc.running},set(v){proc.running=v}})
+ state.foamySource=false;state.load=()=>{}
+ vm.runInContext("(function(){"+body+"})()",ctx)
+ assert.deepEqual(started,["1000","2000"],"the queued clear uses its click-time cutoff, not the exit time")
+ assert.equal(state.clearPendingCut,"")
+})
+
+test("single-key releases are compacted and the in-flight batch is never lost", () => {
+ const state=service(),calls=[],answers=[]
+ state.releasePending=[];state.releaseInFlight=[];state.releaseLimit=50000;state.releaseRetry={running:false,restart(){this.running=true}}
+ // Foamy answers later: callbacks are held until released below.
+ state.peer.call=(target,method,args,done)=>{calls.push(args[0].split(","));answers.push(done)}
+ for(const name of ["releaseNotificationActions","pumpReleases"]) {
+  const start=source.indexOf(`  function ${name}(`)
+  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ }
+ for(let i=1;i<=101;i++) state.releaseNotificationActions([`${i}-1`])
+ assert.equal(calls.length,1);assert.deepEqual(calls[0],["1-1"])
+ answers.shift()(true,"ok")
+ // The other 100 single-key requests go out as one full batch, nothing skipped.
+ assert.deepEqual(calls[1],Array.from({length:100},(_,i)=>`${i+2}-1`))
+ answers.shift()(false,"")
+ assert.equal(state.releasePending.length,100,"a failed batch stays pending")
+ state.releaseRetry.running=false;state.pumpReleases();answers.shift()(true,"ok")
+ assert.equal(state.releasePending.length,0)
+})
+
+test("the unread badge stays current while a search filters the list", () => {
+ const state=service()
+ state.searchQuery="needle";state.unreadSource=[{key:"1-1",timestamp:1}];state.entries=[]
+ for(const name of ["absorbUnread"]) {
+  const start=source.indexOf(`  function ${name}(`)
+  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ }
+ state.absorb(JSON.stringify({key:"2-2",timestamp:2,urgency:2,summary:"critical"}))
+ assert.deepEqual(Array.from(state.unreadSource,r=>r.key),["2-2","1-1"])
+ state.removeMany(["1-1"])
+ assert.deepEqual(Array.from(state.unreadSource,r=>r.key),["2-2"])
+})
+
+test("Clear all's release to Foamy is retried while Foamy answers busy", () => {
+ const state=service(),calls=[]
+ let answer="busy"
+ state.releaseBeforeCut=0;state.releaseBeforeBusy=false;state.releaseRetry={running:false,restart(){this.running=true}}
+ state.peer.call=(target,method,args,done)=>{calls.push(args[0]);done(true,answer)}
+ for(const name of ["releaseBefore","pumpReleaseBefore"]) {
+  const start=source.indexOf(`  function ${name}(`)
+  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ }
+ state.releaseBefore("1000")
+ assert.deepEqual(calls,["1000"]);assert.equal(state.releaseRetry.running,true);assert.equal(state.releaseBeforeCut,1000)
+ answer="ok";state.releaseRetry.running=false;state.releaseBefore("900")
+ assert.deepEqual(calls,["1000","1000"],"the newest cutoff is kept");assert.equal(state.releaseBeforeCut,0)
+})
+
+test("a newer Clear all cutoff that arrives during an in-flight release is sent afterwards", () => {
+ const state=service(),calls=[],answers=[]
+ state.releaseBeforeCut=0;state.releaseBeforeBusy=false;state.releaseRetry={running:false,restart(){this.running=true}}
+ state.peer.call=(target,method,args,done)=>{calls.push(args[0]);answers.push(done)}
+ for(const name of ["releaseBefore","pumpReleaseBefore"]) {
+  const start=source.indexOf(`  function ${name}(`)
+  vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+ }
+ state.releaseBefore("1000");state.releaseBefore("2000")
+ assert.deepEqual(calls,["1000"])
+ answers.shift()(true,"ok")
+ assert.deepEqual(calls,["1000","2000"])
+ answers.shift()(true,"ok")
+ assert.equal(state.releaseBeforeCut,0)
 })

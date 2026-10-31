@@ -35,7 +35,7 @@ test("external refresh waits for an active toggle",()=>{
   assert.equal(state.dndProc.command[2],"toggleDnd")
   state.dndProc.running=false
   state.refreshDnd()
-  assert.equal(state.dndProc.command[2],"dndState")
+  assert.equal(state.dndProc.command[2],"isDnd")
 })
 test("failed or malformed responses preserve the last state and surface a retry error",()=>{
   const state=service()

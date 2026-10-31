@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "foamy.notification-center",
   "name": "Foamy Notification Center",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "foamrider",
   "description": "Notification history with app stacks, search, and do not disturb",
   "homepage": "https://github.com/foamrider/foamy-notification-center",

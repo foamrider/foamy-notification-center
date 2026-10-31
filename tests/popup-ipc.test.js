@@ -21,15 +21,16 @@ test('public handled-click IPC accepts only bounded exact notification keys',()=
   assert.deepEqual(h.calls,[['1000-1','1001-2']])
 })
 
-test('handled acknowledgement updates only memory after durable removal',()=>{
+test('handled acknowledgement removes durably without calling Foamy back',()=>{
  const start=source.indexOf('    function handled(keysCsv: string): string {')
  const end=source.indexOf('\n    }',start)+6
- const context=vm.createContext({root:{removedKeys:{},entries:[{key:'1000-1'},{key:'1001-2'}],visibleEntries(rows){return rows.filter(r=>!this.removedKeys[r.key])},entriesReset(){}}})
+ const calls=[]
+ const context=vm.createContext({root:{removeMany(keys,quiet){calls.push([Array.from(keys),quiet])}}})
  vm.runInContext(source.slice(start,end).replace('(keysCsv: string): string','(keysCsv)'),context)
  assert.match(context.handled('../bad'),/^error:/)
+ assert.match(context.handled('stock-abc'),/^error:/)
  assert.equal(context.handled('1000-1'),'ok')
- assert.deepEqual(Array.from(context.root.entries,r=>r.key),['1001-2'])
- assert.equal(context.handled('1000-1'),'ok')
+ assert.deepEqual(calls,[[['1000-1'],true]])
 })
 
 test('store commands cannot shadow panel open and close controls',()=>{

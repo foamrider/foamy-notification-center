@@ -1,10 +1,12 @@
-import ".." as PluginLanguage
 import QtQuick
 import QtQuick.Effects
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
-import "../Translations.js" as Translations
+// Not "Translations": 4.5 qs.Commons has a Translations type, and the clash breaks loading.
+import "../Translations.js" as CenterText
+import "../kit"
+import "../Markup.js" as Markup
 
 Item {
   id: root
@@ -22,7 +24,7 @@ Item {
   property double now: 0
   property string language: "en"
   property color foreground: Commons.Color.foreground
-  property string fontFamily: Style.font.family
+  property string fontFamily: FoamyStyle.fontFamily
   signal clicked()
   signal removeRequested()
   signal pointerUsed()
@@ -34,8 +36,9 @@ Item {
   implicitHeight: cardHeight + (last ? Style.space(layered ? 24 : 14) : 0)
 
   // Sender-controlled markup must never load resources from notification text.
+  // Stock 4.5 Markup.oneLine semantics: entities decoded, markup dropped, literal text kept.
   function plain(value) {
-    return String(value || "").replace(/<img[^>]*>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+    return Markup.oneLine(value)
   }
 
   Rectangle {
@@ -44,7 +47,7 @@ Item {
     y: root.cardHeight - Style.space(6)
     width: parent.width - Style.space(28)
     height: Style.space(16)
-    radius: Style.cornerRadius * 2
+    radius: FoamyStyle.radius
     color: Commons.Color.popups.background
     border.width: 1
     border.color: Util.alpha(root.foreground, 0.18)
@@ -55,7 +58,7 @@ Item {
     y: root.cardHeight - Style.space(8)
     width: parent.width - Style.space(14)
     height: Style.space(13)
-    radius: Style.cornerRadius * 2
+    radius: FoamyStyle.radius
     color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, 0.04))
     border.width: 1
     border.color: Util.alpha(root.foreground, 0.18)
@@ -87,7 +90,7 @@ Item {
       color: "transparent"
       border.width: root.hasCursor && !root.dismissHasCursor ? 1 : 0
       border.color: Commons.Color.accent
-      radius: Style.cornerRadius * 2
+      radius: FoamyStyle.radius
     }
     MouseArea {
       anchors.fill: parent
@@ -114,10 +117,10 @@ Item {
         width: parent.width
         elide: Text.ElideRight
         textFormat: Text.PlainText
-        text: Translations.relativeTime(Number(root.entry.timestamp || 0), root.now, PluginLanguage.FoamyI18n.t)
+        text: CenterText.relativeTime(Number(root.entry.timestamp || 0), root.now, FoamyI18n.t)
         color: Util.alpha(root.foreground, 0.6)
         font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
+        font.pixelSize: FoamyStyle.font.caption
       }
       Text {
         width: parent.width
@@ -127,7 +130,7 @@ Item {
         maximumLineCount: 1
         color: root.foreground
         font.family: root.fontFamily
-        font.pixelSize: Style.font.body
+        font.pixelSize: FoamyStyle.font.body
       }
       Text {
         width: parent.width
@@ -139,7 +142,7 @@ Item {
         maximumLineCount: 2
         color: Util.alpha(root.foreground, 0.75)
         font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
+        font.pixelSize: FoamyStyle.font.caption
       }
       Image {
         id: previewImage
@@ -164,12 +167,12 @@ Item {
       id: previewMask
       width: previewImage.width
       height: previewImage.height
-      radius: Style.cornerRadius * 2
+      radius: FoamyStyle.radius
       color: "black"
       visible: false
       layer.enabled: true
     }
-    NotificationAction {
+    FoamyAction {
       id: dismiss
       objectName: "notificationRowDismiss"
       anchors.right: parent.right
@@ -177,11 +180,8 @@ Item {
       y: root.verticalPadding - Style.space(3)
       visible: root.expanded || root.dismissHasCursor
       opacity: hover.hovered || root.hasCursor ? 1 : 0
-      iconName: "close"
-      size: Style.space(26)
-      iconSize: Style.space(14)
-      focusable: false
-      tooltipText: PluginLanguage.FoamyI18n.t("Dismiss notification")
+      iconName: "x"
+      tooltipText: FoamyI18n.t("Dismiss notification")
       foreground: root.foreground
       hasCursor: root.dismissHasCursor
       onClicked: { root.pointerUsed(); root.removeRequested() }

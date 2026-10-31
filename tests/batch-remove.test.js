@@ -25,7 +25,8 @@ test("batch removal preserves other and newer entries and rejects invalid keys b
     assert.equal(fs.readFileSync(archive, "utf8"), before)
     assert.equal(run("remove", records[0].key, records[1].key).status, 0)
     assert.deepEqual(JSON.parse(run("list").stdout).map(r => r.key), [records[2].key])
-    assert.equal(fs.existsSync(path.join(source, records[0].key + ".json")), false)
+    // The source's files are never deleted here (contract v2: its daemon is asked over IPC).
+    assert.equal(fs.existsSync(path.join(source, records[0].key + ".json")), true)
     assert.equal(fs.existsSync(path.join(source, records[2].key + ".json")), true)
     assert.equal(run("remove", records[0].key, records[1].key).status, 0)
   } finally { fs.rmSync(temp, { recursive: true, force: true }) }

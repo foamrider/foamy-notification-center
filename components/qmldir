@@ -1,0 +1,5 @@
+BrowserIcons 1.0 BrowserIcons.qml
+NotificationList 1.0 NotificationList.qml
+NotificationRow 1.0 NotificationRow.qml
+NotificationStackHeader 1.0 NotificationStackHeader.qml
+StackFrame 1.0 StackFrame.qml
