@@ -120,7 +120,7 @@ Item {
         text: CenterText.relativeTime(Number(root.entry.timestamp || 0), root.now, FoamyI18n.t)
         color: Util.alpha(root.foreground, 0.6)
         font.family: root.fontFamily
-        font.pixelSize: FoamyStyle.font.caption
+        font.pixelSize: FoamyStyle.font.bodySmall
       }
       Text {
         width: parent.width
@@ -130,7 +130,8 @@ Item {
         maximumLineCount: 1
         color: root.foreground
         font.family: root.fontFamily
-        font.pixelSize: FoamyStyle.font.body
+        font.pixelSize: FoamyStyle.font.title
+        font.weight: Font.DemiBold
       }
       Text {
         width: parent.width
@@ -142,7 +143,7 @@ Item {
         maximumLineCount: 2
         color: Util.alpha(root.foreground, 0.75)
         font.family: root.fontFamily
-        font.pixelSize: FoamyStyle.font.caption
+        font.pixelSize: FoamyStyle.font.title
       }
       Image {
         id: previewImage

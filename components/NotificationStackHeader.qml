@@ -108,7 +108,7 @@ Item {
     elide: Text.ElideRight
     color: root.foreground
     font.family: root.fontFamily
-    font.pixelSize: FoamyStyle.font.caption
+    font.pixelSize: FoamyStyle.font.body
   }
   Row {
     id: metadata
@@ -129,7 +129,7 @@ Item {
       text: FoamyI18n.number(root.group.entries.length) + " · " + CenterText.relativeTime(root.group.timestamp, root.now, FoamyI18n.t)
       color: Util.alpha(root.foreground, 0.65)
       font.family: root.fontFamily
-      font.pixelSize: FoamyStyle.font.caption
+      font.pixelSize: FoamyStyle.font.bodySmall
     }
   }
   FoamyAction {
