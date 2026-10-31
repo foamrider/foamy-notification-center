@@ -50,7 +50,8 @@ ListView {
     NumberAnimation { property: "y"; duration: FoamyMotion.duration(140); easing.type: Easing.OutCubic }
   }
 
-  property real wheelStep: 96
+  // One wheel notch (kit FoamyWheelScroll: 3 rows, however the notch is split).
+  property alias wheelStep: wheel.notch
   property real scrollbarWidth: 6
   property real scrollbarInset: 2
 
@@ -59,40 +60,17 @@ ListView {
   flickableDirection: Flickable.VerticalFlick
   interactive: contentHeight > height
 
+  // Scroll by `delta` px; smooth glides there (and accumulates).
   function scrollBy(delta, smooth) {
     if (!delta || !interactive) return
-    // Accumulate fast wheel ticks against their destination, not an unfinished frame.
-    var start = wheelMotion.running ? wheelMotion.to : contentY
-    wheelMotion.stop()
-    var end = Math.max(originY, Math.min(originY + Math.max(0, contentHeight - height), start + delta))
-    if (smooth) {
-      wheelMotion.from = contentY
-      wheelMotion.to = end
-      wheelMotion.start()
-    } else contentY = end
+    wheel.scrollBy(delta, !!smooth)
   }
+  function stopScrolling() { wheel.scrollTo(contentY, false) }
 
-  onDraggingChanged: if (dragging) wheelMotion.stop()
+  onDraggingChanged: if (dragging) stopScrolling()
 
-  NumberAnimation {
-    id: wheelMotion
-    target: root
-    property: "contentY"
-    duration: FoamyMotion.duration(120)
-    easing.type: Easing.OutCubic
-  }
-
-  WheelHandler {
-    target: null
-    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-    onWheel: function(event) {
-      var pixels = event.pixelDelta.y
-      var angle = event.angleDelta.y
-      if (!pixels && !angle) return
-      root.scrollBy(pixels ? -pixels : -angle / 120 * root.wheelStep, !pixels)
-      event.accepted = true
-    }
-  }
+  // Normal wheel and touchpad scrolling (high-resolution wheels included).
+  FoamyWheelScroll { id: wheel; target: root }
 
   ScrollBar.vertical: ScrollBar {
     width: root.scrollbarWidth
@@ -101,6 +79,6 @@ ListView {
     anchors.right: parent.right
     anchors.rightMargin: root.scrollbarInset
     policy: ScrollBar.AsNeeded
-    onPressedChanged: if (pressed) wheelMotion.stop()
+    onPressedChanged: if (pressed) root.stopScrolling()
   }
 }

@@ -758,7 +758,6 @@ Ui.Panel {
               width: parent.width
               // Construct only visible rows when restoring the detached model.
               cacheBuffer: 0
-              wheelStep: Style.space(96)
               // Paging (root.pageIfAtEnd): reaching the end, or content that
               // already fits, loads the next page.
               onAtYEndChanged: Qt.callLater(root.pageIfAtEnd)
