@@ -1,4 +1,4 @@
-// foamy-kit 0.3.4 e8ac5bbe9a79ea4202f637017e7eb9e438f41bbfcf43a5c91f372e8190af7d91 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.5 e8ac5bbe9a79ea4202f637017e7eb9e438f41bbfcf43a5c91f372e8190af7d91 — do not edit; change foamy-kit and run sync
 import QtQuick
 import Quickshell.Io
 import "FoamyPrefs.js" as Prefs

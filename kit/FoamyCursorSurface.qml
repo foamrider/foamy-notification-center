@@ -1,4 +1,4 @@
-// foamy-kit 0.3.4 322db103ce6d6476aac66858d421c75258365a5a2017188906cce61c8b1610ee — do not edit; change foamy-kit and run sync
+// foamy-kit 0.3.5 322db103ce6d6476aac66858d421c75258365a5a2017188906cce61c8b1610ee — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Ui
 
