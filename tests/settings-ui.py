@@ -44,6 +44,8 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Commons as Commons
 import "plugin" as Plugin
+import "plugin/Preferences.js" as PluginPreferences
+import "plugin/kit" as Kit
 ShellRoot {
   id: root
   QtObject {
@@ -81,7 +83,40 @@ ShellRoot {
     onFileChanged: reload()
     onLoaded: root.config = JSON.parse(text())
   }
-  // Model the host's widget endpoint; service edits use the real Python helper.
+  // Model Foamy Notifications' preference endpoint (Service.qml FoamyIpc): it
+  // answers only while enabled in shell.json, saves to its own plugins[] entry
+  // and then pokes the center's store ("saving", then peerChanged).
+  IpcHandler {
+    target: "foamy.notifications"
+    function entry() {
+      var config = JSON.parse(configFile.text())
+      if ((config.disabledPlugins || []).indexOf("foamy.notifications") >= 0) return null
+      return (config.plugins || []).filter(function(p) { return p.id === "foamy.notifications" })[0] || null
+    }
+    function preferences(): string {
+      var stored = entry()
+      if (!stored) return ""
+      var values = {}
+      PluginPreferences.popupFields.forEach(function(field) {
+        values[field.key] = PluginPreferences.value("popups", stored, field.key)
+      })
+      return JSON.stringify({settings: values, error: "", saving: false, saveError: ""})
+    }
+    function setPreference(key: string, valueJson: string): string {
+      var value
+      try { value = JSON.parse(String(valueJson).trim()) } catch (e) { return "error: invalid value" }
+      if (!entry() || !PluginPreferences.valid("popups", key, value)) return "error: invalid value"
+      var next = JSON.parse(configFile.text())
+      next.plugins.filter(function(p) { return p.id === "foamy.notifications" })[0][key] = value
+      configFile.setText(JSON.stringify(next))
+      root.config = next
+      peerSaved.restart()
+      return "saving"
+    }
+  }
+  // The real save runs a helper process, so the poke comes after "saving" is read.
+  Timer { id: peerSaved; interval: 150; onTriggered: store.peerPreferencesChanged() }
+  // Model the host's widget endpoint.
   IpcHandler {
     target: "shell"
     function setBarWidget(id: string, key: string, valueJson: string, selectorJson: string): string {
@@ -148,14 +183,15 @@ ShellRoot {
       function init() { panel.open(); tryCompare(panel, "opened", true); wait(200) }
       function cleanup() { panel.close(); wait(200) }
       function test_00_direction() {
-        Plugin.FoamyI18n.backend = translator;
+        Kit.FoamyI18n.backend = translator;
         for (var direction = 0; direction < 2; direction++) {
           translator.rightToLeft = !!direction;
           translator.language = direction ? "ar" : "en";
           panel.openSettings(); wait(150);
           var pane = control("notificationSettingsPane");
           compare(pane.LayoutMirroring.enabled, !!direction);
-          verify(direction ? control("settingsBack").x > pane.width / 2 : control("settingsBack").x < pane.width / 2);
+          var backButton = pane.backTarget, backX = backButton.mapToItem(pane, 0, 0).x;
+          verify(direction ? backX > pane.width / 2 : backX < pane.width / 2);
           capture(pane, direction ? "rtl-settings" : "ltr-settings");
           panel.closeSettings(); wait(100);
           panel.moveCursor(direction ? -1 : 1, 0); compare(panel.cursorDismiss, true);
@@ -167,7 +203,7 @@ ShellRoot {
           capture(search.parent.parent, direction ? "rtl-search" : "ltr-search");
           panel.endSearch(); wait(200);
         }
-        Plugin.FoamyI18n.backend = null;
+        Kit.FoamyI18n.backend = null;
       }
       function test_00_snooze_menu() {
         // The header's kit ⋯ menu: Snooze is a submenu (opens in place, Back row first).
@@ -265,7 +301,7 @@ ShellRoot {
         Commons.Color.background = "#eff1f5"; Commons.Color.foreground = "#4c4f69"; Commons.Color.accent = "#1e66f5"
         wait(200); capture(card, "settings-narrow-light")
         panel.settings = Qt.binding(function() { return root.config.bar.layout.right[0] })
-        var back = control("settingsBack")
+        var back = pane.backTarget
         back.forceActiveFocus(); keyClick(Qt.Key_Escape)
         tryCompare(panel, "editingSettings", false)
         tryVerify(function() { return panel.view.activeFocus })
@@ -302,13 +338,16 @@ ShellRoot {
         tryVerify(function() { return panel.preferenceActive === null })
         compare(panel.settingsError, "")
         tryCompare(panel, "compact", false)
-        var duration = control("popups-normalTimeoutSec")
-        tryVerify(function() { return !panel.popupSettingsLoading && duration.enabled })
-        duration.forceActiveFocus(); keyClick(Qt.Key_A, Qt.ControlModifier)
+        // kit FoamyNumberField row: the editor is its `field`; the unit is separate.
+        var row = control("popups-normalTimeoutSec"), duration = row.field
+        verify(row.compact)
+        compare(row.unit, "s")
+        tryVerify(function() { return !panel.popupSettingsLoading && row.enabled })
+        duration.focusInput(); keyClick(Qt.Key_A, Qt.ControlModifier)
         keyClick(Qt.Key_1); keyClick(Qt.Key_2); keyClick(Qt.Key_Return)
         tryVerify(function() { return panel.popupSettings.normalTimeoutSec === 12 })
-        tryVerify(function() { return !panel.popupSettingsLoading && duration.enabled })
-        duration.forceActiveFocus(); keyClick(Qt.Key_A, Qt.ControlModifier); keyClick(Qt.Key_9)
+        tryVerify(function() { return !panel.popupSettingsLoading && row.enabled })
+        duration.focusInput(); keyClick(Qt.Key_A, Qt.ControlModifier); keyClick(Qt.Key_9)
         keyClick(Qt.Key_Escape)
         compare(duration.text, "12")
         panel.savePreference("popups", "normalTimeoutSec", 15)
@@ -324,7 +363,7 @@ ShellRoot {
         panel.openSettings()
         tryCompare(panel, "popupSettingsLoading", false)
         verify(!panel.popupSettingsAvailable)
-        var pane = control("notificationSettingsPane"), scroll = control("settingsScroll")
+        var pane = control("notificationSettingsPane"), scroll = pane.flickable
         compare(findChild(pane, "popups-compact"), null)
         compare(control("popups-availability").text, "Plugin not enabled")
         wait(200)
@@ -338,6 +377,7 @@ ShellRoot {
         } catch (error) { console.log("SETTINGS_FAILURE disabled/scroll", error.message, error.stack); throw error }
       }
       function test_04_uninstalled_service() {
+        try {
         var next = JSON.parse(configFile.text())
         delete next.disabledPlugins
         configFile.setText(JSON.stringify(next))
@@ -359,8 +399,10 @@ ShellRoot {
         verify(!panel.popupSettingsAvailable)
         compare(panel.settingsError, "")
         compare(control("popups-availability").text, "Plugin not installed")
+        } catch (error) { console.log("SETTINGS_FAILURE uninstalled", error.message, error.stack); throw error }
       }
       function test_06_clipboard_parent_keys_and_feedback() {
+        try {
         panel.startSearch()
         var search = control("notificationSearch")
         tryCompare(search, "inputActiveFocus", true)
@@ -381,15 +423,17 @@ ShellRoot {
         compare(panel.filter, "")
         panel.openSettings()
         tryCompare(panel, "popupSettingsLoading", false)
-        var field = control("center-maxItems")
+        // A refused paste shows on the number row's own error line, and typing clears it.
+        var row = control("center-maxItems"), field = row.field
         field.pasteError = "Could not paste clipboard text. Copy plain text and try again."
-        compare(panel.settingsError, field.pasteError)
+        tryVerify(function() { return row.implicitHeight > row.field.height + 4 })
         field.focusInput()
         keyClick(Qt.Key_A, Qt.ControlModifier)
         keyClick(Qt.Key_7)
-        compare(panel.settingsError, "")
+        compare(field.pasteError, "")
         keyClick(Qt.Key_Escape)
         compare(field.text, String(panel.settings.maxItems || 1000))
+        } catch (error) { console.log("SETTINGS_FAILURE clipboard", error.message, error.stack); throw error }
       }
       function test_07_archived_screenshot_action_and_retry() {
         try {
