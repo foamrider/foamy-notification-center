@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.3.5 e2f6c278c7432824fd946f47c487edbcca3aa2341adb20f621c5dbaff6f12899 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.0 e2f6c278c7432824fd946f47c487edbcca3aa2341adb20f621c5dbaff6f12899 — do not edit; change foamy-kit and run sync
 import QtQuick
 import Quickshell.Io
 

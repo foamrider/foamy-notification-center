@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.3.5 7351706e3bff0b8e5f0a9c0fc1459c006db74672dff30c275b4ca1df5d312c18 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.0 f54ae05f597de692a3a44514acaeace32396364f9baf9f53b0fe2e9ff4adc2fa — do not edit; change foamy-kit and run sync
 import QtQuick
 import Quickshell.Io
 import qs.Commons as Commons
@@ -25,6 +25,17 @@ QtObject {
   readonly property color hoverFill: Qt.alpha(text, 0.08)
   readonly property color fieldFill: Qt.alpha(text, 0.055)
   readonly property color selectedFill: Qt.alpha(accent, 0.18)
+  // Menus (FoamyMenu) sit one step above the card they drop over.
+  readonly property color menuFill: Qt.tint(background, Qt.alpha(text, lightTheme ? 0.0 : 0.035))
+  // Inline help notes (FoamyInfoNote): a subtle surface under a heading.
+  readonly property color noteFill: Qt.alpha(text, 0.045)
+  // Text on an accent fill (FoamyButton primary): the darker of the popup's
+  // text and background on a light accent, the lighter on a dark one.
+  readonly property color onAccent: {
+    var backgroundIsDark = luminance(background) < luminance(text)
+    if (luminance(accent) > 0.55) return backgroundIsDark ? background : text
+    return backgroundIsDark ? text : background
+  }
 
   // --- hero band (FoamyHeroBand) ---------------------------------------------------
   // The foamy header band: the popup surface tinted toward the accent, from

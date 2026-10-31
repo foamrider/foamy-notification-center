@@ -8,7 +8,7 @@ Item {
   id: preview
   required property QtObject bar
   required property Item anchorItem
-  property var previewStates: ["default", "settings"]
+  property var previewStates: ["default", "menu", "snooze", "empty-menu", "settings"]
   property string previewState: "default"
   property int settleMs: 900
   property Item popupRef: null
@@ -38,8 +38,8 @@ Item {
     signal browserIconsUpdated()
     signal peerPreferencesChanged()
     signal focusCompleted()
-    property var entries: preview.previewState === "empty" ? [] : preview.sample
-    property int unread: preview.previewState === "empty" ? 0 : 2
+    property var entries: preview.previewState === "empty-menu" ? [] : preview.sample
+    property int unread: preview.previewState === "empty-menu" ? 0 : 2
     property bool unreadCapped: false
     property bool hasCriticalUnread: false
     property bool hasMore: false
@@ -92,7 +92,14 @@ Item {
   onPreviewStateChanged: Qt.callLater(function() {
     if (previewState === "settings") panel.openSettings()
     else if (panel.editingSettings) panel.closeSettings()
-    var menu = find(panel, "notificationOverflowMenu")
-    if (menu && previewState === "menu" && menu.open) menu.open()
+    // The header's ⋯ menu (kit FoamyMenu), opened as from the keyboard; "snooze"
+    // shows its submenu. "empty-menu": a short card grows to fit the menu.
+    store.entriesReset()
+    var header = panel.header
+    if (!header || !header.menu) return
+    if (previewState === "menu" || previewState === "snooze" || previewState === "empty-menu") {
+      header.openMenu(true)
+      if (previewState === "snooze") { header.menu.move(1); header.menu.activate() }
+    } else header.closeMenu()
   })
 }

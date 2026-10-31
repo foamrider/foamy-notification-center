@@ -1,4 +1,4 @@
-// foamy-kit 0.3.5 9560787e2fe14c573f84942540ba4c4686cde246420984419379ed8769a77697 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.0 9560787e2fe14c573f84942540ba4c4686cde246420984419379ed8769a77697 — do not edit; change foamy-kit and run sync
 import QtQuick
 import "FoamyIpcResolver.js" as Resolver
 

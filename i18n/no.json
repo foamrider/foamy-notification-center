@@ -64,11 +64,5 @@
   "%1 notifications": {
     "one": "%1 varsel",
     "other": "%1 varsler"
-  },
-  "unread": {
-    "one": "ulest",
-    "other": "uleste"
-  },
-  "Do not disturb is on": "Ikke forstyrr er på",
-  "Notifications are on": "Varsler er på"
+  }
 }

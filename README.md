@@ -37,7 +37,8 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
   including the visible card in a collapsed stack.
 - Hover to dismiss a stack or individual notification. The trash clears the panel.
 - Click search or press `/` to filter. Press Escape to close search.
-- Open **More options (⋯)** to silence/allow notifications or open **Settings**.
+- Open **More options (⋯)** to silence/allow notifications, snooze them, or open
+  **Settings** (last in the menu; `s` opens it too).
   Right-clicking the bar icon also toggles do not disturb.
 - **More options → Snooze notifications** offers 30 minutes, 1 hour, 4 hours,
   or resume all snoozed senders. It appears only when the daemon supports timed

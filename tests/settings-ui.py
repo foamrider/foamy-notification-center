@@ -170,29 +170,60 @@ ShellRoot {
         Plugin.FoamyI18n.backend = null;
       }
       function test_00_snooze_menu() {
-        control("notificationMore").clicked()
-        var menu=control("notificationSnoozeMenu")
-        tryCompare(menu,"enabled",true)
-        control("notificationOverflowMenu").itemAt(1).triggered()
-        tryCompare(menu,"visible",true);wait(150);capture(menu.contentItem.parent,"snooze-menu")
-        menu.itemAt(0).triggered();tryCompare(root,"snoozedMinutes",30)
-        menu.itemAt(3).triggered();tryCompare(root,"snoozedMinutes",0)
-        menu.close()
+        // The header's kit ⋯ menu: Snooze is a submenu (opens in place, Back row first).
+        var header = panel.header, menu = header.menu
+        mouseClick(control("foamyMenuButton"))
+        tryCompare(header, "menuOpen", true)
+        var snooze = header.menuItems[1]
+        compare(snooze.objectName, "notificationSnooze")
+        compare(snooze.iconName, "alarm-clock")
+        tryCompare(snooze, "visible", true)
+        tryCompare(snooze, "enabled", true)
+        menu.activate(menu.entries.indexOf(snooze))
+        tryCompare(menu, "inSubmenu", true)
+        compare(menu.entries.length, 5)
+        for (var i = 0; i < menu.entries.length; i++) verify(menu.entries[i].iconName !== "", "icon for " + menu.entries[i].text)
+        wait(150); capture(menu.panel, "snooze-menu")
+        menu.activate(menu.entries.indexOf(snooze.items[0])); tryCompare(root,"snoozedMinutes",30)
+        compare(header.menuOpen, false)
+        header.openMenu(true)
+        menu.activate(menu.entries.indexOf(snooze))
+        menu.activate(menu.entries.indexOf(snooze.items[3])); tryCompare(root,"snoozedMinutes",0)
+        header.closeMenu()
       }
       function test_01_menu_and_settings_save() {
         try {
-        var more = control("notificationMore"), menu = control("notificationOverflowMenu")
+        // Search and clear all stay in the row, then ⋯; Silence, Snooze, a
+        // separator and Settings (last) are in its menu, each with an icon.
+        var header = panel.header, menu = header.menu, more = control("foamyMenuButton")
         mouseClick(more)
-        tryCompare(menu, "visible", true)
-        compare(menu.count, 3)
+        tryCompare(header, "menuOpen", true)
+        verify(header.overflowing && header.settingsInMenu)
+        verify(control("notificationSearchButton").visible)
         verify(control("clearAllNotifications").visible)
-        wait(150); capture(menu.contentItem.parent, "overflow-menu")
-        control("notificationMute").triggered()
+        compare(header.shownTrailing.length, 2)
+        var entries = menu.entries
+        compare(entries.length, 4)
+        compare(entries[0].objectName, "notificationMute")
+        verify(entries[2].separator)
+        compare(entries[3].objectName, "foamyMenuSettings")
+        for (var i = 0; i < entries.length; i++) if (!entries[i].separator) verify(entries[i].iconName !== "", "icon for " + entries[i].text)
+        // Dropped from the ⋯ button: its trailing edge on the button's, just below it.
+        var box = menu.panel, end = more.mapToItem(null, more.width, more.height), edge = box.mapToItem(null, box.width, 0)
+        verify(Math.abs(end.x - edge.x) <= 1, "menu trailing edge " + edge.x + " vs button " + end.x)
+        verify(edge.y >= end.y - 1, "menu below the button")
+        wait(150); capture(box, "overflow-menu")
+        menu.activate(0)
         tryCompare(root, "dnd", true)
         tryCompare(panel, "dnd", true)
-        more.forceActiveFocus(); keyClick(Qt.Key_Return)
-        tryCompare(menu, "visible", true)
-        control("notificationSettings").triggered()
+        compare(header.menuItems[0].iconName, "bell-ring")
+        // Keyboard: the ⋯ button is the cursor stop above the first row.
+        panel.view.forceActiveFocus(); keyClick(Qt.Key_Up)
+        verify(panel.cursorOnSettings && header.menuHasCursor)
+        keyClick(Qt.Key_Return)
+        tryCompare(header, "menuOpen", true)
+        compare(menu.currentIndex, 0)
+        keyClick(Qt.Key_End); keyClick(Qt.Key_Return)
         tryCompare(panel, "editingSettings", true)
         tryCompare(panel, "popupSettingsLoading", false)
         verify(panel.popupSettingsAvailable, panel.settingsError)
@@ -237,7 +268,7 @@ ShellRoot {
         var back = control("settingsBack")
         back.forceActiveFocus(); keyClick(Qt.Key_Escape)
         tryCompare(panel, "editingSettings", false)
-        tryVerify(function() { return more.activeFocus })
+        tryVerify(function() { return panel.view.activeFocus })
         } catch (error) { console.log("SETTINGS_FAILURE menu/save", error.message, error.stack); throw error }
       }
       function test_02_invalid_and_failed_saves() {

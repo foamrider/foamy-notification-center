@@ -1,4 +1,4 @@
-// foamy-kit 0.3.5 ec9e609cd5c03b8019ed4d308024d628e22e820d054a36181e0d1ff01b8cfa11 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.0 2b6dbbac420d55e5a178d0bdec9c58222b867f675f1a23beb3ae4e7440dd7b84 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Foamy icon set: inline Lucide SVG paths (ISC, see LICENSE-LUCIDE), the
@@ -8,7 +8,9 @@ import QtQuick
 // Provenance: the 0.1.0 entries are the plugins' approved paths. Entries added
 // or refreshed in 0.2.0 are Lucide 1.65.0 (lucide-static), except `github`,
 // from Lucide 0.577.0: Lucide 1.x dropped brand icons. `message` and `chat`
-// are aliases of `message-square`. Refresh with tools/update-icons.py.
+// are aliases of `message-square`. 0.4.0 added clock, alarm-clock, bell-ring,
+// timer, circle-help and ellipsis-vertical (Lucide 1.65.0). Refresh with
+// tools/update-icons.py.
 //
 //   FoamyIcon { name: "refresh-cw"; color: FoamyPalette.text; width: FoamyStyle.iconSize; height: width }
 //
@@ -25,6 +27,7 @@ Image {
   readonly property var paths: ({
     "activity": "<path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"/>",
     "airplay": "<path d=\"M5 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-1\"/><path d=\"m12 15 7 7H5z\"/>",
+    "alarm-clock": "<circle cx=\"12\" cy=\"13\" r=\"8\"/><path d=\"M12 9v4l2 2\"/><path d=\"M5 3 2 6\"/><path d=\"m22 6-3-3\"/><path d=\"M6.38 18.7 4 21\"/><path d=\"M17.64 18.67 20 21\"/>",
     "alert": "<path d=\"M12 3 2 21h20Z M12 9v5M12 17h.01\"/>",
     "app-window": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"M2 8h20M6 4v4\"/>",
     "arrow-down": "<path d=\"M12 5v14\"/><path d=\"m19 12-7 7-7-7\"/>",
@@ -40,6 +43,7 @@ Image {
     "battery-warning": "<path d=\"M10 17h.01\"/><path d=\"M10 7v6\"/><path d=\"M14 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2\"/><path d=\"M22 14v-4\"/><path d=\"M6 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2\"/>",
     "bell": "<path d=\"M10.268 21a2 2 0 0 0 3.464 0\"/><path d=\"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326\"/>",
     "bell-off": "<path d=\"M10.268 21a2 2 0 0 0 3.464 0\"/><path d=\"M17 17H4a1 1 0 0 1-.74-1.673C4.59 13.956 6 12.499 6 8a6 6 0 0 1 .258-1.742\"/><path d=\"m2 2 20 20\"/><path d=\"M8.668 3.01A6 6 0 0 1 18 8c0 2.687.77 4.653 1.707 6.05\"/>",
+    "bell-ring": "<path d=\"M10.268 21a2 2 0 0 0 3.464 0\"/><path d=\"M22 8c0-2.3-.8-4.3-2-6\"/><path d=\"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326\"/><path d=\"M4 2C2.8 3.7 2 5.7 2 8\"/>",
     "box": "<path d=\"m12 3 9 5v8l-9 5-9-5V8l9-5ZM3 8l9 5 9-5M12 13v8M7.5 5.5l9 5\"/>",
     "calendar": "<path d=\"M8 2v3\"/><path d=\"M16 2v3\"/><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><path d=\"M3 9h18\"/>",
     "cancelled": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"m9 9 6 6m0-6-6 6\"/>",
@@ -50,6 +54,8 @@ Image {
     "chevron-left": "<path d=\"m15 18-6-6 6-6\"/>",
     "chevron-right": "<path d=\"m9 6 6 6-6 6\"/>",
     "chevron-up": "<path d=\"m6 15 6-6 6 6\"/>",
+    "circle-help": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\"/><path d=\"M12 17h.01\"/>",
+    "clock": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 6v6l4 2\"/>",
     "cloud": "<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\"></path>",
     "cloud-drizzle": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\"></path><path d=\"M8 19v1\"></path><path d=\"M8 14v1\"></path><path d=\"M16 19v1\"></path><path d=\"M16 14v1\"></path><path d=\"M12 21v1\"></path><path d=\"M12 16v1\"></path>",
     "cloud-fog": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\"></path><path d=\"M16 17H7\"></path><path d=\"M17 21H9\"></path>",
@@ -66,6 +72,7 @@ Image {
     "droplet": "<path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\"></path>",
     "droplets": "<path d=\"M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z\"></path><path d=\"M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97\"></path>",
     "ellipsis": "<circle cx=\"12\" cy=\"12\" r=\"1\"/><circle cx=\"19\" cy=\"12\" r=\"1\"/><circle cx=\"5\" cy=\"12\" r=\"1\"/>",
+    "ellipsis-vertical": "<circle cx=\"12\" cy=\"12\" r=\"1\"/><circle cx=\"12\" cy=\"5\" r=\"1\"/><circle cx=\"12\" cy=\"19\" r=\"1\"/>",
     "external": "<path d=\"M14 3h7v7m0-7L10 14M10 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6\"/>",
     "external-link": "<path d=\"M15 3h6v6M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5\"/>",
     "eye": "<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
@@ -113,6 +120,7 @@ Image {
     "sync": "<path d=\"M20 9a8 8 0 0 0-14-3L3 9m0-5v5h5M4 15a8 8 0 0 0 14 3l3-3m0 5v-5h-5\"/>",
     "tablet": "<rect x=\"4\" y=\"2\" width=\"16\" height=\"20\" rx=\"2\"/><path d=\"M12 18h.01\"/>",
     "terminal": "<path d=\"m4 17 6-5-6-5M12 19h8\"/>",
+    "timer": "<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\"/><line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\"/><circle cx=\"12\" cy=\"14\" r=\"8\"/>",
     "train": "<rect x=\"5\" y=\"2\" width=\"14\" height=\"17\" rx=\"4\"/><path d=\"M5 10h14M12 2v8M8 19l-2 3m10-3 2 3\"/><path d=\"M8 15h.01M16 15h.01\"/>",
     "trash": "<path d=\"M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6\"/>",
     "triangle-alert": "<path d=\"m10.3 3.9-8.1 14a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3l-8.1-14a2 2 0 0 0-3.4 0M12 9v4M12 17h.01\"/>",

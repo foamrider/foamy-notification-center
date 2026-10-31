@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls as Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
@@ -56,22 +55,6 @@ Ui.Panel {
   readonly property alias popupPanel: popup
   ipcTarget: "foamy.notification-center"
 
-  component SnoozeItem: Controls.MenuItem {
-    id: snoozeItem
-    implicitHeight: Math.max(Style.space(42), contentItem.implicitHeight + Style.space(16))
-    contentItem: Text {
-      text: snoozeItem.text
-      textFormat: Text.PlainText
-      font.family: root.fontFamily
-      font.pixelSize: FoamyStyle.font.caption
-      color: root.foreground
-      opacity: snoozeItem.enabled ? 1 : 0.45
-      wrapMode: Text.WordWrap
-      verticalAlignment: Text.AlignVCenter
-    }
-    background: Rectangle { color: snoozeItem.highlighted ? Qt.alpha(root.foreground, 0.08) : "transparent"; radius: FoamyStyle.radius }
-  }
-
   readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH")
 
   readonly property color foreground: Commons.Color.popups.text
@@ -120,8 +103,7 @@ Ui.Panel {
   property bool awaitingPeerSave: false
 
   function openSettings() {
-    if (moreMenu) moreMenu.close()
-    if (snoozeMenu) snoozeMenu.close()
+    if (header) header.closeMenu()
     endSearch()
     editingSettings = true
     settingsError = ""
@@ -345,8 +327,7 @@ Ui.Panel {
   readonly property Item keyCatcher: view
   readonly property var list: view ? view.list : null
   readonly property var search: view ? view.search : null
-  readonly property var moreMenu: view ? view.moreMenu : null
-  readonly property var snoozeMenu: view ? view.snoozeMenu : null
+  readonly property var header: view ? view.header : null
   readonly property var settingsPane: view ? view.settingsPane : null
   readonly property real listAvailableHeight:
     Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - (view ? view.chromeHeight : Style.space(80)))
@@ -354,7 +335,8 @@ Ui.Panel {
   property var rows: []
   property var expandedGroups: ({})
   property int cursorIndex: -1
-  // The single cursor: list rows, or the header's settings button above row 0.
+  // The single cursor: list rows, or the header's ⋯ button (Settings is in its
+  // menu) above row 0.
   property bool cursorOnSettings: false
   property bool cursorDismiss: false
   property bool keyboardNavigation: false
@@ -404,7 +386,14 @@ Ui.Panel {
   }
 
   function activateCursor(removeOnly) {
-    if (cursorOnSettings) { if (!removeOnly) openSettings(); return }
+    if (cursorOnSettings) {
+      if (removeOnly) return
+      // Settings lives in the ⋯ menu while the header overflows (always, with
+      // search, clear and the menu); open it with the first entry selected.
+      if (header && header.overflowing) header.openMenu(true)
+      else openSettings()
+      return
+    }
     if (cursorIndex < 0 || cursorIndex >= rows.length) return
     var row = rows[cursorIndex]
     if (removeOnly || cursorDismiss) {
@@ -432,8 +421,7 @@ Ui.Panel {
     // Action feedback belongs to this panel visit, not the persistent archive.
     if (store) store.focusError = ""
     if (!opened) {
-      if (moreMenu) moreMenu.close()
-      if (snoozeMenu) snoozeMenu.close()
+      if (header) header.closeMenu()
       editingSettings = false
       searching = false
       filter = ""
@@ -599,7 +587,7 @@ Ui.Panel {
     focusTarget: root.editingSettings && root.settingsPane ? root.settingsPane.backTarget : bodyItem
     contentWidth: popup.fittedContentWidth(Style.space(root.panelWidth))
     contentHeight: Math.round(Math.min(
-      Math.max(popup.verticalContentInset, popup.bodyImplicitHeight + popup.verticalContentInset),
+      Math.max(popup.verticalContentInset, Math.max(popup.bodyImplicitHeight, popup.menuReserve) + popup.verticalContentInset),
       popup.usableCardHeight))
 
     Behavior on contentHeight {
@@ -618,15 +606,13 @@ Ui.Panel {
         // Reached from Panel functions through root.view.
         property alias list: listLoader.item
         property alias search: search
-        property alias moreMenu: moreMenu
-        property alias snoozeMenu: snoozeMenu
-        property alias moreButton: moreButton
+        property alias header: header
         property alias settingsPane: settingsPane
         readonly property real chromeHeight: header.height + (searchRow.visible ? searchRow.height + content.spacing : 0)
           + (errorLine.visible ? errorLine.implicitHeight + content.spacing : 0) + content.spacing + Style.space(10)
         implicitHeight: root.editingSettings ? settingsPane.implicitHeight : content.implicitHeight + Style.space(10)
         // While the search field or a menu has the keys, or Settings is open, this stands aside.
-        blocked: search.inputActiveFocus || root.editingSettings || moreMenu.visible || snoozeMenu.visible
+        blocked: search.inputActiveFocus || root.editingSettings || header.menuOpen
         onCloseRequested: root.searching ? root.endSearch() : root.close()
         onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
         onActivateRequested: root.activateCursor(false)
@@ -646,20 +632,22 @@ Ui.Panel {
           spacing: Style.space(8)
 
           // ------------------------------------------------------ header
-          // The foamy hero band: title row (bell, "Notifications", total, search /
-          // clear / more, settings) and the unread summary in the hero slot.
+          // The foamy hero band, title only: bell, "Notifications", total, then
+          // search and clear all; silence, snooze and Settings (last) are in
+          // the kit's ⋯ overflow menu (at most three buttons on the top right).
           FoamyHeroBand {
             id: header
             objectName: "notificationCenterHeader"
             width: parent.width
-            readonly property int unreadCount: Model.unreadState(root.entries, root.readMark).unread
             iconName: root.dnd ? "bell-off" : "bell"
             title: root.tr("Notifications")
             meta: root.entries.length ? FoamyI18n.tn("%1 notifications", root.entries.length) : ""
+            // The ⋯ button is the cursor stop above row 0 (Settings is in its menu).
+            menuHasCursor: root.keyboardNavigation && root.cursorOnSettings
             settingsHasCursor: root.keyboardNavigation && root.cursorOnSettings
             onSettingsClicked: root.openSettings()
             onSettingsHovered: function(hovered) { if (hovered) root.keyboardNavigation = false }
-            Component.onCompleted: settingsButton.objectName = "notificationSettings"
+            onMenuHovered: function(hovered) { if (hovered) root.keyboardNavigation = false }
             trailing: [
               FoamyAction {
                 objectName: "notificationSearchButton"
@@ -676,110 +664,29 @@ Ui.Panel {
                 foreground: FoamyPalette.secondaryText
                 actionEnabled: root.entries.length > 0
                 onClicked: root.clearAll()
-              },
-              FoamyAction {
-                id: moreButton
-                objectName: "notificationMore"
-                iconName: "ellipsis"
-                tooltipText: root.tr("More options")
-                foreground: FoamyPalette.secondaryText
-                onClicked: moreMenu.visible ? moreMenu.close() : moreMenu.open()
               }
             ]
-
-            // Hero: the unread count and whether notifications are getting through.
-            RowLayout {
-              objectName: "notificationUnreadHero"
-              Layout.fillWidth: true
-              spacing: FoamyStyle.gapLarge
-              Text {
-                text: FoamyI18n.number(header.unreadCount) + (root.unreadCapped ? "+" : "")
-                textFormat: Text.PlainText
-                color: header.unreadCount > 0 ? FoamyPalette.text : FoamyPalette.secondaryText
-                font.family: FoamyStyle.fontFamily
-                font.pixelSize: FoamyStyle.font.numeralCompact
-                font.weight: Font.Light
-                Layout.alignment: Qt.AlignVCenter
+            menuItems: [
+              FoamyMenuItem {
+                objectName: "notificationMute"
+                text: root.dnd ? root.tr("Allow notifications") : root.tr("Silence notifications")
+                iconName: root.dnd ? "bell-ring" : "bell-off"
+                enabled: !!root.store && !root.store.dndBusy
+                onTriggered: root.toggleDnd()
+              },
+              FoamyMenuItem {
+                objectName: "notificationSnooze"
+                text: root.tr("Snooze notifications")
+                iconName: "alarm-clock"
+                // Hidden, not disabled, where the daemon has no timed snooze (stock 4.0 and 4.5-rc2).
+                visible: !!root.store && root.store.snoozeAvailable
+                enabled: visible && !root.store.snoozeBusy
+                FoamyMenuItem { objectName: "notificationSnooze30"; text: root.tr("30 minutes"); iconName: "clock"; onTriggered: root.store.snoozeAll(30) }
+                FoamyMenuItem { objectName: "notificationSnooze60"; text: root.tr("1 hour"); iconName: "clock"; onTriggered: root.store.snoozeAll(60) }
+                FoamyMenuItem { objectName: "notificationSnooze240"; text: root.tr("4 hours"); iconName: "clock"; onTriggered: root.store.snoozeAll(240) }
+                FoamyMenuItem { objectName: "notificationSnoozeResume"; text: root.tr("Resume snoozed notifications"); iconName: "bell-ring"; onTriggered: root.store.snoozeAll(0) }
               }
-              Column {
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: FoamyStyle.gapTiny
-                Text {
-                  width: parent.width
-                  text: FoamyI18n.tn("unread", header.unreadCount)
-                  textFormat: Text.PlainText
-                  elide: Text.ElideRight
-                  color: FoamyPalette.text
-                  font.family: FoamyStyle.fontFamily
-                  font.pixelSize: FoamyStyle.font.subtitle
-                }
-                Text {
-                  width: parent.width
-                  text: root.dnd ? root.tr("Do not disturb is on") : root.tr("Notifications are on")
-                  textFormat: Text.PlainText
-                  elide: Text.ElideRight
-                  color: root.dnd ? Commons.Color.accent : FoamyPalette.secondaryText
-                  font.family: FoamyStyle.fontFamily
-                  font.pixelSize: FoamyStyle.font.bodySmall
-                }
-              }
-            }
-          }
-
-          Controls.Menu {
-            id: moreMenu
-            contentItem.LayoutMirroring.enabled: FoamyI18n.rightToLeft
-            contentItem.LayoutMirroring.childrenInherit: true
-            objectName: "notificationOverflowMenu"
-            x: FoamyI18n.rightToLeft ? FoamyStyle.padding : Math.max(0, content.width - width - FoamyStyle.padding)
-            y: header.height - Style.space(6)
-            width: Math.min(Style.space(248), content.width - FoamyStyle.padding * 2)
-            padding: Style.space(5)
-            closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
-            onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) keyCatcher.forceActiveFocus() })
-            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: FoamyStyle.popupBorderSpec; radius: FoamyStyle.radius }
-            Controls.MenuItem {
-              id: muteItem
-              objectName: "notificationMute"
-              text: root.dnd ? root.tr("Allow notifications") : root.tr("Silence notifications")
-              enabled: !!root.store && !root.store.dndBusy
-              implicitHeight: Style.space(42)
-              contentItem: RowLayout {
-                spacing: Style.space(10)
-                FoamyIcon { name: root.dnd ? "bell-off" : "bell"; color: root.dnd ? Commons.Color.accent : root.foreground; Layout.preferredWidth: FoamyStyle.iconSize; Layout.preferredHeight: FoamyStyle.iconSize; Accessible.ignored: true }
-                Text { text: muteItem.text; textFormat: Text.PlainText; font.family: root.fontFamily; font.pixelSize: FoamyStyle.font.bodySmall; color: root.foreground; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-              }
-              background: Rectangle { color: muteItem.highlighted ? FoamyPalette.hoverFill : "transparent"; radius: FoamyStyle.radius }
-              onTriggered: root.toggleDnd()
-            }
-            SnoozeItem {
-              text: root.tr("Snooze notifications")
-              // Hidden, not disabled, where the daemon has no timed snooze (stock 4.0 and 4.5-rc2).
-              visible: !!root.store && root.store.snoozeAvailable
-              height: visible ? implicitHeight : 0
-              enabled: visible && !root.store.snoozeBusy
-              onTriggered: Qt.callLater(function() { snoozeMenu.open() })
-            }
-          }
-
-          Controls.Menu {
-            id: snoozeMenu
-            contentItem.LayoutMirroring.enabled: FoamyI18n.rightToLeft
-            contentItem.LayoutMirroring.childrenInherit: true
-            objectName: "notificationSnoozeMenu"
-            x: moreMenu.x
-            y: moreMenu.y
-            width: Math.min(Style.space(290), content.width - FoamyStyle.padding * 2)
-            padding: Style.space(5)
-            enabled: !!root.store && root.store.snoozeAvailable && !root.store.snoozeBusy
-            closePolicy: Controls.Popup.CloseOnEscape | Controls.Popup.CloseOnPressOutside
-            background: BorderSurface { color: Commons.Color.popups.background; borderSpec: FoamyStyle.popupBorderSpec; radius: FoamyStyle.radius }
-            onClosed: Qt.callLater(function() { if (root.opened && !root.editingSettings) keyCatcher.forceActiveFocus() })
-            SnoozeItem { text: root.tr("30 minutes"); onTriggered: root.store.snoozeAll(30) }
-            SnoozeItem { text: root.tr("1 hour"); onTriggered: root.store.snoozeAll(60) }
-            SnoozeItem { text: root.tr("4 hours"); onTriggered: root.store.snoozeAll(240) }
-            SnoozeItem { text: root.tr("Resume snoozed notifications"); onTriggered: root.store.snoozeAll(0) }
+            ]
           }
 
           // ------------------------------------------------------ search

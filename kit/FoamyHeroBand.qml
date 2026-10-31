@@ -1,4 +1,4 @@
-// foamy-kit 0.3.5 3902b630cc4b4c600aadca5bd940581e75e4f3fb7ce3c59834e9df5d21b441cb — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.0 7c39048a160d267178d3006f0c8663b887a4a0dfdd9eb9c43a53ab7cd454e4f2 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -23,6 +23,21 @@ import QtQuick.Layouts
 //
 // Settings pages use the compact form (FoamySettingsPage does it for you):
 //   FoamyHeroBand { compact: true; saving: …; onBack: … }
+//
+// Centred variant (a panel about one big value: clock, weather):
+//   FoamyHeroBand {
+//     centered: true
+//     title: dateText; meta: weekText          // centred under the hero, no icon
+//     Text { Layout.alignment: Qt.AlignHCenter; text: time; … }   // hero first, centred:
+//                                                                  // give hero items AlignHCenter
+//   }
+// The buttons (trailing, ⋯, Settings) stay pinned to the trailing top corner;
+// the hero and the title keep clear of them on both sides, so they stay
+// centred on the band.
+//
+// Overflow: `menuItems`, `maxButtons`, `menuHasCursor`, `menuOpen`,
+// `openMenu(keyboard)`, `menuHovered` are FoamyHeader's (at most three
+// buttons top right; see FoamyHeader).
 //
 // Background: the foamy wash by default (FoamyPalette.band*: accent-tinted
 // diagonal wash, a soft glow at the trailing top corner). A plugin may bring
@@ -50,6 +65,26 @@ Item {
   signal settingsClicked()
   signal settingsHovered(bool hovered)
 
+  // --- overflow menu (FoamyHeader) -------------------------------------------------
+  property alias menuItems: header.menuItems
+  property alias maxButtons: header.maxButtons
+  property alias menuHasCursor: header.menuHasCursor
+  property alias menuButton: header.menuButton
+  readonly property alias menu: header.menu
+  readonly property alias menuOpen: header.menuOpen
+  readonly property alias overflowing: header.overflowing
+  readonly property alias settingsInMenu: header.settingsInMenu
+  readonly property alias shownTrailing: header.shownTrailing
+  signal menuHovered(bool hovered)
+  function openMenu(keyboard) { header.openMenu(keyboard) }
+  function closeMenu() { header.closeMenu() }
+  function toggleMenu(keyboard) { header.toggleMenu(keyboard) }
+
+  // --- centred variant -------------------------------------------------------------
+  // Hero first and centred, title/meta centred under it, no icon; buttons in
+  // the trailing top corner.
+  property bool centered: false
+
   // --- compact settings form -------------------------------------------------------
   property bool compact: false
   property string compactTitle: FoamyI18n.t("Settings")
@@ -59,7 +94,17 @@ Item {
 
   // --- hero slot -------------------------------------------------------------------
   default property alias hero: heroSlot.data
-  readonly property bool hasHero: !compact && heroSlot.children.length > 0
+  // True when a hero item is shown: hidden hero children don't count (the
+  // slot itself stays visible so their own `visible` is what is read).
+  // While the band itself is hidden (popup closed, settings open) nothing
+  // reads as shown, so it answers whether there are hero items at all.
+  readonly property bool hasHero: {
+    if (compact) return false
+    var items = heroSlot.children
+    if (!heroSlot.visible) return items.length > 0
+    for (var i = 0; i < items.length; i++) if (items[i].visible) return true
+    return false
+  }
 
   // --- surface ---------------------------------------------------------------------
   property url imageSource: ""
@@ -95,7 +140,7 @@ Item {
   }
 
   implicitWidth: FoamyStyle.popupWidth
-  implicitHeight: FoamyStyle.bandPaddingTop + content.implicitHeight + FoamyStyle.bandPaddingBottom
+  implicitHeight: FoamyStyle.bandPaddingTop + Math.max(content.implicitHeight, compact ? 0 : header.implicitHeight) + FoamyStyle.bandPaddingBottom
 
   Loader {
     id: backgroundLoader
@@ -204,21 +249,15 @@ Item {
     id: content
     y: FoamyStyle.bandPaddingTop
     width: parent.width
-    spacing: band.hasHero ? FoamyStyle.bandGap : 0
+    spacing: band.hasHero ? (band.centered ? FoamyStyle.gap : FoamyStyle.bandGap) : 0
 
-    FoamyHeader {
-      id: header
-      visible: !band.compact
+    // Room for the title row (FoamyHeader, below: it sits over the band so the
+    // centred variant can pin its buttons to the corner).
+    Item {
+      id: headerSlot
+      visible: !band.compact && !band.centered
       width: parent.width
-      topPadding: 0
-      bottomPadding: 0
-      iconName: band.iconName
-      title: band.title
-      meta: band.meta
-      showSettings: band.showSettings
-      settingsHasCursor: band.settingsHasCursor
-      onSettingsClicked: band.settingsClicked()
-      onSettingsHovered: function(hovered) { band.settingsHovered(hovered) }
+      height: header.implicitHeight
     }
 
     FoamySettingsHeader {
@@ -233,14 +272,73 @@ Item {
     }
 
     // A layout, so hero items align to the reading start in RTL too. Give
-    // full-width hero content Layout.fillWidth: true.
+    // full-width hero content Layout.fillWidth: true (centred: AlignHCenter).
     ColumnLayout {
       id: heroSlot
-      visible: band.hasHero
-      x: FoamyStyle.padding
-      width: parent.width - FoamyStyle.padding * 2
+      // Always "visible" outside the compact form (zero height when empty),
+      // so hasHero can read its children's own visibility.
+      visible: !band.compact
+      x: band.centered ? band.centeredInset : FoamyStyle.padding
+      width: Math.max(0, parent.width - x * 2)
       spacing: FoamyStyle.gap
     }
+
+    // Centred title and meta (centred variant).
+    Column {
+      id: centeredTitle
+      objectName: "foamyHeroBandCenteredTitle"
+      visible: band.centered && !band.compact && (band.title !== "" || band.meta !== "")
+      x: band.centeredInset
+      width: Math.max(0, parent.width - x * 2)
+      spacing: FoamyStyle.gapTiny
+      Text {
+        width: parent.width
+        visible: band.title !== ""
+        text: band.title
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        horizontalAlignment: Text.AlignHCenter
+        color: FoamyPalette.text
+        font.family: FoamyStyle.fontFamily
+        font.pixelSize: FoamyStyle.font.title
+        font.weight: Font.DemiBold
+      }
+      Text {
+        width: parent.width
+        visible: band.meta !== ""
+        text: band.meta
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        horizontalAlignment: Text.AlignHCenter
+        color: FoamyPalette.secondaryText
+        font.family: FoamyStyle.fontFamily
+        font.pixelSize: FoamyStyle.font.bodySmall
+      }
+    }
+  }
+
+  // Centred content keeps the same distance from both sides, clear of the
+  // corner buttons, so it stays centred on the band.
+  readonly property real centeredInset: FoamyStyle.padding
+    + (header.buttonsWidth > 0 ? header.buttonsWidth + FoamyStyle.gap : 0)
+
+  FoamyHeader {
+    id: header
+    visible: !band.compact
+    y: FoamyStyle.bandPaddingTop
+    width: parent.width
+    height: implicitHeight
+    topPadding: 0
+    bottomPadding: 0
+    showTitle: !band.centered
+    iconName: band.iconName
+    title: band.title
+    meta: band.meta
+    showSettings: band.showSettings
+    settingsHasCursor: band.settingsHasCursor
+    onSettingsClicked: band.settingsClicked()
+    onSettingsHovered: function(hovered) { band.settingsHovered(hovered) }
+    onMenuHovered: function(hovered) { band.menuHovered(hovered) }
   }
 
   Rectangle {

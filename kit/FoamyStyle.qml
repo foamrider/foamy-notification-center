@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.3.5 26a54246154e9f9d2d7c534ce547e76dcd9fbdc08e258ad30b0c0dec111d8d27 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.0 4ef879065729b119638b636e2d145f76eeb24c59533c2d036892b1540d865a53 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -57,6 +57,8 @@ QtObject {
   // --- popup geometry ----------------------------------------------------------
   readonly property int popupWidth: Style.space(420)
   readonly property int popupWidthWide: Style.space(560)
+  // A height cap a panel may opt into (FoamyPopup.maxHeight). By default
+  // popups grow to the screen's available height instead (kit 0.4.0).
   readonly property int popupMaxHeight: Style.space(640)
   readonly property int menuWidth: Style.space(232)
   // Hero band (FoamyHeroBand): compact paddings around the title row and hero.

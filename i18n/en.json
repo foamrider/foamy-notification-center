@@ -64,11 +64,5 @@
   "%1 notifications": {
     "one": "%1 notification",
     "other": "%1 notifications"
-  },
-  "unread": {
-    "one": "unread",
-    "other": "unread"
-  },
-  "Do not disturb is on": "Do not disturb is on",
-  "Notifications are on": "Notifications are on"
+  }
 }

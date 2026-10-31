@@ -1,4 +1,4 @@
-// foamy-kit 0.3.5 9ab3d2c41900d56f7ea39d8c0a12d839724ffb0c90f07a6efd69ff0bbc46861e — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.0 2b8b65d24472788fa4d32a812f77a50f3054daa6d82a484645a00ba75b2f7980 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 import qs.Commons as Commons
@@ -27,14 +27,21 @@ import qs.Ui
 //   bodyItem, bodyImplicitHeight the built body (null until first open)
 //   ensureBody()                 build the body without opening
 //   wide: bool                   560 instead of 420
-//   maxHeight: real              height cap for the fitted card (default
-//                                FoamyStyle.popupMaxHeight 640; 0 = only the
-//                                screen limit, for panels that compact
-//                                themselves by screen height)
+//   maxHeight: real              extra height cap for the fitted card. Default
+//                                0: the card grows with its content up to the
+//                                screen's available height (screen minus the
+//                                bar, the gap and a margin; the host measures
+//                                it: the 4.0 strip window or the 4.5 bar
+//                                thickness), so content fits where the screen
+//                                allows and scrolls only beyond that. Set a
+//                                number (e.g. FoamyStyle.popupMaxHeight, 640)
+//                                to cap it lower.
 //   contentWidth/contentHeight   override the defaults if needed
 //   cornerRadius, surfaceColor   foamy surface (rarely overridden)
 //   cardItem                     the drawn card (for screenshots/tests)
 //   fittedContentWidth/Height(), availableCardHeight, barThickness (4.5)
+//   menuReserve                  height an open FoamyMenu needs (the default
+//                                contentHeight grows to it while the menu is open)
 //   focusTarget                  defaults to the body; point it at a PanelKeyCatcher
 //
 // Usage:
@@ -52,7 +59,7 @@ KeyboardPanel {
   id: root
 
   property bool wide: false
-  property real maxHeight: FoamyStyle.popupMaxHeight
+  property real maxHeight: 0
   property real cornerRadius: FoamyStyle.radius
   property color surfaceColor: Commons.Color.popups.background
 
@@ -60,6 +67,9 @@ KeyboardPanel {
   property bool bodyRequested: false
   readonly property Item bodyItem: bodyLoader.item
   readonly property real bodyImplicitHeight: bodyItem ? bodyItem.implicitHeight : 0
+  // Room an open FoamyMenu asks for below its button (0 when none is open).
+  // Include it if you override contentHeight: Math.max(body, menuReserve).
+  readonly property real menuReserve: bodyLoader.foamyMenuReserve
   readonly property Item cardItem: surfaceHook.card
 
   function ensureBody() {
@@ -70,13 +80,16 @@ KeyboardPanel {
   padding: 0
   borderSpec: FoamyStyle.popupBorderSpec
   contentWidth: fittedContentWidth(wide ? FoamyStyle.popupWidthWide : FoamyStyle.popupWidth)
-  contentHeight: fittedContentHeight(bodyImplicitHeight, maxHeight)
+  // An open FoamyMenu may ask for room below its button (foamyMenuReserve):
+  // the card grows while it is open instead of the menu scrolling.
+  contentHeight: fittedContentHeight(Math.max(bodyImplicitHeight, bodyLoader.foamyMenuReserve), maxHeight)
   focusTarget: bodyLoader
 
   onOpenChanged: if (open && body) bodyRequested = true
 
   Loader {
     id: bodyLoader
+    property real foamyMenuReserve: 0
     anchors.fill: parent
     focus: true
     active: !!root.body && (root.open || root.bodyRequested)
