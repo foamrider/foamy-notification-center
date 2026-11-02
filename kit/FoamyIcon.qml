@@ -1,4 +1,4 @@
-// foamy-kit 0.4.2 2b6dbbac420d55e5a178d0bdec9c58222b867f675f1a23beb3ae4e7440dd7b84 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.3 1080db23c5895dcfe6a5bb1c69b116b4f7d7e7f15c6a4dd373f745b2b36f68f6 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Foamy icon set: inline Lucide SVG paths (ISC, see LICENSE-LUCIDE), the
@@ -9,8 +9,8 @@ import QtQuick
 // or refreshed in 0.2.0 are Lucide 1.65.0 (lucide-static), except `github`,
 // from Lucide 0.577.0: Lucide 1.x dropped brand icons. `message` and `chat`
 // are aliases of `message-square`. 0.4.0 added clock, alarm-clock, bell-ring,
-// timer, circle-help and ellipsis-vertical (Lucide 1.65.0). Refresh with
-// tools/update-icons.py.
+// timer, circle-help and ellipsis-vertical, 0.4.3 chevrons-down (Lucide
+// 1.65.0). Refresh with tools/update-icons.py.
 //
 //   FoamyIcon { name: "refresh-cw"; color: FoamyPalette.text; width: FoamyStyle.iconSize; height: width }
 //
@@ -54,6 +54,7 @@ Image {
     "chevron-left": "<path d=\"m15 18-6-6 6-6\"/>",
     "chevron-right": "<path d=\"m9 6 6 6-6 6\"/>",
     "chevron-up": "<path d=\"m6 15 6-6 6 6\"/>",
+    "chevrons-down": "<path d=\"m7 6 5 5 5-5\"/><path d=\"m7 13 5 5 5-5\"/>",
     "circle-help": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\"/><path d=\"M12 17h.01\"/>",
     "clock": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 6v6l4 2\"/>",
     "cloud": "<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\"></path>",
