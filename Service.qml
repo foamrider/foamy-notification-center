@@ -570,7 +570,8 @@ Item {
 
   property bool sourceRestartPending: false
   FileView {
-    path: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/omarchy/shell.json"
+    // The host always reads this path; it does not follow XDG_CONFIG_HOME.
+    path: Quickshell.env("HOME") + "/.config/omarchy/shell.json"
     watchChanges: true
     printErrors: false
     onFileChanged: {
