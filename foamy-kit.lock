@@ -1,8 +1,8 @@
 # foamy-kit.lock: written by foamy-kit sync.sh; do not edit.
 # Hashes are of each file's body (the file without its stamp line);
 # notices are hashed whole. tests/kit-check.sh verifies them.
-version 0.4.4
-source 7ec4e9543aa1
+version 0.4.5
+source 69b589ce3e41
 components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyPopup,FoamyPrefs,FoamySettings,FoamyStyle,FoamyWheelScroll,SafeTextField
 31637cf414fddfbc7c18c7d107b4c9a77801568fd78ebb8212791fb66de476a9  kit/FoamyAction.qml
 4488b3dbaa2b0fab78fb66dea979e57bcc0f30e76e6443bb4a0f031fffc44709  kit/FoamyCursor.qml
@@ -11,7 +11,7 @@ b717a528267202710c196f4a67600467b292db64f643a502ea1eebb92df75095  kit/FoamyDropd
 8e654a2f36d869b397f67b1a0fda1279c6f0bae09857400f930381296f8b7496  kit/FoamyHeader.qml
 f89145274930cdd9fe3c71970c4c4afa0d6167f4cfc163e69736373aebe4a8ea  kit/FoamyHeroBand.qml
 1823e930a714d5adabc6349dc4e43ca810b971939970c5c503cb219fe96533b9  kit/FoamyI18n.qml
-1080db23c5895dcfe6a5bb1c69b116b4f7d7e7f15c6a4dd373f745b2b36f68f6  kit/FoamyIcon.qml
+1d0865ffc22288c90854e3a5c4d4031f49302bf1277f138f9dda373d3f387e30  kit/FoamyIcon.qml
 4a41e34e4016ff77806d7adc747f5c645e421d12b0f673a58173aa135b6bd0ad  kit/FoamyInfoNote.qml
 5a372861e53b40a49d0d97cc2796f89231337a9c40700f26a0fcb694d70d2a9b  kit/FoamyIpc.qml
 9560787e2fe14c573f84942540ba4c4686cde246420984419379ed8769a77697  kit/FoamyIpcPreference.qml
