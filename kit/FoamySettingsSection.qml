@@ -1,4 +1,4 @@
-// foamy-kit 0.4.6 8cdbb9c29ea18347ca78e37895688ee44c32c521868aaecfbe99e11f8255b073 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.4.7 8cdbb9c29ea18347ca78e37895688ee44c32c521868aaecfbe99e11f8255b073 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // A titled group of settings rows. Titles are sentence case ("Bar", "Refresh").
