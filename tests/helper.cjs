@@ -2,7 +2,7 @@
 //
 // FOAMY_HELPER is a JSON argv prefix, e.g.
 //   FOAMY_HELPER='["/abs/path/bin/aarch64/foamy-notification-center-helper"]'
-// Without it the plugin's own helper runs.
+// Without it the plugin's own helper for this machine runs (bin/<arch>/).
 //
 // Every call gets a private HOME when the caller would otherwise hand the
 // helper the real one, so no test can reach personal notification state.
@@ -16,7 +16,7 @@ const realHome = os.homedir()
 
 function prefix() {
   const configured = process.env.FOAMY_HELPER
-  if (!configured) return [path.join(root, "bin/notification-center")]
+  if (!configured) return [path.join(root, "bin", os.machine(), "foamy-notification-center-helper")]
   const argv = JSON.parse(configured)
   if (!Array.isArray(argv) || argv.length === 0 || !argv.every(arg => typeof arg === "string"))
     throw new Error("FOAMY_HELPER must be a JSON array of strings")

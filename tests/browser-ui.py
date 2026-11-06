@@ -1,5 +1,6 @@
 """Exercise local favicon lookup and both icon fallbacks on the real QML card."""
 from contextlib import closing
+import json
 import os
 from pathlib import Path
 import signal
@@ -12,6 +13,8 @@ from favicon_test import png
 
 source = Path(__file__).resolve().parents[1]
 center = source.name == 'foamy-notification-center'
+# The plugin's native helper (foamy-<x>-helper for manifest id foamy.<x>) answers `favicon`.
+helper = 'foamy-' + json.loads((source / 'manifest.json').read_text())['id'].split('.', 1)[1] + '-helper'
 base = Path(tempfile.mkdtemp(prefix='foamy-browser-ui-'))
 app = base / 'app'
 app.mkdir()
@@ -20,7 +23,8 @@ for name in ['Commons', 'Ui']:
     (app / name).symlink_to((os.environ.get('OMARCHY_TEST_ROOT') or '/usr/share/omarchy') + '/shell/' + name, target_is_directory=True)
 (app / 'plugin').symlink_to(source, target_is_directory=True)
 failed_helper = (source / 'components/BrowserIcons.qml').read_text().replace('import "../BrowserIdentity.js"', 'import "plugin/BrowserIdentity.js"')
-failed_helper = failed_helper.replace('    command: ["python3", Qt.resolvedUrl("../bin/browser-favicon.py").toString().replace(/^file:\\/\\//, "")]', '    command: ["/nonexistent/foamy-favicon-test-helper"]')
+failed_helper = failed_helper.replace('import "../kit/FoamyNative.js"', 'import "plugin/kit/FoamyNative.js"')
+failed_helper = failed_helper.replace('    command: root.helper ? FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl("..")), root.helper, ["favicon"]) : []', '    command: ["/nonexistent/foamy-favicon-test-helper"]')
 assert '/nonexistent/foamy-favicon-test-helper' in failed_helper
 (app / 'FailedBrowserIcons.qml').write_text(failed_helper)
 (app / 'fallback.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="6" fill="#e05555"/><text x="16" y="23" text-anchor="middle" fill="white" font-size="22">V</text></svg>')
@@ -79,8 +83,8 @@ ShellRoot {
   property var entry:({key:"1000-1",timestamp:1000,app:"Vivaldi",body:"teams.example.com\\nNew message",appIcon:APP_ICON})
   property string overrideSource:"resolved"
   readonly property string iconSource:overrideSource==="resolved" ? resolver.source(IDENTITY_ENTRY) : overrideSource
-  BrowserIcons { id:resolver }
-  FailedBrowserIcons { id:failedResolver }
+  BrowserIcons { id:resolver; helper:"HELPER" }
+  FailedBrowserIcons { id:failedResolver; helper:"HELPER" }
   FloatingWindow {
     id:window;visible:true;implicitWidth:500;implicitHeight:250;color:Color.background
     WIDGET
@@ -117,7 +121,7 @@ MODEL_CHECK
     }
   }
 }
-'''.replace('WIDGET', widget).replace('MODEL_IMPORT', model_import).replace('MODEL_PROPERTIES', model_properties).replace('IDENTITY_ENTRY', identity_entry).replace('MODEL_CHECK', model_check).replace('APP_ICON', app_icon))
+'''.replace('WIDGET', widget).replace('MODEL_IMPORT', model_import).replace('MODEL_PROPERTIES', model_properties).replace('IDENTITY_ENTRY', identity_entry).replace('MODEL_CHECK', model_check).replace('APP_ICON', app_icon).replace('HELPER', helper))
 runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)
 # A temporary HOME must not invoke Python through a user's runtime-manager shim.

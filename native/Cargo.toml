@@ -1,0 +1,18 @@
+[package]
+name = "foamy-notification-center-helper"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+# The kit: locks, atomic writes, bounded children, umask, and the favicon lookup.
+foamy-helper = { path = "../kit/rust/foamy-helper", features = ["favicon"] }
+# Already in the tree through the kit: fstat/open flags, poll, pre-exec prctl.
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "event"] }
+# Already in the tree through the kit's favicon feature: localtime_r, so the
+# assets hash keeps `stat -c %y`'s local-time text.
+libc = "0.2.153"
+# SHA-256 for the source/asset hashes (sha256sum before) and the stock
+# fingerprint (Python's hashlib before). Pure Rust.
+sha2 = { version = "0.10", default-features = false }

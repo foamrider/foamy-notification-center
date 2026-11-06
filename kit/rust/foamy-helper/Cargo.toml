@@ -1,0 +1,45 @@
+# foamy-kit 0.5.0 575b53b4dff70cd59f7e8797ae14303c8a9f9fd421bdbb8611d0d2e11b76b34e — do not edit; change foamy-kit and run sync
+# Shared library of the foamy plugin helpers; see src/lib.rs. Vendored into
+# plugins as kit/rust/foamy-helper and used by path. The version only changes
+# with the public API (a plugin then runs `cargo update -p foamy-helper`), so
+# a kit release that leaves this crate alone needs no new plugin Cargo.lock.
+[package]
+name = "foamy-helper"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Bounded I/O, JSON lines, atomic files, locks and bounded child processes for foamy plugin helpers"
+
+# Heavier modules are opt-in, so a plugin compiles (and pins) only what it
+# uses: `foamy-helper = { path = "../kit/rust/foamy-helper", features = ["favicon"] }`.
+[features]
+# Browser favicon lookup from local Chromium caches (foamy-notifications,
+# foamy-notification-center). Pure Rust: a built-in read-only SQLite reader.
+favicon = ["dep:libc"]
+# seccomp-BPF filters, Landlock exec restriction, bubblewrap argv
+# (foamy-lock, foamy-github).
+sandbox = ["dep:libc", "dep:seccompiler", "dep:landlock"]
+# HTTPS: rustls with Graviola crypto (pure Rust + assembly, reproducible
+# cross-builds without a C compiler) and the system trust store
+# (foamy-train, foamy-lock, foamy-weather, foamy-syncthing).
+tls = ["dep:rustls", "dep:rustls-graviola", "dep:rustls-native-certs"]
+
+[dependencies]
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "event"] }
+serde = { version = "1", default-features = false, features = ["std"] }
+serde_json = { version = "1", default-features = false, features = ["std"] }
+libc = { version = "0.2.153", optional = true }
+seccompiler = { version = "0.5", optional = true }
+landlock = { version = "0.4.2", optional = true }
+# No default features: no aws-lc-rs (C), no logging.
+rustls = { version = "0.23.31", default-features = false, features = ["std", "tls12"], optional = true }
+rustls-graviola = { version = "0.4", optional = true }
+rustls-native-certs = { version = "0.8", optional = true }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"

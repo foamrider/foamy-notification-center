@@ -1,0 +1,4 @@
+[workspace]
+members = ["native"]
+exclude = ["kit"]
+resolver = "3"

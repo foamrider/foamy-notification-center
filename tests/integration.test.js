@@ -140,7 +140,10 @@ test('a source directory created after the watcher started is picked up',async t
  await until(()=>events.some(e=>e.event==='storeChanged'))
  assert.equal(fs.existsSync(late),false,'the watcher never creates the source directory')
  const stamp=Date.now()
- fs.mkdirSync(late,{recursive:true});fs.writeFileSync(path.join(late,`${stamp}-7.json`),JSON.stringify({timestamp:stamp,originalId:7,app:'Late',summary:'Arrived'}))
+ // The directory appears with its file (renamed into place), so the watcher's sync cannot run between the two.
+ const staging=path.join(f.dir,'staging');fs.mkdirSync(path.join(staging,'notifications'),{recursive:true})
+ fs.writeFileSync(path.join(staging,'notifications',`${stamp}-7.json`),JSON.stringify({timestamp:stamp,originalId:7,app:'Late',summary:'Arrived'}))
+ fs.renameSync(staging,path.dirname(late))
  await until(()=>events.some(e=>e.event==='rewatch'))
  assert.deepEqual(f.run('list').map(r=>r.summary),['Arrived'])
 })
@@ -246,7 +249,7 @@ test('any archive-setting change restarts the running watcher, even without a so
  // Every value the watcher reads is in that environment.
  const env=source.slice(source.indexOf('  readonly property var storeEnvironment: {'),source.indexOf('\n  }\n',source.indexOf('  readonly property var storeEnvironment: {')))
  for(const name of ['NC_KEEP_DAYS','NC_MAX_ITEMS','NC_PREVIEWS','NC_SOURCE','NC_SRC_DIR','NC_SRC_HISTORY','NC_HANDLED','NC_STATE_FILE']) assert.ok(env.includes(name),name)
- const script=fs.readFileSync(path.join(__dirname,'../bin/notification-center'),'utf8')
+ const native=path.join(__dirname,'../native/src'),script=fs.readdirSync(native).filter(n=>n.endsWith('.rs')).map(n=>fs.readFileSync(path.join(native,n),'utf8')).join('\n')
  for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL'].includes(name)) assert.ok(env.includes(name),`watcher reads ${name} but the service does not pass it`)
 })
 test('Clear all uses the cutoff captured at the click, so later arrivals survive (as in Foamy)',t=>{
@@ -270,7 +273,9 @@ test('a rewatch after a source directory appears keeps its pruned events',async 
  t.after(()=>watch.kill())
  const until=async fn=>{const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))}}
  await until(()=>events.some(e=>e.event==='storeChanged'))
- fs.mkdirSync(late,{recursive:true});fs.writeFileSync(path.join(late,`${now}-7.json`),JSON.stringify({timestamp:now,originalId:7,app:'Late',summary:'new'}))
+ const staging=path.join(f.dir,'staging');fs.mkdirSync(path.join(staging,'popups'),{recursive:true})
+ fs.writeFileSync(path.join(staging,'popups',`${now}-7.json`),JSON.stringify({timestamp:now,originalId:7,app:'Late',summary:'new'}))
+ fs.renameSync(staging,path.dirname(late))
  await until(()=>events.some(e=>e.event==='rewatch'))
  const pruned=events.filter(e=>e.event==='pruned').flatMap(e=>e.keys)
  assert.deepEqual(pruned,[`${now-8999}-1`],'the dropped Foamy key reaches the service for releaseHistory')
@@ -284,7 +289,7 @@ test('every store process the service launches gets the resolved store environme
  for(const b of store) assert.match(b,/environment: root\.storeEnvironment/,b.split('\n')[1])
  assert.match(source,/id: markProc\n    environment: root\.storeEnvironment/)
  // Commands are built from values captured when the work was requested.
- assert.match(source,/command: \[root\.script, "clear", cut\]/)
+ assert.match(source,/command: root\.storeCommand\(\["clear", cut\]\)/)
 })
 test('a seen stamp taken while a write runs is written afterwards, not dropped',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
@@ -304,4 +309,25 @@ test('a seen stamp taken while a write runs is written afterwards, not dropped',
  Object.defineProperty(ectx,'running',{get(){return proc.running},set(v){proc.running=v}})
  vm.runInContext('(function(){'+exit+'})()',ectx)
  assert.deepEqual(commands,['10','20']);assert.equal(ctx.seenPending,'')
+})
+test('a helper missing for this CPU is reported once, translated, and never restarted',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const FoamyNative=require('../kit/node-loader.cjs').load('FoamyNative'),no=require('../i18n/no.json')
+ assert.ok(no[FoamyNative.UNAVAILABLE_TEXT],'Norwegian text')
+ const take=name=>{const start=source.indexOf(`  function ${name}(`);assert.ok(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4)}
+ const ctx=vm.createContext({FoamyNative,console:{warn(){ctx.warnings++}},warnings:0,helperUnavailable:false,loadError:'',listProc:{running:false},loadPending:false,listRevision:0,archiveRevision:0,listLoadCount:0,listLimit:500,searchQuery:'',storeCommand:a=>a,String})
+ ctx.root=ctx
+ for(const name of ['storeUnavailable','load']) vm.runInContext(take(name),ctx)
+ assert.equal(ctx.storeUnavailable(1),false);assert.equal(ctx.helperUnavailable,false)
+ assert.equal(ctx.storeUnavailable(127),true);assert.equal(ctx.storeUnavailable(126),true)
+ assert.equal(ctx.helperUnavailable,true);assert.equal(ctx.loadError,FoamyNative.UNAVAILABLE_TEXT);assert.equal(ctx.warnings,1)
+ ctx.load();assert.equal(ctx.listLoadCount,0,'no list read without a helper')
+ // The watcher stops for good: its exit handler returns before scheduling a restart.
+ const watch=source.slice(source.indexOf('    id: watchProc'),source.indexOf('\n  }',source.indexOf('    id: watchProc')))
+ assert.match(watch,/onExited: function\(exitCode, exitStatus\) \{\n      if \(root\.storeUnavailable\(exitCode\)\) return/)
+ assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) watchProc\.running = true/)
+ // Every store command runs the bundled binary for this CPU.
+ const cmd=vm.createContext({FoamyNative,root:{pluginDir:'/plugin',helper:'foamy-notification-center-helper'}})
+ cmd.root.storeCommand=vm.runInContext('('+take('storeCommand').trim().replace(/^function storeCommand/,'function')+')',cmd)
+ assert.deepEqual(Array.from(cmd.root.storeCommand(['list','5'])),['bash','-c','exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"','foamy-native','/plugin','foamy-notification-center-helper','list','5'])
 })

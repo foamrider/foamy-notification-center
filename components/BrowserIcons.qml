@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Io
 import "../BrowserIdentity.js" as BrowserIdentity
+import "../kit/FoamyNative.js" as FoamyNative
 
 Item {
   id: root
@@ -9,6 +10,11 @@ Item {
   property var pending: ({})
   property var requests: []
   property var active: null
+  // The plugin's native helper (bin/<arch>/<helper>, foamy-kit FoamyNative); set
+  // where BrowserIcons is used. Its `favicon` subcommand is the lookup.
+  property string helper: ""
+  // No helper binary for this CPU: app icons only, without retrying.
+  property bool unavailable: false
   signal updated()
 
   function source(row) {
@@ -18,6 +24,7 @@ Item {
   }
 
   function warm(rows) {
+    if (unavailable || !helper) return
     var queue = requests.slice()
     for (var i = 0; i < Math.min(rows.length, 128) && queue.length < 128; i++) {
       var row = rows[i], key = BrowserIdentity.key(row)
@@ -60,7 +67,7 @@ Item {
 
   Process {
     id: lookup
-    command: ["python3", Qt.resolvedUrl("../bin/browser-favicon.py").toString().replace(/^file:\/\//, "")]
+    command: root.helper ? FoamyNative.command(FoamyNative.localPath(Qt.resolvedUrl("..")), root.helper, ["favicon"]) : []
     stdinEnabled: true
     stdout: StdioCollector { id: output }
     stderr: StdioCollector { id: errors }
@@ -69,7 +76,12 @@ Item {
       lookup.stdinEnabled = false
     }
     onExited: function(exitCode, exitStatus) {
-      if (exitCode !== 0 || exitStatus !== 0) console.warn("Favicon lookup failed; using the app icon:", errors.text.trim())
+      if (FoamyNative.unavailable(exitCode)) {
+        if (!root.unavailable) console.warn("Favicon lookup: " + FoamyNative.UNAVAILABLE_TEXT + " Using app icons.")
+        root.unavailable = true
+        root.requests = []
+        root.pending = ({})
+      } else if (exitCode !== 0 || exitStatus !== 0) console.warn("Favicon lookup failed; using the app icon:", errors.text.trim())
       root.finish(output.text)
     }
   }
