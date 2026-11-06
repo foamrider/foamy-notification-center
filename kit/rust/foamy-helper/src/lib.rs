@@ -1,4 +1,4 @@
-// foamy-kit 0.5.0 26b515322b5d5a6fec73a0b80176a558966b92aac1e0ca952a02a77043bf6ea4 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.5.0 f8d5a3d7073844931bdf3f4263650038bfc1cf0096f54fc8b04548fb706e841b — do not edit; change foamy-kit and run sync
 //! Shared building blocks for foamy plugin helpers (`foamy-<plugin>-helper`).
 //!
 //! foamy-kit's `FoamyNative` component vendors this crate into a plugin as
@@ -15,6 +15,7 @@
 //! an output cap. Nothing here starts an async runtime or a background thread
 //! that outlives a call.
 //!
+//! - [`hash`]: SHA-256 in plain Rust (`sha256`, `sha256_hex`).
 //! - [`io`]: bounded reads (whole streams, files, lines with a maximum length).
 //! - [`json`]: JSON-lines requests and replies, and [`json::run`], the
 //!   "every failure still prints JSON" entry point.
@@ -22,6 +23,9 @@
 //! - [`lock`]: `flock` locks, including under `$XDG_RUNTIME_DIR/<plugin>`.
 //! - [`child`]: bounded child processes (deadline, output cap, kill on
 //!   timeout, environment control, death with the parent).
+//! - [`net`]: [`net::DeadlineStream`], socket I/O bounded by one absolute
+//!   deadline (re-armed before every read and write, so a trickling peer or
+//!   a TLS layer's many reads cannot outlast it).
 //! - [`process`]: this process: exit on panic, `PR_SET_PDEATHSIG`,
 //!   `setsid`, rlimits, umask.
 //!
@@ -39,9 +43,11 @@ pub mod child;
 #[cfg(feature = "favicon")]
 pub mod favicon;
 pub mod fs;
+pub mod hash;
 pub mod io;
 pub mod json;
 pub mod lock;
+pub mod net;
 pub mod process;
 #[cfg(feature = "sandbox")]
 pub mod sandbox;

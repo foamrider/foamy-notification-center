@@ -2,7 +2,7 @@
 # Hashes are of each file's body (the file without its stamp line);
 # notices are hashed whole. tests/kit-check.sh verifies them.
 version 0.5.0
-source bd6413e85611
+source a67b3dc5d801
 components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyPopup,FoamyPrefs,FoamySettings,FoamyStyle,FoamyWheelScroll,SafeTextField
 31637cf414fddfbc7c18c7d107b4c9a77801568fd78ebb8212791fb66de476a9  kit/FoamyAction.qml
 4488b3dbaa2b0fab78fb66dea979e57bcc0f30e76e6443bb4a0f031fffc44709  kit/FoamyCursor.qml
@@ -43,18 +43,20 @@ c741d6fcac65bfb155c54c3933addc244163c74642ceae4a28b68cec16367abf  kit/SafeTextFi
 dbd237778c3ec2fd8ac78b585dfc01e883d8617e0bddd47dd92a15be0bd79d11  kit/qmldir
 575b53b4dff70cd59f7e8797ae14303c8a9f9fd421bdbb8611d0d2e11b76b34e  kit/rust/foamy-helper/Cargo.toml
 c313f9ebfeef38e6adc56fb455e4643404b50f89aa495d7f7ffbaa139f40f351  kit/rust/foamy-helper/src/child.rs
-5bcdcf0112654d512c426b2f1290e81fa80cfae94d0f7dc60671bc93bed5994c  kit/rust/foamy-helper/src/favicon.rs
+45275bb9a332e9ce9aafab9c1df2e9bb388cb0954dea4086bd17016e285d035e  kit/rust/foamy-helper/src/favicon.rs
 d0de5bb002a6af039c90d728bde78e3fb11174388482588561abc0495cd6b81b  kit/rust/foamy-helper/src/favicon/sqlite.rs
-116c05491dad54c3622b3ee574c1660f0726eee7caa8adb53f4d3551d6e4bd98  kit/rust/foamy-helper/src/favicon/tests.rs
+3b092b6e431e128eda90551c6e517778828ed7b80e3ffcfa9d7cb6a3add54ff6  kit/rust/foamy-helper/src/favicon/tests.rs
 2f17136d803e674f7a0576813750d8406680381102023f4669102bbceadc1555  kit/rust/foamy-helper/src/fs.rs
+444eba5d6f73ead3d00fecbe31574cfc3c260cd220d162448a12ac28ef0ca13c  kit/rust/foamy-helper/src/hash.rs
 17d4cde5814661e1eedce8abdb7ea1e46ef8f9a588d3454920e5fdba99b83c0c  kit/rust/foamy-helper/src/io.rs
 34a2d3b505a93d36d0c874c5aa03e105e49ec885e85d941979b5b14aeba9db99  kit/rust/foamy-helper/src/json.rs
-26b515322b5d5a6fec73a0b80176a558966b92aac1e0ca952a02a77043bf6ea4  kit/rust/foamy-helper/src/lib.rs
+f8d5a3d7073844931bdf3f4263650038bfc1cf0096f54fc8b04548fb706e841b  kit/rust/foamy-helper/src/lib.rs
 b5f018d5c973f1115da2ae6c35c7eb8700e6cc24d97cb7b917a04ca05560d45c  kit/rust/foamy-helper/src/lock.rs
+6e036b32a765a1adf8110629db1fca3c7d476d4f85f8ed7d3d44735222e2daab  kit/rust/foamy-helper/src/net.rs
 2a2d9259787593e3b1bac0a5267d440fb7d698f12a1166ddf439412e89431035  kit/rust/foamy-helper/src/process.rs
 d2213229d6dc4054ee87597496c93caa8f3645f6bad4fd37650cbad7cc6c0ec7  kit/rust/foamy-helper/src/sandbox.rs
 78ba4abf76f4bedcb2fcfb211a0b31af68055b15f6e093bf28cb860caec0be42  kit/rust/foamy-helper/src/sandbox/tests.rs
-546f369a0ff8f52a4360d3fa8ad4425fbd1b5cb0efc473cbe27cdfd8c297765a  kit/rust/foamy-helper/src/tls.rs
+b87cbab9ce6104456616d0309c28adce7c0d0e7bdd4e6746c256a47aa76af421  kit/rust/foamy-helper/src/tls.rs
 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e  rust-toolchain.toml
 59c3505e9a3a16728a521626b705613826f74569871c12b75afa196bcc4af467  tests/kit-check.sh

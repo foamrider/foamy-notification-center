@@ -1,4 +1,4 @@
-// foamy-kit 0.5.0 546f369a0ff8f52a4360d3fa8ad4425fbd1b5cb0efc473cbe27cdfd8c297765a — do not edit; change foamy-kit and run sync
+// foamy-kit 0.5.0 b87cbab9ce6104456616d0309c28adce7c0d0e7bdd4e6746c256a47aa76af421 — do not edit; change foamy-kit and run sync
 //! TLS for helpers that make HTTPS requests (feature `tls`): one crypto
 //! provider and one trust store for every foamy helper.
 //!
@@ -19,14 +19,25 @@
 //! With ureq (`default-features = false, features = ["rustls-no-provider"]`):
 //!
 //! ```ignore
-//! use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
+//! use std::sync::Arc;
+//! use ureq::tls::{Certificate, RootCerts, TlsConfig, TlsProvider};
 //! foamy_helper::tls::ensure_supported()?;
+//! // ureq 3 has its own certificate type.
+//! let roots: Vec<Certificate<'static>> = foamy_helper::tls::system_roots_der()
+//!     .iter()
+//!     .map(|der| Certificate::from_der(der.as_ref()).to_owned())
+//!     .collect();
 //! let tls = TlsConfig::builder()
 //!     .provider(TlsProvider::Rustls)
-//!     .root_certs(RootCerts::Specific(foamy_helper::tls::system_roots_der()))
+//!     .root_certs(RootCerts::Specific(Arc::new(roots)))
 //!     .unversioned_rustls_crypto_provider(foamy_helper::tls::provider())
 //!     .build();
 //! ```
+//!
+//! ureq's `timeout_global` bounds each read by the time left, but its CONNECT
+//! proxy reply loop does not: put a deadline-capping transport in ureq's
+//! connector chain (foamy-train's `native/src/net.rs` `DeadlineConnector`), or
+//! use [`crate::net::DeadlineStream`] under your own HTTP code.
 
 use std::fmt;
 use std::sync::{Arc, OnceLock};

@@ -1,4 +1,4 @@
-// foamy-kit 0.5.0 116c05491dad54c3622b3ee574c1660f0726eee7caa8adb53f4d3551d6e4bd98 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.5.0 3b092b6e431e128eda90551c6e517778828ed7b80e3ffcfa9d7cb6a3add54ff6 — do not edit; change foamy-kit and run sync
 //! The favicon lookup against real SQLite files. The databases are written
 //! (and browsers holding them simulated) with Python's `sqlite3` module, the
 //! same library the Python helper used; without `python3` these tests are
@@ -201,21 +201,21 @@ fn png_bounds() {
 #[test]
 fn sha256_and_uris_match_python() {
     assert_eq!(
-        hex(&sha256(b"")),
+        hex(&crate::hash::sha256(b"")),
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     );
     assert_eq!(
-        hex(&sha256(b"abc")),
+        hex(&crate::hash::sha256(b"abc")),
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     );
     // hashlib.sha256(…).hexdigest()
     assert_eq!(
-        hex(&sha256(b"vivaldi\nexample.com")),
+        hex(&crate::hash::sha256(b"vivaldi\nexample.com")),
         "61400a381a3bc23c14ba54c1a8543f9241ae78f58115e77d7c6f0450467a14b9"
     );
     let long: Vec<u8> = (0..1000u32).map(|i| i as u8).collect();
     assert_eq!(
-        hex(&sha256(&long)),
+        hex(&crate::hash::sha256(&long)),
         "a8af099bf2e878609558dbf69d8f88f4a31040a8cf84b549a0cfa912f12ffc3f"
     );
     assert_eq!(
