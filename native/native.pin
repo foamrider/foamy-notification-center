@@ -6,6 +6,6 @@ crate native
 binary foamy-notification-center-helper
 toolchain 1.99.1
 kit 0.5.0
-source f4d7331fcd6b642c5e891266033ca1492dc755352359ea5e26ce9bd139bf31c1
-783302585c9f38caf0d6c8cb19c049fb7113e725b799a51970983e06f18e374c  bin/aarch64/foamy-notification-center-helper
-8863fff00e78f0fcb781c5d72787e84ebf14edadf4254e348ceaa69a6f698caa  bin/x86_64/foamy-notification-center-helper
+source b6a61b033d7712eec6225664ea41cfa0f9f86236f7d75ac202719c942ae38c93
+ad2d0b17f409481b7cc6edb23e448f831944cebf14ca3971d874ba41a5d8211e  bin/aarch64/foamy-notification-center-helper
+4ae526788aae6e1f0f3c6e0237ee56363739c4f8f1dc616608971cd959f9a756  bin/x86_64/foamy-notification-center-helper

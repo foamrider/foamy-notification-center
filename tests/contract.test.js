@@ -194,3 +194,19 @@ test('watch prints its events as fixed lines', async t => {
   assert.equal(code, 1)
   assert.equal(lines.at(-1), '{"ok":false,"error":"notification source changed; reconnecting"}')
 })
+
+test('a stopped watcher finishes its step and ends with "notification watcher stopped"', async t => {
+  const f = fixture(t)
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    const lines = [], watch = helper.spawn(['watch'], {env: f.env})
+    let pending = ''
+    watch.stdout.on('data', chunk => { pending += chunk; let n; while ((n = pending.indexOf('\n')) >= 0) { lines.push(pending.slice(0, n)); pending = pending.slice(n + 1) } })
+    t.after(() => watch.kill('SIGKILL'))
+    const end = Date.now() + 5000
+    while (!lines.includes('{"event":"storeChanged"}')) { assert.ok(Date.now() < end, lines.join('\n')); await new Promise(r => setTimeout(r, 25)) }
+    const exited = new Promise(resolve => watch.on('close', code => resolve(code)))
+    watch.kill(signal)
+    assert.equal(await exited, 1, signal)
+    assert.equal(lines.at(-1), '{"ok":false,"error":"notification watcher stopped"}', signal)
+  }
+})

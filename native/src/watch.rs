@@ -3,9 +3,10 @@
 
 use std::fs;
 use std::io::{self, Read};
-use std::os::fd::AsFd;
+use std::os::fd::{AsFd, IntoRawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rustix::event::{PollFd, PollFlags, Timespec, poll};
@@ -26,9 +27,49 @@ fn is_dir(path: &str) -> bool {
     fs::metadata(path).is_ok_and(|m| m.is_dir())
 }
 
+/// SIGTERM or SIGINT arrived: the old script's trap stopped inotifywait and
+/// let the current step finish, then the stream ended ("notification
+/// watcher stopped").
+static STOP: AtomicBool = AtomicBool::new(false);
+/// The write end of the self-pipe that wakes the event loop's `poll`.
+static WAKE: AtomicI32 = AtomicI32::new(-1);
+
+extern "C" fn on_stop(_: libc::c_int) {
+    STOP.store(true, Ordering::SeqCst);
+    let fd = WAKE.load(Ordering::SeqCst);
+    if fd >= 0 {
+        let byte = 1u8;
+        // SAFETY: write(2) is async-signal-safe; the descriptor is a
+        // non-blocking pipe this process keeps open for its lifetime.
+        unsafe {
+            libc::write(fd, (&raw const byte).cast(), 1);
+        }
+    }
+}
+
+/// Traps SIGTERM and SIGINT like the old `trap … INT TERM`; returns the
+/// self-pipe's read end.
+fn trap_stop() -> Option<io::PipeReader> {
+    let (reader, writer) = io::pipe().ok()?;
+    rustix::fs::fcntl_setfl(&writer, rustix::fs::OFlags::NONBLOCK).ok()?;
+    WAKE.store(writer.into_raw_fd(), Ordering::SeqCst);
+    // SAFETY: a zeroed sigaction is valid; the handler only touches atomics
+    // and calls write(2). No SA_RESTART, so a blocked read or poll returns.
+    unsafe {
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = on_stop as *const () as libc::sighandler_t;
+        libc::sigemptyset(&mut action.sa_mask);
+        for signal in [libc::SIGTERM, libc::SIGINT] {
+            libc::sigaction(signal, &action, std::ptr::null_mut());
+        }
+    }
+    Some(reader)
+}
+
 /// inotifywait's merged output, line by line, with a deadline per read.
 struct Events {
     pipe: io::PipeReader,
+    wake: Option<io::PipeReader>,
     buffer: Vec<u8>,
     eof: bool,
 }
@@ -36,6 +77,8 @@ struct Events {
 enum Next {
     Line(String),
     Timeout,
+    /// A stop signal arrived (handled by the caller).
+    Wake,
     End,
 }
 
@@ -54,12 +97,29 @@ impl Events {
                 tv_sec: s.max(0) as _,
                 tv_nsec: 0,
             });
-            let mut fds = [PollFd::from_borrowed_fd(self.pipe.as_fd(), PollFlags::IN)];
-            match poll(&mut fds, timeout.as_ref()) {
-                Ok(0) => return Next::Timeout,
-                Ok(_) => {}
-                Err(rustix::io::Errno::INTR) => continue,
-                Err(_) => return Next::End,
+            let woken = {
+                let mut fds = vec![PollFd::from_borrowed_fd(self.pipe.as_fd(), PollFlags::IN)];
+                if let Some(wake) = &self.wake {
+                    fds.push(PollFd::from_borrowed_fd(wake.as_fd(), PollFlags::IN));
+                }
+                match poll(&mut fds, timeout.as_ref()) {
+                    Ok(0) => return Next::Timeout,
+                    Ok(_) => {}
+                    Err(rustix::io::Errno::INTR) => return Next::Wake,
+                    Err(_) => return Next::End,
+                }
+                let ready = |fd: &PollFd| !fd.revents().is_empty();
+                (fds.get(1).is_some_and(ready), ready(&fds[0]))
+            };
+            if woken.0 {
+                if let Some(wake) = &mut self.wake {
+                    let mut drain = [0u8; 64];
+                    let _ = rustix::io::read(&*wake, &mut drain);
+                }
+                return Next::Wake;
+            }
+            if !woken.1 {
+                continue;
             }
             let mut chunk = [0u8; 8192];
             match self.pipe.read(&mut chunk) {
@@ -76,6 +136,14 @@ impl Events {
 struct Watcher(Child);
 
 impl Watcher {
+    /// After a stop signal: end inotifywait so the stream runs dry (once).
+    fn interrupt(&mut self, done: &mut bool) {
+        if STOP.load(Ordering::SeqCst) && !*done {
+            *done = true;
+            let _ = self.0.kill();
+        }
+    }
+
     fn stop(&mut self) {
         let _ = self.0.kill();
         let _ = self.0.wait();
@@ -99,6 +167,7 @@ pub fn run(store: &mut Store) -> ! {
         fail(&message);
     }
     store.watching = true;
+    let wake = trap_stop();
     // Watch only what exists; never create directories in another plugin's
     // state. A missing source directory is watched through its nearest
     // existing ancestor; when it appears, the watcher syncs and asks to be
@@ -175,16 +244,19 @@ pub fn run(store: &mut Store) -> ! {
     };
     drop(command);
     let mut watcher = Watcher(child);
+    let mut interrupted = false;
     let mut events = Events {
+        wake,
         pipe: reader,
         buffer: Vec::new(),
         eof: false,
     };
     // Establish watches before startup reconciliation so arrivals cannot fall into a gap.
     loop {
+        watcher.interrupt(&mut interrupted);
         match events.next(None) {
             Next::Line(line) if line == "Watches established." => break,
-            Next::Line(_) | Next::Timeout => continue,
+            Next::Line(_) | Next::Timeout | Next::Wake => continue,
             Next::End => watcher.die("notification watcher failed to start"),
         }
     }
@@ -202,6 +274,7 @@ pub fn run(store: &mut Store) -> ! {
         .map_or(3600, |v| v.min(i64::MAX as i128 / 2) as i64);
     let mut next_retention = epoch_seconds() + interval;
     loop {
+        watcher.interrupt(&mut interrupted);
         let wait = next_retention - epoch_seconds();
         if wait <= 0 {
             if store.locked(Store::prune).is_err() {
@@ -213,7 +286,7 @@ pub fn run(store: &mut Store) -> ! {
         }
         let line = match events.next(Some(wait)) {
             Next::Line(line) => line,
-            Next::Timeout => continue,
+            Next::Timeout | Next::Wake => continue,
             Next::End => break,
         };
         let (event, file) = match line.split_once('|') {
