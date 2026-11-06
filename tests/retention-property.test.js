@@ -1,5 +1,5 @@
 // Property test for the archive invariants written at the top of
-// bin/notification-center: random arrivals (with equal-millisecond ties, some
+// native/src/main.rs: random arrivals (with equal-millisecond ties, some
 // days old), in-place updates, dismissals (also before first ingestion), count
 // and age retention limits that go down and up again, and syncs. Sources keep
 // their files after a dismissal, as stock 4.0 does. Invariants are checked
@@ -10,7 +10,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const script = path.join(__dirname, '../bin/notification-center')
+const helper = require('./helper.cjs')
 
 function rng(seed) { return () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff } }
 const rankLe = (a, b) => a.ts < b.ts || (a.ts === b.ts && a.key <= b.key)
@@ -24,7 +24,7 @@ for (const seed of [7, 42, 1337, 2024, 99]) {
     fs.mkdirSync(path.join(source, 'history'), { recursive: true })
     const DAY = 86400000, base = Date.now() - 600000
     const run = (env, ...args) => {
-      const r = spawnSync(script, args, { env: { ...process.env, NC_SRC_DIR: source, NC_SRC_HISTORY: path.join(source, 'history'), NC_STORE: store, NC_PREVIEWS: '0', ...env }, encoding: 'utf8', timeout: 10000 })
+      const r = helper.spawnSync(args, { env: { ...process.env, NC_SRC_DIR: source, NC_SRC_HISTORY: path.join(source, 'history'), NC_STORE: store, NC_PREVIEWS: '0', ...env }, encoding: 'utf8', timeout: 10000 })
       assert.equal(r.status, 0, r.stderr + r.stdout)
       return JSON.parse(r.stdout)
     }

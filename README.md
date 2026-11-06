@@ -8,7 +8,9 @@ Notification history with app stacks, search, and do not disturb.
 
 Targets Omarchy 4.5 and retains basic compatibility with 4.0.
 Requires stock notifications or Foamy Notifications enabled, `jq`, `wl-paste`, and GNU `timeout`, plus
-`inotify-tools`. Website favicon lookup uses the system Python 3 runtime.
+`inotify-tools`. The archive and the website favicon lookup are a bundled helper
+(`bin/x86_64`, `bin/aarch64`, built from `native/`); it needs no Python or Rust.
+On other CPUs the center shows that the helper isn't available.
 
 File-backed app icons, attached images, and picture previews require `file` and
 ImageMagick 7 (`magick`). PNG, JPEG (including progressive JPEG), GIF, and WebP
@@ -19,7 +21,7 @@ resources are unavailable. Transparency and aspect ratio are preserved; themed
 app icons still resolve normally.
 Conversion uses a plugin-local policy: no delegates or disk pixel cache, an
 8,192-pixel width/height limit, a 128 MiB pixel cache, a 512 MiB process memory
-limit, and a five-second timeout (forced termination after one further second).
+limit, and a five-second deadline, after which the converter and its children are killed.
 Unsupported, oversized, or failed images are omitted; notification text remains
 archived and app icons fall back to the app glyph. Missing conversion tools also
 omit file-backed images rather than exposing originals to the shell. Existing
@@ -105,7 +107,7 @@ Favicons are read asynchronously from standard Linux Vivaldi, Chrome, Chromium,
 Brave, Edge and Opera profile caches. Firefox, custom profile locations and missing
 icons fall back to the app icon. This also works with stock Omarchy notifications
 when the sender’s website origin is present in the archived body. No website
-requests or additional Python packages are used. PNG copies use the shared private cache
+requests are made. PNG copies use the shared private cache
 at `$XDG_CACHE_HOME/foamy/browser-favicons` (normally `~/.cache/foamy/browser-favicons`),
 limited to 256 icons of at most 64 KiB and 256 × 256 pixels. Successful lookups
 refresh after one day; missing icons can retry after five minutes on a display
@@ -113,7 +115,7 @@ model change. Lookups cover only the first 128 groups in the display.
 
 Browser databases are opened read-only. If a rollback database is locked, the
 helper can read an in-memory copy of at most 32 MiB. It rejects active
-journals, WAL sidecars, changed files and copies that fail SQLite's integrity
+journals, WAL sidecars, changed files and copies that fail a structural
 check. Copying and querying share a two-second deadline. No database copies are
 written to disk; the helper never writes to the browser database or removes its
 locks. A cache that cannot be read safely keeps the app icon and reports
@@ -133,7 +135,7 @@ Keeps up to 1,000 notifications for 30 days by default. The archive's
 invariants (identity is the key; equal timestamps are ordered by key; removed
 notifications never return while a source still holds a copy; rows still in the
 archive always take updates; what each source can resurrect and how tombstones
-prevent it) are written at the top of `bin/notification-center` and checked by
+prevent it) are written at the top of `native/src/main.rs` and checked by
 the randomised `tests/retention-property.test.js`. Retention is enforced
 when the watcher starts, after new arrivals that cross a limit, and hourly while
 nothing arrives; expired entries never show. **Clear all deletes** the archived
@@ -181,9 +183,9 @@ Its redacted verification-code placeholders remain redacted.
 
 Updates to an existing notification replace its archived content without creating
 another unread item. The watcher reconciles at startup and after reconnecting,
-then reports source and archive changes. Ingesting a notification costs a few
-processes (one `jq` for its fields, one `sha256sum`, the entry write), and
-retention rewrites happen only when a limit can have been crossed.
+then reports source and archive changes. Ingesting a notification starts no
+process unless it brings an image to convert, and retention rewrites happen
+only when a limit can have been crossed.
 
 ### Foamy Notifications contract
 
@@ -251,7 +253,7 @@ Card animations can be checked with `python3 tests/motion.py` (isolated Qt) or
 Stock compatibility can be checked without touching personal history:
 
 ```sh
-node --test tests/*.test.js
+node --test tests/*.test.js tests/*.test.cjs
 python3 -I -m unittest discover -s tests -p '*_test.py' -v
 bash tests/kit-check.sh
 python3 tests/browser-ui.py
@@ -262,7 +264,23 @@ python3 tests/stock-runtime.py
 python3 tests/stock-runtime.py --custom
 ```
 
-These checks use a private D-Bus session and temporary home directory.
+These checks use a private D-Bus session and temporary home directory. The
+store and favicon tests run the helper as a process: `FOAMY_HELPER` (a JSON
+argv prefix, e.g. `'["/path/bin/aarch64/foamy-notification-center-helper"]'`)
+selects another build; the default is `bin/<machine>/`. `tests/contract.test.js`
+pins the exact output and file formats.
+
+The helper is Rust (`native/`, contract at the top of `native/src/main.rs`) and
+is committed prebuilt. After changing it, rebuild both architectures
+reproducibly and check them with foamy-kit's tool (rustup with the toolchain
+from `rust-toolchain.toml`, `file`, and qemu-user binfmt for the aarch64 tests):
+
+```sh
+~/GitHub/Personal/foamy-kit/tools/build-native.sh . --test    # fmt, clippy, cargo test
+~/GitHub/Personal/foamy-kit/tools/build-native.sh .           # bin/x86_64, bin/aarch64, native/native.pin
+~/GitHub/Personal/foamy-kit/tools/build-native.sh . --verify  # clean rebuild, byte compare
+bash tests/kit-check.sh
+```
 The settings panel check requires a running Wayland session. Set
 `OMARCHY_TEST_ROOT` to an extracted Omarchy 4.5 source tree for `stock-runtime.py`
 and `settings-ui.py` to exercise that release without installing it. Both the

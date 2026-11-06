@@ -4,8 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-
-const script = path.resolve(__dirname, "../bin/notification-center");
+const helper = require("./helper.cjs")
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "notification-previews-"));
@@ -33,7 +32,7 @@ function fixture(t) {
       return key;
     },
     run(command = "sync") {
-      const result = spawnSync(script, [command], { env, encoding: "utf8", timeout: 12000 });
+      const result = helper.spawnSync([command], { env, encoding: "utf8", timeout: 12000 });
       assert.equal(result.status, 0, result.stderr || String(result.error));
       return result;
     },
@@ -133,7 +132,7 @@ test("the real watcher continues after rejecting an image", async t => {
   const f = fixture(t);
   const wide = f.image("wide.png", "-size", "9000x1", "xc:red");
   const initial = f.send();
-  const child = spawn(script, ["watch"], { env: f.env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  const child = helper.spawn(["watch"], { env: f.env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
   t.after(() => {
     try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
   });
@@ -294,7 +293,7 @@ test('concurrent first loads migrate once and retain valid images after source c
   fs.writeFileSync(path.join(f.store,'archive.jsonl'),JSON.stringify({key,timestamp,summary:'Keep',appIcon:image})+'\n');
   function list() {
     return new Promise((resolve,reject)=>{
-      const child=spawn(script,['list'],{env:f.env});let output='',errors='';
+      const child=helper.spawn(['list'],{env:f.env});let output='',errors='';
       child.stdout.on('data',data=>output+=data);child.stderr.on('data',data=>errors+=data);
       child.on('error',reject);child.on('exit',code=>{if(code!==0)reject(new Error(errors));else resolve(JSON.parse(output));});
     });

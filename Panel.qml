@@ -29,8 +29,9 @@ import "kit"
 // the toasts you just missed, and far too few for the question this panel
 // exists to answer, which is "what did that say".
 //
-// So `bin/notification-center` copies each file out of there the moment it
-// lands, into an archive kept for as long as you asked for, icon and all. It
+// So the store helper (`bin/<arch>/foamy-notification-center-helper`, built
+// from `native/`) copies each file out of there the moment it lands, into an
+// archive kept for as long as you asked for, icon and all. It
 // follows the directory with inotify rather than polling it, so a notification
 // is in the archive before its toast has finished appearing.
 //

@@ -6,6 +6,7 @@ const path = require("node:path")
 const vm = require("node:vm")
 const test = require("node:test")
 const Model = require("../Model.js")
+const helper = require("./helper.cjs")
 
 const panel = fs.readFileSync(path.join(__dirname, "../Panel.qml"), "utf8")
 const start = panel.indexOf("  function activate(")
@@ -32,9 +33,8 @@ function fixture(t) {
   fs.mkdirSync(path.join(source, "history"), { recursive: true })
   const env = { ...process.env, NC_SRC_DIR: source, NC_SRC_HISTORY: path.join(source, "history"),
     NC_STORE: store, NC_PREVIEWS: "0" }
-  const script = path.join(__dirname, "../bin/notification-center")
   return { temp, source, archive: path.join(store, "archive.jsonl"), run(command) {
-    const result = spawnSync(script, [command], { env, encoding: "utf8" })
+    const result = helper.spawnSync([command], { env, encoding: "utf8" })
     assert.equal(result.status, 0, result.stderr)
     return JSON.parse(result.stdout)
   } }

@@ -69,5 +69,6 @@
   },
   "This list: how it groups and shows notifications, and how long it keeps them.": "Denne listen: hvordan den grupperer og viser varsler, og hvor lenge de beholdes.",
   "Pop-up notifications": "Popup-varsler",
-  "Notifications as they appear on screen (the Foamy Notifications plugin).": "Varsler slik de dukker opp på skjermen (utvidelsen Foamy Notifications)."
+  "Notifications as they appear on screen (the Foamy Notifications plugin).": "Varsler slik de dukker opp på skjermen (utvidelsen Foamy Notifications).",
+  "This plugin's helper isn't available for this CPU.": "Hjelpeprogrammet til denne utvidelsen er ikke tilgjengelig for denne prosessoren."
 }

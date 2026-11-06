@@ -5,14 +5,14 @@ const os = require('node:os')
 const path = require('node:path')
 const {spawnSync, spawn} = require('node:child_process')
 const vm = require('node:vm')
-const script = path.join(__dirname,'../bin/notification-center')
+const helper = require('./helper.cjs')
 function fixture(t) {
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'foamy-integration-'))
  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
  const source=path.join(dir,'source'),store=path.join(dir,'store')
  fs.mkdirSync(path.join(source,'history'),{recursive:true})
  const env={...process.env,NC_SRC_DIR:source,NC_SRC_HISTORY:path.join(source,'history'),NC_STORE:store,NC_PREVIEWS:'0'}
- const run=(...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ const run=(...args)=>{const r=helper.spawnSync(args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
  return {dir,source,store,env,run}
 }
 test('replacement updates retain identity and images; repeated ingestion is idempotent',t=>{
@@ -30,7 +30,7 @@ test('replacement updates retain identity and images; repeated ingestion is idem
  f.run('remove',key);f.run('sync');assert.equal(f.run('list').length,0)
 })
 test('watcher announces replacements, external clear and removal, and remains quiet while idle',async t=>{
- const f=fixture(t),events=[],watch=spawn(script,['watch'],{env:f.env})
+ const f=fixture(t),events=[],watch=helper.spawn(['watch'],{env:f.env})
  let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){const line=pending.slice(0,n);pending=pending.slice(n+1);events.push(JSON.parse(line))}})
  t.after(()=>watch.kill())
  async function until(fn) { const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))} }
@@ -62,10 +62,10 @@ test('large archive pages contain one JSON array, filter before limiting, and ke
  assert.deepEqual(f.run('list','500','NEEDLE').map(r=>r.key),[`${base+11}-1`])
  fs.writeFileSync(path.join(f.store,'cleared_at'),String(base+750));assert.equal(f.run('list','500').length,250)
  // Expired rows never show, even before retention runs.
- fs.writeFileSync(path.join(f.store,'cleared_at'),'0');const expired=spawnSync(script,['list','5000'],{env:{...f.env,NC_KEEP_DAYS:'1'},encoding:'utf8'});assert.equal(JSON.parse(expired.stdout).length,1000)
+ fs.writeFileSync(path.join(f.store,'cleared_at'),'0');const expired=helper.spawnSync(['list','5000'],{env:{...f.env,NC_KEEP_DAYS:'1'},encoding:'utf8'});assert.equal(JSON.parse(expired.stdout).length,1000)
  fs.appendFileSync(path.join(f.store,'archive.jsonl'),JSON.stringify({key:'5-5',timestamp:5})+'\n');assert.equal(f.run('list','5000').length,1000)
  assert.deepEqual(f.run('list','0'),[])
- const bad=spawnSync(script,['list','invalid'],{env:f.env,encoding:'utf8'});assert.equal(bad.status,1);assert.equal(JSON.parse(bad.stdout).ok,false)
+ const bad=helper.spawnSync(['list','invalid'],{env:f.env,encoding:'utf8'});assert.equal(bad.status,1);assert.equal(JSON.parse(bad.stdout).ok,false)
 })
 test('the source comes from the service (IPC), never from another plugin\'s config, and the handled journal is applied',t=>{
  const f=fixture(t),home=path.join(f.dir,'home'),config=path.join(home,'.config/omarchy')
@@ -75,7 +75,7 @@ test('the source comes from the service (IPC), never from another plugin\'s conf
  // Foamy enabled in shell.json no longer changes anything by itself.
  fs.writeFileSync(path.join(config,'shell.json'),JSON.stringify({plugins:[{id:'foamy.notifications'}]}))
  const base={...f.env,HOME:home,XDG_CONFIG_HOME:path.join(home,'.config')};delete base.NC_SRC_DIR;delete base.NC_SRC_HISTORY
- const run=(env,...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ const run=(env,...args)=>{const r=helper.spawnSync(args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
  run(base,'sync');assert.deepEqual(run(base,'list').map(r=>r.summary),['Stock'])
  fs.rmSync(f.store,{recursive:true,force:true})
  const handled=path.join(foamy,'handled')
@@ -88,8 +88,8 @@ test('a key in Foamy\'s handled journal before its file arrives is never archive
  const f=fixture(t),foamy=path.join(f.dir,'foamy'),handled=path.join(foamy,'handled'),history=path.join(foamy,'history')
  fs.mkdirSync(path.join(foamy,'popups'),{recursive:true});fs.mkdirSync(history,{recursive:true});fs.writeFileSync(handled,'')
  const env={...f.env,NC_SOURCE:'foamy',NC_SRC_DIR:path.join(foamy,'popups'),NC_SRC_HISTORY:history,NC_HANDLED:handled,NC_STATE_FILE:path.join(foamy,'state.json')}
- const run=(...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
- const events=[],watch=spawn(script,['watch'],{env})
+ const run=(...args)=>{const r=helper.spawnSync(args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ const events=[],watch=helper.spawn(['watch'],{env})
  let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
  t.after(()=>watch.kill())
  async function until(fn){const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))}}
@@ -133,14 +133,17 @@ test('search folds Unicode case like the panel and matches the query literally',
 test('a source directory created after the watcher started is picked up',async t=>{
  const f=fixture(t),late=path.join(f.dir,'late','notifications')
  const env={...f.env,NC_SRC_DIR:late,NC_SRC_HISTORY:path.join(late,'history')}
- const events=[],watch=spawn(script,['watch'],{env})
+ const events=[],watch=helper.spawn(['watch'],{env})
  let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
  t.after(()=>watch.kill())
  async function until(fn){const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))}}
  await until(()=>events.some(e=>e.event==='storeChanged'))
  assert.equal(fs.existsSync(late),false,'the watcher never creates the source directory')
  const stamp=Date.now()
- fs.mkdirSync(late,{recursive:true});fs.writeFileSync(path.join(late,`${stamp}-7.json`),JSON.stringify({timestamp:stamp,originalId:7,app:'Late',summary:'Arrived'}))
+ // The directory appears with its file (renamed into place), so the watcher's sync cannot run between the two.
+ const staging=path.join(f.dir,'staging');fs.mkdirSync(path.join(staging,'notifications'),{recursive:true})
+ fs.writeFileSync(path.join(staging,'notifications',`${stamp}-7.json`),JSON.stringify({timestamp:stamp,originalId:7,app:'Late',summary:'Arrived'}))
+ fs.renameSync(staging,path.dirname(late))
  await until(()=>events.some(e=>e.event==='rewatch'))
  assert.deepEqual(f.run('list').map(r=>r.summary),['Arrived'])
 })
@@ -148,7 +151,7 @@ test('a retention pass reports every pruned Foamy key, in bounded events',async 
  const f=fixture(t),stamp=Date.now()-1000
  f.run('list')
  fs.writeFileSync(path.join(f.store,'archive.jsonl'),Array.from({length:2101},(_,i)=>JSON.stringify({key:`${stamp+i}-1`,timestamp:stamp+i,summary:'x'})).join('\n')+'\n')
- const events=[],watch=spawn(script,['watch'],{env:{...f.env,NC_SOURCE:'foamy',NC_MAX_ITEMS:'100'}})
+ const events=[],watch=helper.spawn(['watch'],{env:{...f.env,NC_SOURCE:'foamy',NC_MAX_ITEMS:'100'}})
  let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
  t.after(()=>watch.kill())
  const end=Date.now()+8000
@@ -175,7 +178,7 @@ test('archive search matches the joined app, title and text like the panel',t=>{
 })
 test('retention is by timestamp and pruned source copies never re-enter the archive',t=>{
  const f=fixture(t),stamp=Date.now()-10000,env={...f.env,NC_MAX_ITEMS:'2'}
- const run=(...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ const run=(...args)=>{const r=helper.spawnSync(args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
  for(const i of [1,2,3]) fs.writeFileSync(path.join(f.source,'history',`${stamp+i}-${i}.json`),JSON.stringify({timestamp:stamp+i,originalId:i,app:'T',summary:String(i)}))
  for(let round=0;round<4;round++){run('sync');assert.deepEqual(run('list').map(r=>r.summary),['3','2'],`sync ${round}`)}
  // A late-arriving older copy does not displace newer rows either.
@@ -193,7 +196,7 @@ test('pages are newest by timestamp even when an old row arrived last',t=>{
 })
 test('rows retained across an equal-timestamp split keep taking updates',t=>{
  const f=fixture(t),stamp=Date.now()-5000,env={...f.env,NC_MAX_ITEMS:'2'}
- const run=(...args)=>{const r=spawnSync(script,args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ const run=(...args)=>{const r=helper.spawnSync(args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
  for(const i of [1,2,3]) fs.writeFileSync(path.join(f.source,'history',`${stamp}-${i}.json`),JSON.stringify({timestamp:stamp,originalId:i,app:'T',summary:'v1'}))
  run('sync');const kept=run('list').map(r=>r.key).sort();assert.deepEqual(kept,[`${stamp}-2`,`${stamp}-3`])
  fs.writeFileSync(path.join(f.source,'history',`${stamp}-3.json`),JSON.stringify({timestamp:stamp,originalId:3,app:'T',summary:'v2'}))
@@ -214,14 +217,14 @@ test('a dismissal tombstone outlives any number of older rows while its source c
 test('lowering then raising the age limit never brings back a dismissed notification',t=>{
  const f=fixture(t),ts=Date.now()-2*86400000,key=`${ts}-1`
  fs.writeFileSync(path.join(f.source,'history',`${key}.json`),JSON.stringify({timestamp:ts,originalId:1,app:'T',summary:'old'}))
- const run=(days,...args)=>{const r=spawnSync(script,args,{env:{...f.env,NC_KEEP_DAYS:String(days)},encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ const run=(days,...args)=>{const r=helper.spawnSync(args,{env:{...f.env,NC_KEEP_DAYS:String(days)},encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
  run(30,'sync');run(30,'remove',key);run(1,'prune');run(30,'sync')
  assert.deepEqual(run(30,'list'),[])
  assert.match(fs.readFileSync(path.join(f.store,'dismissed'),'utf8'),new RegExp(`^${key} `,'m'),'the tombstone outlives the age limit while the source copy exists')
 })
 test('retention runs on its deadline while events keep arriving (30-minute events over 3 hours, time scaled 1:1800)',async t=>{
  // Interval 2 s stands for the hourly deadline; an event every second stands for every 30 minutes.
- const f=fixture(t),events=[],watch=spawn(script,['watch'],{env:{...f.env,NC_RETENTION_INTERVAL:'2',NC_KEEP_DAYS:'1'}})
+ const f=fixture(t),events=[],watch=helper.spawn(['watch'],{env:{...f.env,NC_RETENTION_INTERVAL:'2',NC_KEEP_DAYS:'1'}})
  let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
  t.after(()=>watch.kill())
  const until=async fn=>{const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))}}
@@ -246,7 +249,7 @@ test('any archive-setting change restarts the running watcher, even without a so
  // Every value the watcher reads is in that environment.
  const env=source.slice(source.indexOf('  readonly property var storeEnvironment: {'),source.indexOf('\n  }\n',source.indexOf('  readonly property var storeEnvironment: {')))
  for(const name of ['NC_KEEP_DAYS','NC_MAX_ITEMS','NC_PREVIEWS','NC_SOURCE','NC_SRC_DIR','NC_SRC_HISTORY','NC_HANDLED','NC_STATE_FILE']) assert.ok(env.includes(name),name)
- const script=fs.readFileSync(path.join(__dirname,'../bin/notification-center'),'utf8')
+ const native=path.join(__dirname,'../native/src'),script=fs.readdirSync(native).filter(n=>n.endsWith('.rs')).map(n=>fs.readFileSync(path.join(native,n),'utf8')).join('\n')
  for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL'].includes(name)) assert.ok(env.includes(name),`watcher reads ${name} but the service does not pass it`)
 })
 test('Clear all uses the cutoff captured at the click, so later arrivals survive (as in Foamy)',t=>{
@@ -258,19 +261,21 @@ test('Clear all uses the cutoff captured at the click, so later arrivals survive
  assert.equal(fs.readFileSync(path.join(f.store,'cleared_at'),'utf8').trim(),String(now-3000))
  // An older cutoff never lowers the clear line.
  f.run('clear',String(now-4000));assert.equal(fs.readFileSync(path.join(f.store,'cleared_at'),'utf8').trim(),String(now-3000))
- const bad=spawnSync(script,['clear','../x'],{env:f.env,encoding:'utf8'});assert.notEqual(bad.status,0)
+ const bad=helper.spawnSync(['clear','../x'],{env:f.env,encoding:'utf8'});assert.notEqual(bad.status,0)
 })
 test('a rewatch after a source directory appears keeps its pruned events',async t=>{
  const f=fixture(t),late=path.join(f.dir,'late','popups'),now=Date.now()
  const env={...f.env,NC_SOURCE:'foamy',NC_MAX_ITEMS:'2',NC_SRC_DIR:late,NC_SRC_HISTORY:path.join(f.dir,'late','history')}
  fs.mkdirSync(f.store,{recursive:true})
  fs.writeFileSync(path.join(f.store,'archive.jsonl'),[1,2].map(i=>JSON.stringify({key:`${now-9000+i}-${i}`,timestamp:now-9000+i,summary:'old '+i})).join('\n')+'\n')
- const events=[],watch=spawn(script,['watch'],{env})
+ const events=[],watch=helper.spawn(['watch'],{env})
  let pending='';watch.stdout.on('data',chunk=>{pending+=chunk;let n;while((n=pending.indexOf('\n'))>=0){events.push(JSON.parse(pending.slice(0,n)));pending=pending.slice(n+1)}})
  t.after(()=>watch.kill())
  const until=async fn=>{const end=Date.now()+5000;while(!fn()){assert.ok(Date.now()<end,JSON.stringify(events));await new Promise(r=>setTimeout(r,25))}}
  await until(()=>events.some(e=>e.event==='storeChanged'))
- fs.mkdirSync(late,{recursive:true});fs.writeFileSync(path.join(late,`${now}-7.json`),JSON.stringify({timestamp:now,originalId:7,app:'Late',summary:'new'}))
+ const staging=path.join(f.dir,'staging');fs.mkdirSync(path.join(staging,'popups'),{recursive:true})
+ fs.writeFileSync(path.join(staging,'popups',`${now}-7.json`),JSON.stringify({timestamp:now,originalId:7,app:'Late',summary:'new'}))
+ fs.renameSync(staging,path.dirname(late))
  await until(()=>events.some(e=>e.event==='rewatch'))
  const pruned=events.filter(e=>e.event==='pruned').flatMap(e=>e.keys)
  assert.deepEqual(pruned,[`${now-8999}-1`],'the dropped Foamy key reaches the service for releaseHistory')
@@ -284,7 +289,7 @@ test('every store process the service launches gets the resolved store environme
  for(const b of store) assert.match(b,/environment: root\.storeEnvironment/,b.split('\n')[1])
  assert.match(source,/id: markProc\n    environment: root\.storeEnvironment/)
  // Commands are built from values captured when the work was requested.
- assert.match(source,/command: \[root\.script, "clear", cut\]/)
+ assert.match(source,/command: root\.storeCommand\(\["clear", cut\]\)/)
 })
 test('a seen stamp taken while a write runs is written afterwards, not dropped',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
@@ -304,4 +309,25 @@ test('a seen stamp taken while a write runs is written afterwards, not dropped',
  Object.defineProperty(ectx,'running',{get(){return proc.running},set(v){proc.running=v}})
  vm.runInContext('(function(){'+exit+'})()',ectx)
  assert.deepEqual(commands,['10','20']);assert.equal(ctx.seenPending,'')
+})
+test('a helper missing for this CPU is reported once, translated, and never restarted',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const FoamyNative=require('../kit/node-loader.cjs').load('FoamyNative'),no=require('../i18n/no.json')
+ assert.ok(no[FoamyNative.UNAVAILABLE_TEXT],'Norwegian text')
+ const take=name=>{const start=source.indexOf(`  function ${name}(`);assert.ok(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4)}
+ const ctx=vm.createContext({FoamyNative,console:{warn(){ctx.warnings++}},warnings:0,helperUnavailable:false,loadError:'',listProc:{running:false},loadPending:false,listRevision:0,archiveRevision:0,listLoadCount:0,listLimit:500,searchQuery:'',storeCommand:a=>a,String})
+ ctx.root=ctx
+ for(const name of ['storeUnavailable','load']) vm.runInContext(take(name),ctx)
+ assert.equal(ctx.storeUnavailable(1),false);assert.equal(ctx.helperUnavailable,false)
+ assert.equal(ctx.storeUnavailable(127),true);assert.equal(ctx.storeUnavailable(126),true)
+ assert.equal(ctx.helperUnavailable,true);assert.equal(ctx.loadError,FoamyNative.UNAVAILABLE_TEXT);assert.equal(ctx.warnings,1)
+ ctx.load();assert.equal(ctx.listLoadCount,0,'no list read without a helper')
+ // The watcher stops for good: its exit handler returns before scheduling a restart.
+ const watch=source.slice(source.indexOf('    id: watchProc'),source.indexOf('\n  }',source.indexOf('    id: watchProc')))
+ assert.match(watch,/onExited: function\(exitCode, exitStatus\) \{\n      if \(root\.storeUnavailable\(exitCode\)\) return/)
+ assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) watchProc\.running = true/)
+ // Every store command runs the bundled binary for this CPU.
+ const cmd=vm.createContext({FoamyNative,root:{pluginDir:'/plugin',helper:'foamy-notification-center-helper'}})
+ cmd.root.storeCommand=vm.runInContext('('+take('storeCommand').trim().replace(/^function storeCommand/,'function')+')',cmd)
+ assert.deepEqual(Array.from(cmd.root.storeCommand(['list','5'])),['bash','-c','exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"','foamy-native','/plugin','foamy-notification-center-helper','list','5'])
 })

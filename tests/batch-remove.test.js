@@ -4,6 +4,7 @@ const os = require("node:os")
 const path = require("node:path")
 const { spawnSync } = require("node:child_process")
 const test = require("node:test")
+const helper = require("./helper.cjs")
 
 test("batch removal preserves other and newer entries and rejects invalid keys before mutation", () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "notification-batch-"))
@@ -12,8 +13,7 @@ test("batch removal preserves other and newer entries and rejects invalid keys b
     fs.mkdirSync(path.join(source, "history"), { recursive: true })
     const store = path.join(temp, "store")
     const env = { ...process.env, NC_SRC_DIR: source, NC_SRC_HISTORY: path.join(source, "history"), NC_STORE: store }
-    const script = path.resolve(__dirname, "../bin/notification-center")
-    const run = (...args) => spawnSync(script, args, { env, encoding: "utf8" })
+    const run = (...args) => helper.spawnSync(args, { env, encoding: "utf8" })
     assert.equal(run("list").status, 0)
     const timestamp = Date.now()
     const records = [1, 2, 3].map(id => ({ key: `${timestamp}-${id}`, timestamp, app: id < 3 ? "Chat" : "Other" }))
