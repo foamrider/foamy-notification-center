@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const helper = require("./helper.cjs")
 
 test("prune retains valid records after corruption and clear deletes them", () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "notification-archive-test-"));
@@ -11,9 +12,8 @@ test("prune retains valid records after corruption and clear deletes them", () =
     const state = path.join(temp, "omarchy-notification-center");
     fs.mkdirSync(state, { recursive: true });
     const env = { ...process.env, HOME: temp, XDG_CONFIG_HOME: path.join(temp, "config"), XDG_STATE_HOME: temp, NC_KEEP_DAYS: "30", NC_MAX_ITEMS: "1000" };
-    const script = path.join(__dirname, "../bin/notification-center");
     const run = (...args) => {
-      const result = spawnSync("bash", [script, ...args], { env, encoding: "utf8" });
+      const result = helper.spawnSync(args, { env, encoding: "utf8" });
       assert.equal(result.status, 0, result.stderr);
       return result.stdout;
     };

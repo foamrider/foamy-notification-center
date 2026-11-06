@@ -4,16 +4,16 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const {spawnSync, spawn} = require('node:child_process')
+const helper = require('./helper.cjs')
 function fixture(t) {
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'foamy-stock-arrays-'))
  t.after(()=>fs.rmSync(temp,{recursive:true,force:true}))
  const source=path.join(temp,'source'),store=path.join(temp,'store')
  fs.mkdirSync(source)
  const env={...process.env,HOME:temp,XDG_CONFIG_HOME:path.join(temp,'config'),NC_SRC_DIR:source,NC_STORE:store,NC_PREVIEWS:'0'}
- const script=path.join(__dirname,'../bin/notification-center')
- function run(...args){const result=spawnSync(script,args,{env,encoding:'utf8'});assert.equal(result.status,0,result.stderr+result.stdout);return JSON.parse(result.stdout)}
+ function run(...args){const result=helper.spawnSync(args,{env,encoding:'utf8'});assert.equal(result.status,0,result.stderr+result.stdout);return JSON.parse(result.stdout)}
  function write(name,rows){fs.writeFileSync(path.join(source,name+'.tmp'),JSON.stringify(rows));fs.renameSync(path.join(source,name+'.tmp'),path.join(source,name+'.json'))}
- return {temp,source,store,env,script,run,write}
+ return {temp,source,store,env,run,write}
 }
 function row(key,ts,extra={}){return {key,ts,app:'Vivaldi',summary:'Hello',body:'Message',rawBody:'<a href="https://example.test">example.test</a>\nMessage',...extra}}
 test('4.5 arrays preserve opaque keys, browser identity, replacement read state, removal and clear',t=>{
@@ -38,7 +38,7 @@ test('4.5 malformed arrays fail visibly; invalid rows and commands never become 
  const f=fixture(t),now=Date.now()/1000
  for(const bad of ['{','{}',JSON.stringify(Array(101).fill(row('n-x',now)))]) {
   fs.writeFileSync(path.join(f.source,'live.json'),bad)
-  const r=spawnSync(f.script,['sync'],{env:f.env,encoding:'utf8'})
+  const r=helper.spawnSync(['sync'],{env:f.env,encoding:'utf8'})
   assert.notEqual(r.status,0);assert.equal(JSON.parse(r.stdout).ok,false)
  }
  f.write('live',[row('../escape',now),row('n-good',now,{execArgv:'["bash","-c","must not run"]'}),row('n-bad',now,{ts:'bad'}),row('n-ephemeral',now,{transient:true})])
@@ -47,7 +47,7 @@ test('4.5 malformed arrays fail visibly; invalid rows and commands never become 
 })
 test('watcher follows atomic array and quiet-state replacements',async t=>{
  const f=fixture(t);f.write('live',[]);f.write('history',[])
- const watcher=spawn(f.script,['watch'],{env:f.env,stdio:['ignore','pipe','pipe']})
+ const watcher=helper.spawn(['watch'],{env:f.env,stdio:['ignore','pipe','pipe']})
  t.after(()=>watcher.kill())
  let output='',errors='';watcher.stdout.on('data',d=>output+=d);watcher.stderr.on('data',d=>errors+=d)
  async function wait(fn){for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,30))}assert.fail(output+errors)}
