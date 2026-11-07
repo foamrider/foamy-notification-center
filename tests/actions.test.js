@@ -229,7 +229,7 @@ test("invalid app identity cannot become a stock focus regex",()=>{
  })
 
 
-test("live image actions win; expired screenshots use Tensaku and other pictures use the viewer", () => {
+test("live image actions win; expired screenshots use the screenshot editor and other pictures use the viewer", () => {
  for (const [fileAction, program] of [["edit-screenshot", "omasnap"], ["", "xdg-open"], ["arbitrary command", "xdg-open"]]) {
   const row = {key:"100-1",app:"omarchy-action",file:"/tmp/image with spaces.png",fileAction,execArgv:'["unsafe"]'}
   const live = focusService(); live.focusNotification(row)
@@ -274,9 +274,13 @@ test("fixed image launcher preserves spaces, rejects unsafe paths and reports st
  t.after(()=>fs.rmSync(temp,{recursive:true,force:true}))
  const file=path.join(temp,"a picture.png"),marker=path.join(temp,"opened")
  fs.writeFileSync(file,"fixture")
- for(const program of ["tensaku-edit","xdg-open"]) fs.writeFileSync(path.join(temp,program),'#!/bin/bash\nprintf "%s" "$1" > "$MARKER"\nexit "${OPEN_CODE:-0}"\n',{mode:0o755})
+ // Only these stubs and the launcher's own tools are on PATH, so an installed
+ // omasnap, tensaku-edit or xdg-open is never chosen (or started).
+ const bin=path.join(temp,"bin");fs.mkdirSync(bin)
+ for(const name of ["jq","sleep"]) fs.symlinkSync("/usr/bin/"+name,path.join(bin,name))
+ for(const program of ["omasnap","xdg-open"]) fs.writeFileSync(path.join(bin,program),'#!/bin/bash\nprintf "%s" "$1" > "$MARKER"\nexit "${OPEN_CODE:-0}"\n',{mode:0o755})
  const helper=path.join(__dirname,"../bin/open-notification-image")
- const run=(intent,image,extra={})=>spawnSync("/usr/bin/bash",[helper,intent,image],{env:{...process.env,PATH:temp+":"+process.env.PATH,MARKER:marker,...extra},encoding:"utf8",timeout:2000})
+ const run=(intent,image,extra={})=>spawnSync("/usr/bin/bash",[helper,intent,image],{env:{...process.env,PATH:bin,MARKER:marker,...extra},encoding:"utf8",timeout:2000})
  for(const intent of ["edit-screenshot","view-image"]) {
   assert.equal(run(intent,file).status,0);assert.equal(fs.readFileSync(marker,"utf8"),file)
   assert.equal(run(intent,file,{OPEN_CODE:"3"}).status,3)
@@ -288,7 +292,7 @@ test("fixed image launcher preserves spaces, rejects unsafe paths and reports st
  fs.symlinkSync("/usr/bin/jq",path.join(unavailable,"jq"))
  assert.equal(run("edit-screenshot",file,{PATH:unavailable}).status,127)
  // A long-lived editor must not hold the center's process or output pipes open.
- fs.writeFileSync(path.join(temp,"tensaku-edit"),'#!/bin/bash\nprintf "%s" "$1" > "$MARKER"\nsleep 1\n',{mode:0o755})
+ fs.writeFileSync(path.join(bin,"omasnap"),'#!/bin/bash\nprintf "%s" "$1" > "$MARKER"\nsleep 1\n',{mode:0o755})
  const start=Date.now();assert.equal(run("edit-screenshot",file).status,0);assert.ok(Date.now()-start<700)
 })
 

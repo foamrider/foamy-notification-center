@@ -29,12 +29,13 @@ cli.mkdir()
 image = home / "screenshot with spaces.png"
 image.write_bytes(png())
 (home / "editor-ready").write_text("")
-(cli / "tensaku-edit").write_text('#!/bin/bash\ngrep -q ready "$HOME/editor-ready" || exit 3\nprintf "%s" "$1" > "$HOME/editor-opened"\nsleep 1\n')
-(cli / "tensaku-edit").chmod(0o755)
+# The editor 4.5 names and the opener prefers; this stub (first on PATH) shadows an installed omasnap.
+(cli / "omasnap").write_text('#!/bin/bash\ngrep -q ready "$HOME/editor-ready" || exit 3\nprintf "%s" "$1" > "$HOME/editor-opened"\nsleep 1\n')
+(cli / "omasnap").chmod(0o755)
 history = home / ".local/state/omarchy/notifications/history"
 history.mkdir(parents=True)
 stamp = int(time.time() * 1000)
-(history / f"{stamp}-1.json").write_text(json.dumps({"timestamp":stamp,"app":"omarchy-action","summary":"Screenshot saved to clipboard and file","body":"Edit with Super + Alt + , (or click this)","image":str(image),"execArgv":json.dumps(["tensaku-edit",str(image)])}))
+(history / f"{stamp}-1.json").write_text(json.dumps({"timestamp":stamp,"app":"omarchy-action","summary":"Screenshot saved to clipboard and file","body":"Edit with Super + Alt + , (or click this)","image":str(image),"execArgv":json.dumps(["omasnap",str(image)])}))
 (app / "shell.qml").write_text('''pragma ComponentBehavior: Bound
 import QtQuick
 import QtTest
