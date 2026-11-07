@@ -5,7 +5,9 @@ installed 4.0.6 /usr/share/omarchy or an extracted 4.5 tree under /tmp/omarchy-r
 Only `shell/` and `default/` are exposed through a private OMARCHY_PATH; its `bin/`
 and every `omarchy-*` on PATH are logging stubs. `omarchy-shell` reaches this test's
 own shell only (qs ipc -p APP), never the live session. check() asserts nothing
-under /tmp/omarchy-ref (or the installed bin) was executed.
+under /tmp/omarchy-ref (or the installed bin) was executed. An AppImage's
+LD_LIBRARY_PATH (e.g. an editor's bundled libnotify) is dropped, so notify-send
+and the shell load the system libraries.
 """
 import os
 from pathlib import Path
@@ -22,8 +24,15 @@ def root():
     return Path(explicit or '/usr/share/omarchy')
 
 
+def library_path():
+    """LD_LIBRARY_PATH without an AppImage's bundled libraries ($APPDIR)."""
+    appdir = (os.environ.get('APPDIR') or '').rstrip('/')
+    return ':'.join(p for p in os.environ.get('LD_LIBRARY_PATH', '').split(':')
+                    if p and not (appdir and (p == appdir or p.startswith(appdir + '/'))))
+
+
 def make(base, app):
-    """Returns the environment overrides (OMARCHY_PATH, OMARCHY_SHELL_PATH, PATH)."""
+    """Returns the environment overrides (OMARCHY_PATH, OMARCHY_SHELL_PATH, PATH, LD_LIBRARY_PATH)."""
     host = root()
     tree = base / 'omarchy-host'
     (tree / 'bin').mkdir(parents=True)
@@ -53,7 +62,8 @@ def make(base, app):
             (folder / name).chmod(0o755)
     path = [str(stubs)] + [p for p in os.environ.get('PATH', '').split(':')
                            if p and not p.startswith(REF) and p != INSTALLED_BIN]
-    return {'OMARCHY_PATH': str(tree), 'OMARCHY_SHELL_PATH': str(tree / 'shell'), 'PATH': ':'.join(path)}
+    return {'OMARCHY_PATH': str(tree), 'OMARCHY_SHELL_PATH': str(tree / 'shell'), 'PATH': ':'.join(path),
+            'LD_LIBRARY_PATH': library_path()}
 
 
 def check(env, *outputs):
