@@ -6,8 +6,7 @@ Notification history with app stacks, search, and do not disturb.
 
 ## Install
 
-Targets Omarchy 4.5 and retains basic compatibility with 4.0.
-Requires stock notifications or Foamy Notifications enabled, `jq`, `wl-paste`, and GNU `timeout`, plus
+Requires Omarchy 4.5 with stock notifications or Foamy Notifications enabled, `jq`, `wl-paste`, and GNU `timeout`, plus
 `inotify-tools`. The archive and the website favicon lookup are a bundled helper
 (`bin/x86_64`, `bin/aarch64`, built from `native/`); it needs no Python or Rust.
 On other CPUs the center shows that the helper isn't available.
@@ -48,7 +47,7 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
   Right-clicking the bar icon also toggles do not disturb.
 - **More options → Snooze notifications** offers 30 minutes, 1 hour, 4 hours,
   or resume all snoozed senders. It appears only when the daemon supports timed
-  snooze (Foamy Notifications); stock Omarchy 4.0 and 4.5-rc2 have DND but no
+  snooze (Foamy Notifications); stock Omarchy has DND but no
   timed snooze, so the item is hidden there.
 - Scrolling to the end loads the next 500 notifications; search covers the
   whole archive, not just the loaded part.
@@ -158,7 +157,7 @@ Foamy Notifications. If that action is unavailable, it opens an absolute PNG,
 JPEG, GIF, or WebP path, or focuses the sending app when no image is available.
 The standard two-argument `omasnap` or legacy `tensaku-edit` screenshot action becomes a fixed
 `edit-screenshot` intent, so screenshots remain editable after expiry or
-reload. Editing prefers Omasnap, falls back to Tensaku on 4.0, and finally to
+reload. Editing prefers Omasnap, falls back to Tensaku, and finally to
 `xdg-open` when neither editor is installed. Other images open with `xdg-open`. Missing files, unavailable apps, or immediate launch failures leave
 the entry available for retry.
 
@@ -182,7 +181,8 @@ committed that removal; Foamy Notifications uses this to avoid a second archive
 rewrite. Both accept at most 100 exact `timestamp-id` keys.
 
 Stock Omarchy 4.5 stores arrays in `live.json` and `history.json`. The reader
-accepts those arrays as well as Foamy/4.0's individual notification files. Stock
+accepts those arrays as well as the older per-file format (one file per
+notification) that Foamy Notifications keeps. Stock
 identities stay stable across updates and moves into history; updates do not
 become unread again. Only changed stock rows are ingested. Malformed or oversized
 arrays report a read error rather than silently returning an empty history.
@@ -204,12 +204,12 @@ The two plugins talk over IPC only; neither reads the other's config, runs the
 other's scripts, or writes or deletes the other's files. The center asks
 `foamy.notifications storeInfo` where Foamy's popup/history files and its
 `handled` journal are (read-only here); without an answer it reads stock
-Omarchy (`~/.local/state/omarchy/notifications`, 4.0 files or 4.5 arrays),
-and an older Foamy without `storeInfo` is read at its 4.0 location. Dismissing
+Omarchy (`~/.local/state/omarchy/notifications`, arrays or older per-file archives),
+and an older Foamy without `storeInfo` is read at its legacy location. Dismissing
 or clearing here asks Foamy (`releaseHistory`, `releaseHistoryBefore`) to drop its
 copies; Foamy reports handled clicks with `foamy.notification-center.store
 handled` and in its journal, and tells the center to re-read with `peerChanged`.
-On 4.5 these calls are answered in-process; on 4.0 through `omarchy-shell`.
+These calls are answered in-process.
 Changing the enabled plugin in `shell.json` re-resolves the source. There is no periodic archive polling;
 opening the panel also requests a fresh list. Reads which overlap newer events
 are retried, and duplicate filesystem events skip retention work.
@@ -301,6 +301,6 @@ and data, never its scripts). Set `OMARCHY_TEST_ROOT` to another Omarchy tree, o
 installing it. Both the stock service and Foamy service paths need validation; a
 fixture alone does not establish compatibility with a full OS upgrade.
 
-Language follows **Omarchy → Setup → Language** on Omarchy 4.5. Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin in English. Missing translations fall back to English.
+Language follows **Omarchy → Setup → Language** on Omarchy 4.5. Plugin language overrides are no longer used. Missing translations fall back to English.
 
 Translation checks: `python3 tests/i18n-runtime.py` checks live language switching on the installed Omarchy 4.5 shell. The 4.0 English fallback runs only when `FOAMY_HOST_40` names an Omarchy 4.0 `shell/` directory; otherwise the test prints a SKIP line.
