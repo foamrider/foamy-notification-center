@@ -1,13 +1,14 @@
 """Numeric settings use kit FoamyNumberField: an external change shows while Settings is open,
-and Escape restores the saved value without saving or leaving the page. Offscreen; OMARCHY_TEST_ROOT
-selects the host shell (default 4.0.6)."""
+and Escape restores the saved value without saving or leaving the page. Offscreen; the host shell is
+hostenv.root() (the installed 4.5 unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick another)."""
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+import hostenv
 
 source = Path(__file__).resolve().parents[1]
-host = (os.environ.get('OMARCHY_TEST_ROOT') or '/usr/share/omarchy')
+host = str(hostenv.root())
 base = Path(tempfile.mkdtemp(prefix='foamy-center-number-'))
 app = base / 'app'
 app.mkdir()

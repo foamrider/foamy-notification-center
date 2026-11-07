@@ -8,13 +8,14 @@ import tempfile
 import time
 
 from favicon_test import png
+import hostenv
 
 source = Path(__file__).resolve().parents[1]
 base = Path(tempfile.mkdtemp(prefix="foamy-center-settings-"))
 app = base / "app"
 app.mkdir()
 for name in ["Commons", "Ui"]:
-    (app / name).symlink_to(os.environ.get("OMARCHY_TEST_ROOT", "/usr/share/omarchy") + "/shell/" + name, target_is_directory=True)
+    (app / name).symlink_to(hostenv.root() / "shell" / name, target_is_directory=True)
 (app / "plugin").symlink_to(source, target_is_directory=True)
 home = base / "home"
 config = home / ".config/omarchy/shell.json"
@@ -464,7 +465,7 @@ ShellRoot {
 }
 ''')
 # Avoid starting desktop portal daemons on the disposable test bus.
-env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QUICK_BACKEND="rhi", QT_QPA_PLATFORMTHEME="basic", QT_NO_XDG_DESKTOP_PORTAL="1", OMARCHY_PATH="/usr/share/omarchy")
+env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QUICK_BACKEND="rhi", QT_QPA_PLATFORMTHEME="basic", QT_NO_XDG_DESKTOP_PORTAL="1", OMARCHY_PATH=str(hostenv.root()))
 process = subprocess.Popen(["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
 try:
     output = process.communicate(timeout=30)[0]

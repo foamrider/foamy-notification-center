@@ -1,14 +1,15 @@
 """Exercise real Center list delegates with synthetic history and an isolated Qt surface."""
 import os,signal,subprocess,tempfile,sys
 from pathlib import Path
+import hostenv
 source=Path(__file__).resolve().parents[1]
 base=Path(tempfile.mkdtemp(prefix='foamy-center-motion-'));app=base/'app';app.mkdir()
-(app/'Commons').symlink_to('/usr/share/omarchy/shell/Commons',target_is_directory=True)
+(app/'Commons').symlink_to(hostenv.root()/'shell/Commons',target_is_directory=True)
 # Include the plugin translator without registering unrelated fixture types.
 (app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
 (app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
 for name in ['Markup.js','BrowserIdentity.js']: (app / name).symlink_to(source / name)
-(app/'Ui').symlink_to('/usr/share/omarchy/shell/Ui',target_is_directory=True)
+(app/'Ui').symlink_to(hostenv.root()/'shell/Ui',target_is_directory=True)
 (app/'components').symlink_to(source/'components',target_is_directory=True)
 for name in ['Model.js','Translations.js']:(app/name).symlink_to(source/name)
 s=(source/'Panel.qml').read_text();a=s.index('          delegate: Item {');b=s.index('\n            }\n          }\n        }\n\n        // --------------------------------------------------------- empty',a)

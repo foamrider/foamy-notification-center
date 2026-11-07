@@ -6,13 +6,14 @@ import signal
 import subprocess
 import tempfile
 import time
+import hostenv
 
 source = Path(__file__).resolve().parents[1]
 base = Path(tempfile.mkdtemp(prefix="foamy-center-images-"))
 app = base / "app"
 app.mkdir()
 for name in ["Commons", "Ui"]:
-    (app / name).symlink_to("/usr/share/omarchy/shell/" + name, target_is_directory=True)
+    (app / name).symlink_to(hostenv.root() / "shell" / name, target_is_directory=True)
 (app / "plugin").symlink_to(source, target_is_directory=True)
 notifications = base / "notifications"
 (notifications / "history").mkdir(parents=True)

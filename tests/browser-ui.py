@@ -10,6 +10,7 @@ import sys
 import tempfile
 
 from favicon_test import png
+import hostenv
 
 source = Path(__file__).resolve().parents[1]
 center = source.name == 'foamy-notification-center'
@@ -19,8 +20,8 @@ base = Path(tempfile.mkdtemp(prefix='foamy-browser-ui-'))
 app = base / 'app'
 app.mkdir()
 for name in ['Commons', 'Ui']:
-    # OMARCHY_TEST_ROOT selects the host shell (an extracted 4.5 tree); default 4.0.6.
-    (app / name).symlink_to((os.environ.get('OMARCHY_TEST_ROOT') or '/usr/share/omarchy') + '/shell/' + name, target_is_directory=True)
+    # hostenv.root(): the installed 4.5 shell unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick another.
+    (app / name).symlink_to(hostenv.root() / 'shell' / name, target_is_directory=True)
 (app / 'plugin').symlink_to(source, target_is_directory=True)
 failed_helper = (source / 'components/BrowserIcons.qml').read_text().replace('import "../BrowserIdentity.js"', 'import "plugin/BrowserIdentity.js"')
 failed_helper = failed_helper.replace('import "../kit/FoamyNative.js"', 'import "plugin/kit/FoamyNative.js"')

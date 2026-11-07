@@ -3,14 +3,15 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import hostenv
 
 source = Path(__file__).resolve().parents[1]
 base = Path(tempfile.mkdtemp(prefix='foamy-center-rtl-'))
 app = base / 'app'
 app.mkdir()
 for name in ['Commons', 'Ui']:
-    # OMARCHY_TEST_ROOT selects the host shell (an extracted 4.5 tree); default 4.0.6.
-    (app / name).symlink_to((os.environ.get('OMARCHY_TEST_ROOT') or '/usr/share/omarchy') + '/shell/' + name)
+    # hostenv.root(): the installed 4.5 shell unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick another.
+    (app / name).symlink_to(hostenv.root() / 'shell' / name)
 (app / 'plugin').symlink_to(source)
 runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)

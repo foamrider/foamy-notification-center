@@ -294,12 +294,13 @@ from `rust-toolchain.toml`, `file`, and qemu-user binfmt for the aarch64 tests):
 ~/GitHub/Personal/foamy-kit/tools/build-native.sh . --verify  # clean rebuild, byte compare
 bash tests/kit-check.sh
 ```
-`settings-ui.py` and `images-ui.py` require a running Wayland session. Set
-`OMARCHY_TEST_ROOT` to an extracted Omarchy 4.5 source tree for `stock-runtime.py`
-and `settings-ui.py` to exercise that release without installing it. Both the
-stock service and Foamy service paths need validation; a fixture alone does not
-establish compatibility with a full OS upgrade.
+`settings-ui.py` and `images-ui.py` require a running Wayland session. The
+tests load the installed Omarchy 4.5 shell (`/usr/share/omarchy`; only its QML
+and data, never its scripts). Set `OMARCHY_TEST_ROOT` to another Omarchy tree, or
+`FOAMY_HOST_45` to its `shell/` directory, to exercise that release without
+installing it. Both the stock service and Foamy service paths need validation; a
+fixture alone does not establish compatibility with a full OS upgrade.
 
 Language follows **Omarchy → Setup → Language** on Omarchy 4.5. Plugin language overrides are no longer used. Omarchy 4.0 displays the plugin in English. Missing translations fall back to English.
 
-Translation checks: `python3 tests/i18n-runtime.py` uses the installed shell. Set `OMARCHY_PATH` to a 4.5 source tree to check live language switching against that version.
+Translation checks: `python3 tests/i18n-runtime.py` checks live language switching on the installed Omarchy 4.5 shell. The 4.0 English fallback runs only when `FOAMY_HOST_40` names an Omarchy 4.0 `shell/` directory; otherwise the test prints a SKIP line.
