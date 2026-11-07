@@ -1,4 +1,4 @@
-// foamy-kit 0.5.0 17d4cde5814661e1eedce8abdb7ea1e46ef8f9a588d3454920e5fdba99b83c0c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.5.1 17d4cde5814661e1eedce8abdb7ea1e46ef8f9a588d3454920e5fdba99b83c0c — do not edit; change foamy-kit and run sync
 //! Bounded reads: whole streams with a byte cap, and lines with a maximum
 //! length that skip (rather than buffer) an overlong line.
 

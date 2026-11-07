@@ -1,4 +1,4 @@
-// foamy-kit 0.5.0 b87cbab9ce6104456616d0309c28adce7c0d0e7bdd4e6746c256a47aa76af421 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.5.1 b87cbab9ce6104456616d0309c28adce7c0d0e7bdd4e6746c256a47aa76af421 — do not edit; change foamy-kit and run sync
 //! TLS for helpers that make HTTPS requests (feature `tls`): one crypto
 //! provider and one trust store for every foamy helper.
 //!

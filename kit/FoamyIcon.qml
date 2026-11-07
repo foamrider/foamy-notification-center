@@ -1,4 +1,4 @@
-// foamy-kit 0.5.0 1d0865ffc22288c90854e3a5c4d4031f49302bf1277f138f9dda373d3f387e30 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.5.1 08f7ffdca63439f95edea8c084f6f304b81b36ce7e189bdf864f05a63c1d43fb — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Foamy icon set: inline Lucide SVG paths (ISC, see LICENSE-LUCIDE), the
@@ -10,7 +10,10 @@ import QtQuick
 // from Lucide 0.577.0: Lucide 1.x dropped brand icons. `message` and `chat`
 // are aliases of `message-square`. 0.4.0 added clock, alarm-clock, bell-ring,
 // timer, circle-help and ellipsis-vertical, 0.4.5 arrow-down-to-line (Lucide
-// 1.65.0). Refresh with tools/update-icons.py.
+// 1.65.0). 0.5.1 adds undo-2, undo-dot and check-check (Lucide 1.65.0) and
+// the CC0 Zendesk mark from
+// https://github.com/simple-icons/simple-icons/blob/develop/icons/zendesk.svg.
+// Refresh with tools/update-icons.py.
 //
 //   FoamyIcon { name: "refresh-cw"; color: FoamyPalette.text; width: FoamyStyle.iconSize; height: width }
 //
@@ -22,7 +25,7 @@ Image {
   property color color: FoamyPalette.text
   property real strokeWidth: FoamyStyle.iconStroke
   readonly property bool known: paths.hasOwnProperty(name)
-  readonly property var directional: ["arrow-left", "arrow-right", "back", "chevron", "chevron-left", "chevron-right", "external-link"]
+  readonly property var directional: ["arrow-left", "arrow-right", "back", "chevron", "chevron-left", "chevron-right", "external-link", "undo-2", "undo-dot"]
   // Media transport (skip-back/-forward, play) does not mirror, as in media apps.
   readonly property var paths: ({
     "activity": "<path d=\"M22 12h-4l-3 9L9 3l-3 9H2\"/>",
@@ -50,6 +53,7 @@ Image {
     "cancelled": "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"m9 9 6 6m0-6-6 6\"/>",
     "chat": "<path d=\"M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z\"/>",
     "check": "<path d=\"m20 6-11 11-5-5\"/>",
+    "check-check": "<path d=\"M18 6 7 17l-5-5\"/><path d=\"m22 10-7.5 7.5L13 16\"/>",
     "chevron": "<path d=\"m9 5 7 7-7 7\"/>",
     "chevron-down": "<path d=\"m6 9 6 6 6-6\"/>",
     "chevron-left": "<path d=\"m15 18-6-6 6-6\"/>",
@@ -125,6 +129,8 @@ Image {
     "train": "<rect x=\"5\" y=\"2\" width=\"14\" height=\"17\" rx=\"4\"/><path d=\"M5 10h14M12 2v8M8 19l-2 3m10-3 2 3\"/><path d=\"M8 15h.01M16 15h.01\"/>",
     "trash": "<path d=\"M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6\"/>",
     "triangle-alert": "<path d=\"m10.3 3.9-8.1 14a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3l-8.1-14a2 2 0 0 0-3.4 0M12 9v4M12 17h.01\"/>",
+    "undo-2": "<path d=\"M9 14 4 9l5-5\"/><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11\"/>",
+    "undo-dot": "<path d=\"M21 17a9 9 0 0 0-15-6.7L3 13\"/><path d=\"M3 7v6h6\"/><circle cx=\"12\" cy=\"17\" r=\"1\"/>",
     "unlink": "<path d=\"m8 3 1 3M3 8l3 1m10 12-1-3m6-2-3-1M10 14l-2 2a4 4 0 0 1-6-6l2-2m10 2 2-2a4 4 0 0 1 6 6l-2 2M3 3l18 18\"/>",
     "users": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><path d=\"M16 3.128a4 4 0 0 1 0 7.744\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/>",
     "volume-2": "<path d=\"m11 5-6 4H2v6h3l6 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14\"/>",
@@ -133,7 +139,8 @@ Image {
     "watch": "<rect x=\"5\" y=\"6\" width=\"14\" height=\"12\" rx=\"3\"/><path d=\"m9 6 1-4h4l1 4M9 18l1 4h4l1-4M12 9v3l2 1\"/>",
     "wind": "<path d=\"M12.8 19.6A2 2 0 1 0 14 16H2\"></path><path d=\"M17.5 8a2.5 2.5 0 1 1 2 4H2\"></path><path d=\"M9.8 4.4A2 2 0 1 1 11 8H2\"></path>",
     "x": "<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>",
-    "zap": "<path d=\"M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z\"/>"
+    "zap": "<path d=\"M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z\"/>",
+    "zendesk": "<path d=\"M12.914 2.904V16.29L24 2.905H12.914zM0 2.906C0 5.966 2.483 8.45 5.543 8.45s5.542-2.484 5.543-5.544H0zm11.086 4.807L0 21.096h11.086V7.713zm7.37 7.84c-3.063 0-5.542 2.48-5.542 5.543H24c0-3.06-2.48-5.543-5.543-5.543z\"/>"
   })
   width: FoamyStyle.iconSize
   height: width
@@ -146,5 +153,5 @@ Image {
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="'
     + color.toString() + '" stroke-width="' + strokeWidth
     + '" stroke-linecap="round" stroke-linejoin="round">'
-    + (paths[name] || paths.settings) + '</svg>')
+    + (name === "zendesk" ? '<g fill="' + color.toString() + '" stroke="none">' + paths.zendesk + '</g>' : (paths[name] || paths.settings)) + '</svg>')
 }
