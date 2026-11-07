@@ -104,7 +104,7 @@
           "Nothing"
         ],
         "defaultValue": "Auto",
-        "description": "Auto tries the current popup action first, then edits standard screenshots in Tensaku, opens other pictures, or focuses the sending app. Archived sender commands are never replayed. Focus the app skips pictures and live actions; Nothing disables body clicks."
+        "description": "Auto tries the current popup action first, then edits standard screenshots in Omasnap (Tensaku where Omasnap is missing, else the image viewer), opens other pictures, or focuses the sending app. Archived sender commands are never replayed. Focus the app skips pictures and live actions; Nothing disables body clicks."
       },
       {
         "key": "showBody",
