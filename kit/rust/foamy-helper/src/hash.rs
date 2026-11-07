@@ -1,4 +1,4 @@
-// foamy-kit 0.5.1 444eba5d6f73ead3d00fecbe31574cfc3c260cd220d162448a12ac28ef0ca13c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.5.2 444eba5d6f73ead3d00fecbe31574cfc3c260cd220d162448a12ac28ef0ca13c — do not edit; change foamy-kit and run sync
 //! SHA-256 in plain Rust (no C, no crypto provider), for cache file names
 //! and content hashes the helpers compare with Python's `hashlib.sha256`.
 //! Not constant-time; not for secrets or MACs.

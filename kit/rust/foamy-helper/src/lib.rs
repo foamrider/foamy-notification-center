@@ -1,4 +1,4 @@
-// foamy-kit 0.5.1 f8d5a3d7073844931bdf3f4263650038bfc1cf0096f54fc8b04548fb706e841b — do not edit; change foamy-kit and run sync
+// foamy-kit 0.5.2 f8d5a3d7073844931bdf3f4263650038bfc1cf0096f54fc8b04548fb706e841b — do not edit; change foamy-kit and run sync
 //! Shared building blocks for foamy plugin helpers (`foamy-<plugin>-helper`).
 //!
 //! foamy-kit's `FoamyNative` component vendors this crate into a plugin as

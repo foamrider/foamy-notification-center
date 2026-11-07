@@ -1,4 +1,4 @@
-# foamy-kit 0.5.1 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e — do not edit; change foamy-kit and run sync
+# foamy-kit 0.5.2 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e — do not edit; change foamy-kit and run sync
 # The release profile of every foamy native helper. tools/build-native.sh
 # passes this file to cargo (`--config kit/rust/release.toml`), which ranks
 # it above the crate's Cargo.toml; plugin crates declare no [profile] of their

@@ -1,8 +1,8 @@
 # foamy-kit.lock: written by foamy-kit sync.sh; do not edit.
 # Hashes are of each file's body (the file without its stamp line);
 # notices are hashed whole. tests/kit-check.sh verifies them.
-version 0.5.1
-source f25d3772d61d
+version 0.5.2
+source cc3e46f0fae4
 components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyPopup,FoamyPrefs,FoamySettings,FoamyStyle,FoamyWheelScroll,SafeTextField
 31637cf414fddfbc7c18c7d107b4c9a77801568fd78ebb8212791fb66de476a9  kit/FoamyAction.qml
 4488b3dbaa2b0fab78fb66dea979e57bcc0f30e76e6443bb4a0f031fffc44709  kit/FoamyCursor.qml
@@ -56,7 +56,7 @@ b5f018d5c973f1115da2ae6c35c7eb8700e6cc24d97cb7b917a04ca05560d45c  kit/rust/foamy
 2a2d9259787593e3b1bac0a5267d440fb7d698f12a1166ddf439412e89431035  kit/rust/foamy-helper/src/process.rs
 d2213229d6dc4054ee87597496c93caa8f3645f6bad4fd37650cbad7cc6c0ec7  kit/rust/foamy-helper/src/sandbox.rs
 78ba4abf76f4bedcb2fcfb211a0b31af68055b15f6e093bf28cb860caec0be42  kit/rust/foamy-helper/src/sandbox/tests.rs
-b87cbab9ce6104456616d0309c28adce7c0d0e7bdd4e6746c256a47aa76af421  kit/rust/foamy-helper/src/tls.rs
+1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa  kit/rust/foamy-helper/src/tls.rs
 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e  rust-toolchain.toml
 59c3505e9a3a16728a521626b705613826f74569871c12b75afa196bcc4af467  tests/kit-check.sh

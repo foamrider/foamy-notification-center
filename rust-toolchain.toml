@@ -1,4 +1,4 @@
-# foamy-kit 0.5.1 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e — do not edit; change foamy-kit and run sync
+# foamy-kit 0.5.2 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e — do not edit; change foamy-kit and run sync
 # The Rust toolchain every foamy native helper is built with. foamy-kit's
 # FoamyNative component copies this file to a plugin's root, so cargo picks
 # it up anywhere in the plugin (rustup reads it from the working directory
