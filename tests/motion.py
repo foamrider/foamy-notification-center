@@ -18,6 +18,7 @@ delegate=s[a:b]
 import QtTest
 import Quickshell
 import qs.Commons
+import qs.Commons as Commons
 import "components"
 import "kit"
 import "Model.js" as Model
@@ -27,7 +28,7 @@ ShellRoot {
  property string language:"en"
  property double now:Date.now()
  property double readMark:0
- property color foreground:Color.popups.text
+ property color foreground:Commons.Color.popups.text
  property string fontFamily:Style.font.family
  property bool keyboardNavigation:false
  property bool popupContentActive:true
@@ -126,7 +127,7 @@ ShellRoot {
     list.positionViewAtEnd();wait(40);var last=item(79);compare(last.opacity,1);compare(last.entranceOffset,0)
     root.filter="no matches";root.rebuild();tryCompare(list,"count",0);wait(200)
     root.filter="App 3";root.rebuild();tryVerify(function(){return list.count>0});wait(220)
-    list.positionViewAtBeginning();root.compact=false;list.width=320;Color.background="#eff1f5";Color.foreground="#4c4f69";wait(100);capture("narrow-light-search")
+    list.positionViewAtBeginning();root.compact=false;list.width=320;Commons.Color.background="#eff1f5";Commons.Color.foreground="#4c4f69";wait(100);capture("narrow-light-search")
     root.keyboardNavigation=true;root.cursorIndex=1;wait(40)
     root.filter="";root.rebuild();tryCompare(list,"count",80)
    }catch(e){console.log("FAILED",e.message,e.stack);throw e}}

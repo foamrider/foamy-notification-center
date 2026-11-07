@@ -77,6 +77,7 @@ model_check = '''        compare(root.groups.length,2);compare(root.groups[0].la
 import QtTest
 import Quickshell
 import qs.Commons
+import qs.Commons as Commons
 import "plugin/components"
 MODEL_IMPORT
 ShellRoot {
@@ -88,7 +89,7 @@ ShellRoot {
   BrowserIcons { id:resolver; helper:"HELPER" }
   FailedBrowserIcons { id:failedResolver; helper:"HELPER" }
   FloatingWindow {
-    id:window;visible:true;implicitWidth:500;implicitHeight:250;color:Color.background
+    id:window;visible:true;implicitWidth:500;implicitHeight:250;color:Commons.Color.background
     WIDGET
     property bool ready:false
     Timer {interval:400;running:true;onTriggered:window.ready=true}
@@ -112,7 +113,7 @@ ShellRoot {
         tryCompare(favicon,"status",Image.Ready);tryCompare(appIcon,"status",Image.Ready)
         verify(favicon.visible);verify(!appIcon.visible);capture("favicon-wide-dark")
         card.width=280;waitForRendering(card);capture("favicon-narrow-dark")
-        Color.background="#eff1f5";Color.foreground="#4c4f69";Color.accent="#1e66f5";card.width=420;waitForRendering(card);capture("favicon-wide-light")
+        Commons.Color.background="#eff1f5";Commons.Color.foreground="#4c4f69";Commons.Color.accent="#1e66f5";card.width=420;waitForRendering(card);capture("favicon-wide-light")
 MODEL_CHECK
         root.overrideSource=Qt.resolvedUrl("missing.png").toString()
         tryCompare(favicon,"status",Image.Error);verify(!favicon.visible);verify(appIcon.visible);capture("fallback-missing")

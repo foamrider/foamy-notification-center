@@ -41,6 +41,7 @@ import QtTest
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import "plugin" as Plugin
 import "plugin/components"
 import "plugin/Model.js" as Model
@@ -52,7 +53,7 @@ ShellRoot {
   Plugin.Service { id: store }
   FileView { id: input; path: INPUT_PATH }
   FloatingWindow {
-    id: window; visible:true; implicitWidth:600; implicitHeight:430; color:Color.background
+    id: window; visible:true; implicitWidth:600; implicitHeight:430; color:Commons.Color.background
     Column {
       id: card; x:20; y:20; width:520
       NotificationStackHeader {
@@ -82,9 +83,9 @@ ShellRoot {
         verify(root.entry.appIcon.endsWith("-appIcon.png"));tryCompare(icon,"status",Image.Ready)
         tryVerify(function(){return row.hasPreview})
         var preview=imageFor(row,root.entry.preview);verify(preview!==null);tryCompare(preview,"status",Image.Ready)
-        Color.background="#24273a";Color.foreground="#cad3f5";Color.accent="#8aadf4"
+        Commons.Color.background="#24273a";Commons.Color.foreground="#cad3f5";Commons.Color.accent="#8aadf4"
         capture("images-wide-dark");card.width=280;capture("images-narrow-dark")
-        Color.background="#eff1f5";Color.foreground="#4c4f69";Color.accent="#1e66f5"
+        Commons.Color.background="#eff1f5";Commons.Color.foreground="#4c4f69";Commons.Color.accent="#1e66f5"
         card.width=520;capture("images-wide-light");card.width=280;capture("images-narrow-light")
         mouseClick(row,80,20);compare(root.activations,1)
         var updated=SOURCE_ENTRY
@@ -103,7 +104,7 @@ ShellRoot {
   }
 }
 '''.replace("INPUT_PATH", json.dumps(str(notification))).replace("SOURCE_ENTRY", json.dumps(entry)))
-env = dict(os.environ, HOME=str(base / "home"), XDG_CONFIG_HOME=str(base / "home/.config"), XDG_CACHE_HOME=str(base / "cache"), XDG_STATE_HOME=str(base / "state"), XDG_RUNTIME_DIR=str(runtime), NC_SRC_DIR=str(notifications), NC_SRC_HISTORY=str(notifications / "history"), NC_STORE=str(base / "store"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QPA_PLATFORMTHEME="basic", QT_STYLE_OVERRIDE="Fusion")
+env = dict(os.environ, HOME=str(base / "home"), XDG_CONFIG_HOME=str(base / "home/.config"), XDG_CACHE_HOME=str(base / "cache"), XDG_STATE_HOME=str(base / "state"), XDG_RUNTIME_DIR=str(runtime), NC_SRC_DIR=str(notifications), NC_SRC_HISTORY=str(notifications / "history"), NC_STORE=str(base / "state/omarchy-notification-center"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QPA_PLATFORMTHEME="basic", QT_STYLE_OVERRIDE="Fusion")
 env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / os.environ["WAYLAND_DISPLAY"])
 for key in ["DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "QT_QUICK_BACKEND"]:
     env.pop(key, None)
