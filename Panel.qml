@@ -270,7 +270,12 @@ Ui.Panel {
   property double readMark: 0
   readonly property bool loaded: store ? store.loaded : false
   property bool searching: false
-  property double now: Date.now()
+  // What row ages are measured against. A preview sets fixedNow to the mock
+  // time its sample was written for, so renders do not drift with the date.
+  property double fixedNow: 0
+  function clockNow() { return fixedNow > 0 ? fixedNow : Date.now() }
+  property double now: clockNow()
+  onFixedNowChanged: now = clockNow()
 
   readonly property int unread: store ? store.unread : 0
   // More unread than the loaded page holds.
@@ -283,7 +288,7 @@ Ui.Panel {
     running: root.opened
     repeat: true
     triggeredOnStart: true
-    onTriggered: root.now = Date.now()
+    onTriggered: root.now = root.clockNow()
   }
 
   function startSearch() {
@@ -430,7 +435,7 @@ Ui.Panel {
       if (search) { search.text = ""; search.pasteError = "" }
       return
     }
-    now = Date.now()
+    now = clockNow()
     keyboardNavigation = false
     cursorOnSettings = false
     cursorIndex = -1
