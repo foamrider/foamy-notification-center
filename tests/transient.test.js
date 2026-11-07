@@ -4,6 +4,7 @@ const os = require("node:os")
 const path = require("node:path")
 const { spawnSync } = require("node:child_process")
 const test = require("node:test")
+const helper = require("./helper.cjs")
 
 test("transient stock notification records never enter the archive", () => {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "notification-transient-"))
@@ -24,11 +25,10 @@ test("transient stock notification records never enter the archive", () => {
     // A malformed source must not prevent valid notifications being archived.
     fs.writeFileSync(path.join(source, "broken.json"), "{")
     const env = { ...process.env, NC_SRC_DIR: source, NC_SRC_HISTORY: path.join(source, "history"), NC_STORE: path.join(scratch, "archive") }
-    const script = path.resolve(__dirname, "../bin/notification-center")
     for (let pass = 0; pass < 2; pass++) {
-      const sync = spawnSync(script, ["sync"], { env, encoding: "utf8" })
+      const sync = helper.spawnSync(["sync"], { env, encoding: "utf8" })
       assert.equal(sync.status, 0, sync.stderr)
-      const result = spawnSync(script, ["list", "100"], { env, encoding: "utf8" })
+      const result = helper.spawnSync(["list", "100"], { env, encoding: "utf8" })
       assert.equal(result.status, 0, result.stderr)
       assert.deepEqual(JSON.parse(result.stdout).map(row => row.key).sort(), [`${timestamp}-2`, `${timestamp}-3`])
       // Expiry moves the same files to history; catch-up must still skip transient toasts.

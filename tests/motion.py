@@ -1,14 +1,15 @@
 """Exercise real Center list delegates with synthetic history and an isolated Qt surface."""
 import os,signal,subprocess,tempfile,sys
 from pathlib import Path
+import hostenv
 source=Path(__file__).resolve().parents[1]
 base=Path(tempfile.mkdtemp(prefix='foamy-center-motion-'));app=base/'app';app.mkdir()
-(app/'Commons').symlink_to('/usr/share/omarchy/shell/Commons',target_is_directory=True)
+(app/'Commons').symlink_to(hostenv.root()/'shell/Commons',target_is_directory=True)
 # Include the plugin translator without registering unrelated fixture types.
 (app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
 (app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
 for name in ['Markup.js','BrowserIdentity.js']: (app / name).symlink_to(source / name)
-(app/'Ui').symlink_to('/usr/share/omarchy/shell/Ui',target_is_directory=True)
+(app/'Ui').symlink_to(hostenv.root()/'shell/Ui',target_is_directory=True)
 (app/'components').symlink_to(source/'components',target_is_directory=True)
 for name in ['Model.js','Translations.js']:(app/name).symlink_to(source/name)
 s=(source/'Panel.qml').read_text();a=s.index('          delegate: Item {');b=s.index('\n            }\n          }\n        }\n\n        // --------------------------------------------------------- empty',a)
@@ -17,6 +18,7 @@ delegate=s[a:b]
 import QtTest
 import Quickshell
 import qs.Commons
+import qs.Commons as Commons
 import "components"
 import "kit"
 import "Model.js" as Model
@@ -26,7 +28,7 @@ ShellRoot {
  property string language:"en"
  property double now:Date.now()
  property double readMark:0
- property color foreground:Color.popups.text
+ property color foreground:Commons.Color.popups.text
  property string fontFamily:Style.font.family
  property bool keyboardNavigation:false
  property bool popupContentActive:true
@@ -125,7 +127,7 @@ ShellRoot {
     list.positionViewAtEnd();wait(40);var last=item(79);compare(last.opacity,1);compare(last.entranceOffset,0)
     root.filter="no matches";root.rebuild();tryCompare(list,"count",0);wait(200)
     root.filter="App 3";root.rebuild();tryVerify(function(){return list.count>0});wait(220)
-    list.positionViewAtBeginning();root.compact=false;list.width=320;Color.background="#eff1f5";Color.foreground="#4c4f69";wait(100);capture("narrow-light-search")
+    list.positionViewAtBeginning();root.compact=false;list.width=320;Commons.Color.background="#eff1f5";Commons.Color.foreground="#4c4f69";wait(100);capture("narrow-light-search")
     root.keyboardNavigation=true;root.cursorIndex=1;wait(40)
     root.filter="";root.rebuild();tryCompare(list,"count",80)
    }catch(e){console.log("FAILED",e.message,e.stack);throw e}}
@@ -135,7 +137,7 @@ ShellRoot {
 '''.replace('DELEGATE',delegate))
 home=base/'home';home.mkdir();runtime=base/'runtime';runtime.mkdir(mode=0o700)
 desktop='--desktop' in sys.argv
-env=dict(os.environ,HOME=str(home),QT_QPA_PLATFORM='wayland' if desktop else 'offscreen',QT_QUICK_BACKEND='rhi' if desktop else 'software',QT_QPA_PLATFORMTHEME='basic')
+env=dict(os.environ,HOME=str(home),XDG_CONFIG_HOME=str(home/'.config'),XDG_STATE_HOME=str(home/'.local/state'),QT_QPA_PLATFORM='wayland' if desktop else 'offscreen',QT_QUICK_BACKEND='rhi' if desktop else 'software',QT_QPA_PLATFORMTHEME='basic')
 if not desktop:
  env['XDG_RUNTIME_DIR']=str(runtime)
  for key in ['DISPLAY','WAYLAND_DISPLAY','HYPRLAND_INSTANCE_SIGNATURE']:env.pop(key,None)

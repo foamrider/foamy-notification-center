@@ -5,6 +5,7 @@ import "." as Plugin
 import "Model.js" as Model
 import "components"
 import "kit"
+import "kit/FoamyNative.js" as FoamyNative
 
 // The archive, mounted once for the shell.
 //
@@ -45,7 +46,7 @@ Item {
     load()
   }
 
-  BrowserIcons { id: browserIcons; onUpdated: root.browserIconsUpdated() }
+  BrowserIcons { id: browserIcons; helper: root.helper; onUpdated: root.browserIconsUpdated() }
   signal browserIconsUpdated()
   function faviconSource(row) { return row ? browserIcons.source(row) : "" }
   function warmBrowserIcons(rows) { browserIcons.warm(rows) }
@@ -75,8 +76,18 @@ Item {
   readonly property bool unreadCapped: hasMore && unread >= unreadSource.length && unread > 0
   readonly property bool hasCriticalUnread: unreadState.hasCriticalUnread
 
-  readonly property string script:
-    Qt.resolvedUrl("bin/notification-center").toString().replace(/^file:\/\//, "")
+  // The store helper (bin/<arch>/foamy-notification-center-helper, foamy-kit FoamyNative).
+  readonly property string helper: "foamy-notification-center-helper"
+  readonly property string pluginDir: FoamyNative.localPath(Qt.resolvedUrl("."))
+  // No helper binary for this CPU: say so once and start nothing again.
+  property bool helperUnavailable: false
+  function storeUnavailable(exitCode) {
+    if (!FoamyNative.unavailable(exitCode)) return false
+    if (!root.helperUnavailable) console.warn("Notification history: " + FoamyNative.UNAVAILABLE_TEXT)
+    root.helperUnavailable = true
+    root.loadError = FoamyNative.UNAVAILABLE_TEXT
+    return true
+  }
 
   // ------------------------------------------------ the notification source
   //
@@ -225,7 +236,7 @@ Item {
   signal entriesReset()
 
   function storeCommand(args) {
-    return [root.script].concat(args)
+    return FoamyNative.command(root.pluginDir, root.helper, args)
   }
 
   function differsFrom(data) {
@@ -233,6 +244,7 @@ Item {
   }
 
   function load() {
+    if (root.helperUnavailable) return
     if (listProc.running) { loadPending = true; return }
     loadPending = false
     listRevision = archiveRevision
@@ -243,7 +255,7 @@ Item {
   }
 
   function readSeen() {
-    if (seenProc.running) return
+    if (seenProc.running || root.helperUnavailable) return
     seenProc.command = root.storeCommand(["seen"])
     seenProc.running = true
   }
@@ -254,6 +266,7 @@ Item {
   function markSeen() {
     var stamp = Date.now()
     root.lastSeen = stamp
+    if (root.helperUnavailable) return
     if (markProc.running) { seenPending = String(stamp); return }
     markProc.command = root.storeCommand(["seen", String(stamp)])
     markProc.running = true
@@ -285,7 +298,7 @@ Item {
   }
 
   function startRemoval() {
-    if (removeProc.running || pendingRemovalKeys.length === 0) return
+    if (removeProc.running || pendingRemovalKeys.length === 0 || root.helperUnavailable) return
     activeRemovalKeys = pendingRemovalKeys
     pendingRemovalKeys = []
     removalError = ""
@@ -303,7 +316,7 @@ Item {
         // Release failed tombstones so a reload can restore entries for a retry.
         for (var i = 0; i < root.activeRemovalKeys.length; i++)
           delete root.removedKeys[root.activeRemovalKeys[i]]
-        root.removalError = "Could not dismiss notifications. Try again."
+        root.removalError = root.storeUnavailable(exitCode) ? FoamyNative.UNAVAILABLE_TEXT : "Could not dismiss notifications. Try again."
         console.warn("Notification dismissal failed:", removeErrors.text)
         root.load()
       } else root.releaseNotificationActions(root.activeRemovalKeys.filter(function(key) { return !root.quietRemovalKeys[key] }))
@@ -484,6 +497,7 @@ Item {
     // The cutoff is the moment of the click. A clear requested while one runs
     // runs afterwards with its own click-time cutoff (the latest request wins).
     var cut = String(Date.now())
+    if (root.helperUnavailable) return
     if (clearProc.running) { clearPendingCut = cut; return }
     clearProc.cut = cut
     clearProc.running = true
@@ -493,10 +507,11 @@ Item {
     id: clearProc
     property string cut: ""
     // The cutoff captured at the click goes to the script and to Foamy alike.
-    command: [root.script, "clear", cut]
+    command: root.storeCommand(["clear", cut])
     environment: root.storeEnvironment
     onExited: function(code, status) {
       if (code === 0 && status === 0) { if (root.foamySource) root.releaseBefore(cut) }
+      else if (root.storeUnavailable(code)) { root.removalError = FoamyNative.UNAVAILABLE_TEXT; root.clearPendingCut = ""; return }
       else root.removalError = "Could not clear notifications. Try again."
       if (root.clearPendingCut) {
         cut = root.clearPendingCut
@@ -590,7 +605,8 @@ Item {
     stdout: SplitParser {
       onRead: function(line) { root.absorb(line) }
     }
-    onExited: {
+    onExited: function(exitCode, exitStatus) {
+      if (root.storeUnavailable(exitCode)) return
       if (!root.sourceRestartPending) console.warn("Notification history watcher stopped; reconnecting")
       restartWatch.interval = root.sourceRestartPending ? 100 : 1000
       restartWatch.restart()
@@ -600,7 +616,7 @@ Item {
   Timer {
     id: restartWatch
     interval: 30000
-    onTriggered: { root.sourceRestartPending = false; if (!watchProc.running && root.sourceKind) watchProc.running = true }
+    onTriggered: { root.sourceRestartPending = false; if (!watchProc.running && root.sourceKind && !root.helperUnavailable) watchProc.running = true }
   }
 
   Timer { id: reloadArchive; interval: 75; onTriggered: root.load() }
@@ -609,6 +625,7 @@ Item {
     id: listProc
     environment: root.storeEnvironment
     onExited: function(exitCode, exitStatus) {
+      if (root.storeUnavailable(exitCode)) return
       if (exitCode !== 0 || exitStatus !== 0) root.loadError = "Could not refresh notification history. Reopen the center to retry."
       if (root.loadPending) reloadArchive.restart()
     }

@@ -8,14 +8,15 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import hostenv
 
 source = Path(__file__).resolve().parents[1]
 base = Path(tempfile.mkdtemp(prefix='foamy-center-scroll-'))
 app = base / 'app'
 app.mkdir()
 for name in ['Commons', 'Ui']:
-    # OMARCHY_TEST_ROOT selects the host shell (an extracted 4.5 tree); default 4.0.6.
-    (app / name).symlink_to((os.environ.get('OMARCHY_TEST_ROOT') or '/usr/share/omarchy') + '/shell/' + name)
+    # hostenv.root(): the installed 4.5 shell unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick another.
+    (app / name).symlink_to(hostenv.root() / 'shell' / name)
 (app / 'plugin').symlink_to(source)
 runtime = base / 'runtime'
 runtime.mkdir(mode=0o700)
@@ -94,7 +95,10 @@ ShellRoot {
  }
 }
 ''')
-env = dict(os.environ, XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
+# A private home and config: on 4.5 the shell language is $XDG_CONFIG_HOME/omarchy/language.
+home = base / 'home'
+home.mkdir()
+env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / '.config'), XDG_STATE_HOME=str(home / '.local/state'), XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
 env.pop('WAYLAND_DISPLAY', None)
 result = subprocess.run(['quickshell', '-p', str(app), '--no-color'], env=env, capture_output=True, text=True, timeout=30)
 output = result.stdout + result.stderr

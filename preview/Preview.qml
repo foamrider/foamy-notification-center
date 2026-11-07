@@ -22,6 +22,8 @@ Item {
     return null
   }
 
+  // The mock "now" the sample (and its keys) were written for; the panel
+  // measures ages against it, so renders read "1m ago" on any date.
   readonly property double now: 1793350800000
   readonly property var sample: [
     { key: "1793350740000-11", app: "Signal", appIcon: "signal-desktop", summary: "Ada Lovelace", body: "Are we still on for the review at 3? &amp; bring the notes", timestamp: now - 60000, urgency: 1 },
@@ -82,6 +84,7 @@ Item {
     height: preview.anchorItem.height
     bar: preview.bar
     manageIpc: false
+    fixedNow: preview.now
     settings: ({ panelWidth: 420, badge: "Dot", compact: false, showBody: true, showPreview: true })
     Component.onCompleted: {
       preview.popupRef = panel.popupPanel

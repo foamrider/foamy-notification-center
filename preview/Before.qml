@@ -21,6 +21,8 @@ Item {
     return null
   }
 
+  // The mock "now" the sample (and its keys) were written for; the panel
+  // measures ages against it, so renders read "1m ago" on any date.
   readonly property double now: 1793350800000
   readonly property var sample: [
     { key: "1793350740000-11", app: "Signal", appIcon: "signal-desktop", summary: "Ada Lovelace", body: "Are we still on for the review at 3? &amp; bring the notes", timestamp: now - 60000, urgency: 1 },
@@ -87,10 +89,17 @@ Item {
       // The dev fork has no cardItem the harness can find: the screen shot is
       // what counts, and the PR's Before cards are cropped from it.
       preview.popupRef = preview.find(panel, "notificationCenterPopup") || panel
+      panel.now = preview.now
       Qt.callLater(function() {
         panel.open()
       })
     }
+  }
+  // The dev Panel may predate fixedNow, and it resets `now` from the clock when
+  // it opens: hold it at the mock time either way.
+  Connections {
+    target: panel
+    function onNowChanged() { if (panel.now !== preview.now) panel.now = preview.now }
   }
 
   onPreviewStateChanged: Qt.callLater(function() {

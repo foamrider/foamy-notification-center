@@ -4,12 +4,15 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import hostenv
 
 source = Path(__file__).resolve().parents[1]
-# OMARCHY_PATH (or OMARCHY_TEST_ROOT) names the host tree; only its QML and data are loaded.
-if not os.environ.get('OMARCHY_TEST_ROOT') and os.environ.get('OMARCHY_PATH'):
+# The host tree (hostenv.root(): the installed 4.5 by default; OMARCHY_TEST_ROOT,
+# FOAMY_HOST_45 or else OMARCHY_PATH picks another); only its QML and data are loaded.
+# The 4.0 English fallback runs only on a FOAMY_HOST_40 tree.
+if not os.environ.get('OMARCHY_TEST_ROOT') and not os.environ.get('FOAMY_HOST_45') and os.environ.get('OMARCHY_PATH'):
     os.environ['OMARCHY_TEST_ROOT'] = os.environ['OMARCHY_PATH']
 omarchy = hostenv.root()
 native = (omarchy / 'shell/Commons/Translations.qml').exists()
@@ -72,3 +75,11 @@ ShellRoot {
     if result.returncode or 'I18N_RUNTIME_PASS' not in output or any(e in output for e in ['ReferenceError', 'TypeError', 'Unable to assign']):
         raise AssertionError(output)
     print(source.name, '4.5 live no/ar/en' if native else '4.0 English fallback', 'passed')
+
+if native and not os.environ.get('FOAMY_I18N_40'):
+    host40 = hostenv.host40()
+    if host40 is None:
+        print('SKIP: 4.0 English fallback (set FOAMY_HOST_40 to an Omarchy 4.0 shell/ directory)')
+    else:
+        subprocess.run([sys.executable, __file__], env=dict(os.environ, OMARCHY_TEST_ROOT=str(host40), FOAMY_I18N_40='1'),
+                       check=True, timeout=60)

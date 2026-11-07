@@ -2,3 +2,4 @@ __pycache__/
 *.py[cod]
 *.local.json
 shell.json
+/target/

@@ -69,5 +69,6 @@
   },
   "This list: how it groups and shows notifications, and how long it keeps them.": "This list: how it groups and shows notifications, and how long it keeps them.",
   "Pop-up notifications": "Pop-up notifications",
-  "Notifications as they appear on screen (the Foamy Notifications plugin).": "Notifications as they appear on screen (the Foamy Notifications plugin)."
+  "Notifications as they appear on screen (the Foamy Notifications plugin).": "Notifications as they appear on screen (the Foamy Notifications plugin).",
+  "This plugin's helper isn't available for this CPU.": "This plugin's helper isn't available for this CPU."
 }

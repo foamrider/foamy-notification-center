@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "foamy.notification-center",
   "name": "Foamy Notification Center",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "foamrider",
   "description": "Notification history with app stacks, search, and do not disturb",
   "homepage": "https://github.com/foamrider/foamy-notification-center",
@@ -104,7 +104,7 @@
           "Nothing"
         ],
         "defaultValue": "Auto",
-        "description": "Auto tries the current popup action first, then edits standard screenshots in Tensaku, opens other pictures, or focuses the sending app. Archived sender commands are never replayed. Focus the app skips pictures and live actions; Nothing disables body clicks."
+        "description": "Auto tries the current popup action first, then edits standard screenshots in Omasnap (Tensaku where Omasnap is missing, else the image viewer), opens other pictures, or focuses the sending app. Archived sender commands are never replayed. Focus the app skips pictures and live actions; Nothing disables body clicks."
       },
       {
         "key": "showBody",

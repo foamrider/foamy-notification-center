@@ -8,13 +8,14 @@ import tempfile
 import time
 
 from favicon_test import png
+import hostenv
 
 source = Path(__file__).resolve().parents[1]
 base = Path(tempfile.mkdtemp(prefix="foamy-center-settings-"))
 app = base / "app"
 app.mkdir()
 for name in ["Commons", "Ui"]:
-    (app / name).symlink_to(os.environ.get("OMARCHY_TEST_ROOT", "/usr/share/omarchy") + "/shell/" + name, target_is_directory=True)
+    (app / name).symlink_to(hostenv.root() / "shell" / name, target_is_directory=True)
 (app / "plugin").symlink_to(source, target_is_directory=True)
 home = base / "home"
 config = home / ".config/omarchy/shell.json"
@@ -29,12 +30,13 @@ cli.mkdir()
 image = home / "screenshot with spaces.png"
 image.write_bytes(png())
 (home / "editor-ready").write_text("")
-(cli / "tensaku-edit").write_text('#!/bin/bash\ngrep -q ready "$HOME/editor-ready" || exit 3\nprintf "%s" "$1" > "$HOME/editor-opened"\nsleep 1\n')
-(cli / "tensaku-edit").chmod(0o755)
+# The editor 4.5 names and the opener prefers; this stub (first on PATH) shadows an installed omasnap.
+(cli / "omasnap").write_text('#!/bin/bash\ngrep -q ready "$HOME/editor-ready" || exit 3\nprintf "%s" "$1" > "$HOME/editor-opened"\nsleep 1\n')
+(cli / "omasnap").chmod(0o755)
 history = home / ".local/state/omarchy/notifications/history"
 history.mkdir(parents=True)
 stamp = int(time.time() * 1000)
-(history / f"{stamp}-1.json").write_text(json.dumps({"timestamp":stamp,"app":"omarchy-action","summary":"Screenshot saved to clipboard and file","body":"Edit with Super + Alt + , (or click this)","image":str(image),"execArgv":json.dumps(["tensaku-edit",str(image)])}))
+(history / f"{stamp}-1.json").write_text(json.dumps({"timestamp":stamp,"app":"omarchy-action","summary":"Screenshot saved to clipboard and file","body":"Edit with Super + Alt + , (or click this)","image":str(image),"execArgv":json.dumps(["omasnap",str(image)])}))
 (app / "shell.qml").write_text('''pragma ComponentBehavior: Bound
 import QtQuick
 import QtTest
@@ -463,7 +465,7 @@ ShellRoot {
 }
 ''')
 # Avoid starting desktop portal daemons on the disposable test bus.
-env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QUICK_BACKEND="rhi", QT_QPA_PLATFORMTHEME="basic", QT_NO_XDG_DESKTOP_PORTAL="1", OMARCHY_PATH="/usr/share/omarchy")
+env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QUICK_BACKEND="rhi", QT_QPA_PLATFORMTHEME="basic", QT_NO_XDG_DESKTOP_PORTAL="1", OMARCHY_PATH=str(hostenv.root()))
 process = subprocess.Popen(["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
 try:
     output = process.communicate(timeout=30)[0]

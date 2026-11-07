@@ -1,13 +1,14 @@
 """Numeric settings use kit FoamyNumberField: an external change shows while Settings is open,
-and Escape restores the saved value without saving or leaving the page. Offscreen; OMARCHY_TEST_ROOT
-selects the host shell (default 4.0.6)."""
+and Escape restores the saved value without saving or leaving the page. Offscreen; the host shell is
+hostenv.root() (the installed 4.5 unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick another)."""
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+import hostenv
 
 source = Path(__file__).resolve().parents[1]
-host = (os.environ.get('OMARCHY_TEST_ROOT') or '/usr/share/omarchy')
+host = str(hostenv.root())
 base = Path(tempfile.mkdtemp(prefix='foamy-center-number-'))
 app = base / 'app'
 app.mkdir()
@@ -94,7 +95,10 @@ ShellRoot {
  }
 }
 ''')
-env = dict(os.environ, XDG_RUNTIME_DIR=str(base / 'runtime'), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
+# A private home and config: on 4.5 the shell language is $XDG_CONFIG_HOME/omarchy/language.
+home = base / 'home'
+home.mkdir()
+env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / '.config'), XDG_STATE_HOME=str(home / '.local/state'), XDG_RUNTIME_DIR=str(base / 'runtime'), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
 for key in ['WAYLAND_DISPLAY', 'HYPRLAND_INSTANCE_SIGNATURE']:
     env.pop(key, None)
 result = subprocess.run(['quickshell', '-p', str(app), '--no-color'], env=env, capture_output=True, text=True, timeout=20)
