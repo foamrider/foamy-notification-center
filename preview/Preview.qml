@@ -22,7 +22,8 @@ Item {
     return null
   }
 
-  readonly property double now: 1793350800000
+  // The panel measures ages against the clock, so the sample follows it.
+  readonly property double now: Date.now()
   readonly property var sample: [
     { key: "1793350740000-11", app: "Signal", appIcon: "signal-desktop", summary: "Ada Lovelace", body: "Are we still on for the review at 3? &amp; bring the notes", timestamp: now - 60000, urgency: 1 },
     { key: "1793350500000-10", app: "Signal", appIcon: "signal-desktop", summary: "Ada Lovelace", body: "Pushed the fix to the branch.", timestamp: now - 300000, urgency: 1 },

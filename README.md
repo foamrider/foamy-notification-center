@@ -39,6 +39,10 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
   including the visible card in a collapsed stack.
 - Hover to dismiss a stack or individual notification. The trash clears the panel.
 - Click search or press `/` to filter. Press Escape to close search.
+- Arrow keys (or `h`/`j`/`k`/`l`) move a selection through the list; Up from
+  the first row selects **More options**. Enter or Space opens the selected
+  notification or expands its stack, Right (Left in right-to-left languages)
+  selects its X, and Delete or `x` dismisses it. Escape closes the panel.
 - Open **More options (⋯)** to silence/allow notifications, snooze them, or open
   **Settings** (last in the menu; `s` opens it too).
   Right-clicking the bar icon also toggles do not disturb.
@@ -54,10 +58,11 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
 Settings use the same controls as Foamy Bolt and Audio. The **Notification
 center** section changes this list's browser grouping, favicons, compact view,
 pictures, retention (days), and maximum archive count. **Pop-up notifications**
-changes the enabled Foamy Notifications service's toasts: duplicate grouping,
-favicons, compact view, pictures, normal duration (seconds), and **X removes
-from history**. Favicons, compact view and pictures appear in both sections
-because they are separate settings: one for this list, one for the toasts. That option
+changes the enabled Foamy Notifications service's toasts: the snooze offer when
+screen sharing starts, duplicate grouping, favicons, compact view, pictures,
+normal duration (seconds), and **X removes from history**. Favicons, compact
+view and pictures appear in both sections because they are separate settings:
+one for this list, one for the toasts. That option
 is off by default; when enabled, the popup's X button removes its whole duplicate
 group from history. Right-click still hides the popup and keeps its history.
 **Do not disturb also silences critical alerts** is off by default. Enable it
@@ -125,6 +130,12 @@ Set `compact` on the widget entry in `shell.json` to `true` for a slim app
 header and tighter message spacing. The default, `false`, keeps the roomier
 cards. Text and picture sizes stay unchanged. This setting is independent of
 Foamy Notifications, which defaults to compact popups.
+
+Other widget entry keys: `badge` marks unread notifications on the bell
+(`"Dot"` default, `"Highlight"`, `"Count"` or `"None"`), `showBody: false`
+hides message text, `showPreview: false` hides pictures and stops archiving new
+ones, `panelWidth` (default 420) sets the panel width and `listHeight` caps the
+list (default 0: down to the bottom of the screen).
 
 Cards use the same motion as Foamy popups: a 180 ms fade with an 8 px lift on
 arrival and a 120 ms fade on removal. The departed row then collapses over
@@ -258,6 +269,8 @@ python3 -I -m unittest discover -s tests -p '*_test.py' -v
 bash tests/kit-check.sh
 python3 tests/browser-ui.py
 python3 tests/settings-ui.py
+python3 tests/settings-number.py
+python3 tests/images-ui.py
 python3 tests/rtl-rows.py
 python3 tests/scrolling.py
 python3 tests/stock-runtime.py
@@ -281,7 +294,7 @@ from `rust-toolchain.toml`, `file`, and qemu-user binfmt for the aarch64 tests):
 ~/GitHub/Personal/foamy-kit/tools/build-native.sh . --verify  # clean rebuild, byte compare
 bash tests/kit-check.sh
 ```
-The settings panel check requires a running Wayland session. Set
+`settings-ui.py` and `images-ui.py` require a running Wayland session. Set
 `OMARCHY_TEST_ROOT` to an extracted Omarchy 4.5 source tree for `stock-runtime.py`
 and `settings-ui.py` to exercise that release without installing it. Both the
 stock service and Foamy service paths need validation; a fixture alone does not
