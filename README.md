@@ -252,9 +252,10 @@ cd foamy-notification-center
 pin=native/native.pin
 rustup toolchain install "$(awk '$1 == "toolchain" { print $2 }' $pin)" \
   --profile minimal --target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
-git clone https://github.com/foamrider/foamy-kit.git ../foamy-kit
-git -C ../foamy-kit checkout -q "v$(awk '$1 == "kit" { print $2 }' $pin)"
-../foamy-kit/tools/build-native.sh . --verify
+# foamy-kit 0.5.2 (`kit` in native.pin), at the commit its v0.5.2 tag names:
+git clone https://github.com/foamrider/foamy-kit.git ../foamy-kit &&
+  git -C ../foamy-kit checkout -q --detach cc3e46f0fae443701c81793cf9f49890b39b37c1 &&
+  ../foamy-kit/tools/build-native.sh . --verify
 ```
 
 The last command builds both binaries from scratch in `~/.cache/foamy-native/`
@@ -262,8 +263,12 @@ The last command builds both binaries from scratch in `~/.cache/foamy-native/`
 `bin/`. It also checks that the kit files are unmodified copies of that
 foamy-kit release and that `native.pin` matches the source. It ends with
 `verify OK (foamy-notification-center-helper, <toolchain>, both arches reproducible)`; any
-difference is reported with both hashes. To check a release the marketplace
-lists, run `git checkout <commit>` before the last command.
+difference is reported with both hashes. `git -C ../foamy-kit describe --tags`
+prints `v0.5.2`, the release `native.pin` names. To check a release the
+marketplace lists, run `git checkout <commit>` right after `cd`.
+
+<!-- Maintainers: when native.pin's kit changes, set the commit above to
+     `git -C foamy-kit rev-parse v<kit>^{commit}`. -->
 
 ## Remove
 
