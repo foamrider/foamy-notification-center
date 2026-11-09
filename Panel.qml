@@ -319,7 +319,7 @@ Ui.Panel {
 
   function handleEntryAdded(entry) {
     if (!entry || !entry.key) return
-    if (root.opened && store) store.markSeen()
+    if (root.opened && store) { store.markSeen(); store.refreshLiveActions() }
     rebuild()
     if (root.opened && list && list.atYBeginning) Qt.callLater(function() {
       if (root.opened && list) list.positionViewAtBeginning()
@@ -420,6 +420,15 @@ Ui.Panel {
     if (store) store.focusNotification(row, clickAction === "Auto")
   }
 
+  // A button Foamy Notifications can still press (number keys on the cursor's row).
+  function pressAction(row, index) {
+    if (store) store.pressAction(row, index)
+  }
+  function pressCursorAction(index) {
+    if (cursorOnSettings || cursorIndex < 0 || cursorIndex >= rows.length || rows[cursorIndex].kind !== "message") return
+    pressAction(rows[cursorIndex].entry, index)
+  }
+
   // ---------------------------------------------------------------- lifecycle
 
   Component.onCompleted: pushSettings()
@@ -441,6 +450,7 @@ Ui.Panel {
     cursorIndex = -1
     cursorDismiss = false
     if (store) store.load()
+    if (store) store.refreshLiveActions()
     readMark = lastSeen
     if (store) store.markSeen()
     if (rowsDirty) rebuild()
@@ -626,10 +636,12 @@ Ui.Panel {
         onDeleteRequested: root.activateCursor(true)
         onTabRequested: function(direction) { root.switchPanel(direction) }
         onTextKey: function(text) {
-          // "/" searches and "s" opens Settings; no other key starts anything, so
-          // the panel never swallows what you were typing underneath.
+          // "/" searches, "s" opens Settings and 1–9 press the cursor row's
+          // buttons; no other key starts anything, so the panel never swallows
+          // what you were typing underneath.
           if (text === "/") root.startSearch()
           else if (text === "s") root.openSettings()
+          else if (/^[1-9]$/.test(text)) root.pressCursorAction(Number(text) - 1)
         }
 
         Column {
@@ -857,7 +869,10 @@ Ui.Panel {
                     hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
                     dismissHasCursor: hasCursor && root.cursorDismiss
                     onPointerUsed: root.keyboardNavigation = false
+                    actions: root.store && root.store.liveActions[entry.key] ? root.store.liveActions[entry.key] : []
+                    actionsEnabled: !!root.store && !root.store.pressingAction
                     onClicked: root.activate(entry)
+                    onActionRequested: function(index) { root.pressAction(entry, index) }
                     onRemoveRequested: root.remove(entry.key)
                   }
                 }

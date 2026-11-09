@@ -1,5 +1,7 @@
 import QtQuick
+import QtQuick.Controls as Controls
 import QtQuick.Effects
+import QtQuick.Layouts
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
@@ -25,13 +27,17 @@ Item {
   property string language: "en"
   property color foreground: Commons.Color.foreground
   property string fontFamily: FoamyStyle.fontFamily
+  // Labels of the buttons Foamy Notifications can still press (untrusted text).
+  property var actions: []
+  property bool actionsEnabled: true
   signal clicked()
+  signal actionRequested(int index)
   signal removeRequested()
   signal pointerUsed()
 
   readonly property bool critical: Number(entry.urgency) === 2
   readonly property real verticalPadding: Style.space(compact ? 8 : 12)
-  readonly property real cardHeight: texts.implicitHeight + verticalPadding * 2
+  readonly property real cardHeight: texts.implicitHeight + verticalPadding * 2 + (footer.visible ? footer.implicitHeight : 0)
   readonly property bool hasPreview: showPreview && String(entry.preview || "") !== "" && previewImage.status !== Image.Error
   implicitHeight: cardHeight + (last ? Style.space(layered ? 24 : 14) : 0)
 
@@ -163,6 +169,61 @@ Item {
         }
       }
 
+    }
+    // The popup's footer: two buttons a row, an odd last one filling its row.
+    GridLayout {
+      id: footer
+      objectName: "notificationRowActions"
+      visible: root.actions.length > 0
+      anchors.left: parent.left
+      anchors.leftMargin: root.groupCritical ? Style.space(3) : 1
+      anchors.right: parent.right
+      anchors.rightMargin: 1
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: 1
+      columns: Math.min(2, root.actions.length)
+      columnSpacing: 0
+      rowSpacing: 0
+      uniformCellWidths: true
+      Repeater {
+        model: root.actions
+        Controls.AbstractButton {
+          id: actionButton
+          required property int index
+          required property string modelData
+          objectName: "notificationRowAction"
+          Layout.fillWidth: true
+          Layout.minimumWidth: 0
+          Layout.preferredWidth: 1
+          Layout.columnSpan: index === root.actions.length - 1 && index % 2 === 0 ? footer.columns : 1
+          // With the keyboard cursor on the row, the number key that presses it leads the label.
+          text: root.hasCursor && index < 9 ? FoamyI18n.number(index + 1) + "  " + modelData : modelData
+          enabled: root.actionsEnabled
+          hoverEnabled: true
+          implicitHeight: Math.max(Style.space(32), actionLabel.implicitHeight + Style.space(12))
+          Accessible.name: modelData
+          onClicked: { root.pointerUsed(); root.actionRequested(index) }
+          background: Rectangle {
+            color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, actionButton.hovered ? 0.10 : 0.055))
+            Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Util.alpha(root.foreground, 0.12) }
+            Rectangle { visible: actionButton.index % 2 === 1; anchors.left: parent.left; width: 1; height: parent.height; color: Util.alpha(root.foreground, 0.12) }
+          }
+          contentItem: Text {
+            id: actionLabel
+            text: actionButton.text
+            // Sender labels are plain text, never markup.
+            textFormat: Text.PlainText
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: FoamyStyle.font.bodySmall
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
+          }
+        }
+      }
     }
     Rectangle {
       id: previewMask
