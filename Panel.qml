@@ -168,7 +168,10 @@ Ui.Panel {
     }
     var result = Prefs.save(root.bar, root.moduleName, Preferences.centerFields, root.settings, next.key, next.value)
     if (!result.ok) { finishPreference(false); return }
-    if (result.command.length) { preferencesSave.command = result.command; preferencesSave.running = true }
+    // Under coreutils timeout (its own process group), so a hung save is
+    // killed whole, wrapper and children, before the 5 s watchdog below and
+    // can't write a rolled-back value later.
+    if (result.command.length) { preferencesSave.command = Prefs.bounded(result.command, 4000); preferencesSave.running = true }
     else finishPreference(true)
   }
   // A failed save: the field shows the stored value again and accepts the same

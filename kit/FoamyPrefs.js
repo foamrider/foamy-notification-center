@@ -1,5 +1,5 @@
 .pragma library
-// foamy-kit 0.7.0 aeaf0e29f6d83d27bac96614f33f843116dbbd070a675b82f0301773f105624c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.8.1 7836f63f858f18559db0cef11b66ff46098192247fa1a0a80bf0a7c396698f13 — do not edit; change foamy-kit and run sync
 
 // Inline widget settings: schema validation and saving, for every plugin.
 //
@@ -38,6 +38,8 @@
 // "[…]" argument into a list, so the call fails. Arrays go straight to the
 // shell's setBarWidget with a leading space (JSON.parse ignores it), through
 // `sh -c` with positional arguments, which fails unless the shell says "ok".
+// FoamyPrefsQueue runs either through bounded() (own process group, killed
+// as a whole at the deadline).
 //
 // Field types: boolean, enum (options), integer/number (min, max; `step` is a
 // UI hint and not enforced), string (maxLength, pattern), array (maxItems,
@@ -175,6 +177,26 @@ function saveCommand(moduleName, key, next) {
   return ["omarchy", "bar", "set", String(moduleName), String(key), json, "--json"]
 }
 
+// `command` in its own process group, the whole group SIGKILLed after `ms`.
+// coreutils timeout makes itself the group leader (no --foreground) and
+// kill(0)s the group, so a child (omarchy-shell under the array wrapper's
+// `sh -c`) can't outlive a timed-out save and write later. Its pid is the
+// group id killGroupCommand() takes.
+function bounded(command, ms) {
+  var seconds = Math.max(1, Math.ceil(Number(ms) || 0)) / 1000
+  return ["timeout", "--signal=KILL", String(seconds) + "s"].concat(command)
+}
+
+// SIGKILL every process in group `pgid` (none left is fine). Refuses
+// anything but a positive pid: kill -- -0 / -1 would hit far more.
+var KILL_GROUP = 'kill -s KILL -- "-$1" 2>/dev/null; exit 0'
+
+function killGroupCommand(pgid) {
+  var id = Number(pgid)
+  if (!(id > 1 && Math.floor(id) === id)) return []
+  return ["sh", "-c", KILL_GROUP, "foamy-prefs", String(id)]
+}
+
 function canSaveInline(bar) {
   return !!(bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
 }
@@ -209,5 +231,6 @@ function save(bar, moduleName, fields, settings, key, next, pending) {
 if (typeof module !== "undefined") module.exports = {
   NOT_ALLOWED: NOT_ALLOWED, NO_ENTRY: NO_ENTRY, field: field, problem: problem, valid: valid, value: value,
   values: values, canonical: canonical, equal: equal, overlay: overlay, settle: settle, merged: merged,
-  saveCommand: saveCommand, canSaveInline: canSaveInline, save: save
+  saveCommand: saveCommand, bounded: bounded, killGroupCommand: killGroupCommand, canSaveInline: canSaveInline,
+  save: save
 }

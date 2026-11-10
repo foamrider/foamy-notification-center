@@ -1,8 +1,8 @@
 # foamy-kit.lock: written by foamy-kit sync.sh; do not edit.
 # Hashes are of each file's body (the file without its stamp line);
 # notices are hashed whole. tests/kit-check.sh verifies them.
-version 0.7.0
-source 70c273dec6d6
+version 0.8.1
+source 049fd989c0b0
 components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyPopup,FoamyPrefs,FoamySettings,FoamyStyle,FoamyWheelScroll,SafeTextField
 98bd9e4430551129a6f4c309ee8ba59b66514db5ca1d4c5b7151ec308f6d632b  .github/workflows/verify-native.yml
 31637cf414fddfbc7c18c7d107b4c9a77801568fd78ebb8212791fb66de476a9  kit/FoamyAction.qml
@@ -23,10 +23,10 @@ cfe84fbb27e412da43a3ad4652cd17d0bb071e81119a0e4565fca7fcb1dda488  kit/FoamyMenuI
 16b017e91ba960a867a1c5cc056f7f8d7bad07c07722714b32765d7c6d53920a  kit/FoamyNative.js
 2927c0c2f4281cc06f6b7b3e837fe8dd97d07c3769e2c9356541891693121aa4  kit/FoamyNumberField.qml
 f54ae05f597de692a3a44514acaeace32396364f9baf9f53b0fe2e9ff4adc2fa  kit/FoamyPalette.qml
-6e87231b1a32d562f2f2be9542001cb985a1b2be7121fed88ed66bab2acef0d2  kit/FoamyPeerIpc.qml
+47322c3ae1a2a09e28908d622241117d1a19c0e6349953f26609ee72c5e5b512  kit/FoamyPeerIpc.qml
 2b8b65d24472788fa4d32a812f77a50f3054daa6d82a484645a00ba75b2f7980  kit/FoamyPopup.qml
-aeaf0e29f6d83d27bac96614f33f843116dbbd070a675b82f0301773f105624c  kit/FoamyPrefs.js
-e8ac5bbe9a79ea4202f637017e7eb9e438f41bbfcf43a5c91f372e8190af7d91  kit/FoamyPrefsQueue.qml
+7836f63f858f18559db0cef11b66ff46098192247fa1a0a80bf0a7c396698f13  kit/FoamyPrefs.js
+a7f61051a5f703d35cc890a4304bd761fb53f4e8cd0895357bdda7121310b7b9  kit/FoamyPrefsQueue.qml
 908dce0d7308aaad5a88d125b6775a0c5f0f85905d851544f84a154e8ec66802  kit/FoamySettingsError.qml
 b5b1307cddd811fb80b56a3b5ff8834271999b7b6f6fbdd0e3bc33be2a3194a2  kit/FoamySettingsHeader.qml
 720aa31b664f5b6a427b101394bb54f879145fb90833184a33359f49b0201f32  kit/FoamySettingsPage.qml
@@ -41,7 +41,7 @@ b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57  kit/LICENSE-LU
 c741d6fcac65bfb155c54c3933addc244163c74642ceae4a28b68cec16367abf  kit/SafeTextField.qml
 5084c8e33fd38e0ba57b1cf2b732cd04a4985d714583f7445e45419d95ae3118  kit/clipboard.sh
 31cd6228f43b6b189e993ba517cbf8f18c4ba2681a4e71be49b853a39d6114ba  kit/native/build-native.sh
-eb004fb2f3a5ff6bc56fdd1dfba32c3aafcc8905f5f11b53c92370a8e77b9cc4  kit/native/native.py
+4ddafaa0e228ff4d5298740369ca5afb397cabc50fb50e0660a05b184d540616  kit/native/native.py
 90b1a10f5f5005c94031f36fef0ad3d8e705cf4e13372dd8362ef4579e0a93df  kit/node-loader.cjs
 dbd237778c3ec2fd8ac78b585dfc01e883d8617e0bddd47dd92a15be0bd79d11  kit/qmldir
 a9b3009e14bc6ada2e83c131678566268d4fd987891925fd75739a61912a36f7  kit/rust/foamy-helper/Cargo.toml
@@ -62,4 +62,4 @@ b5f018d5c973f1115da2ae6c35c7eb8700e6cc24d97cb7b917a04ca05560d45c  kit/rust/foamy
 1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa  kit/rust/foamy-helper/src/tls.rs
 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e  rust-toolchain.toml
-dc69e77dff312e43bf037de031f36688aa527c39b07fcdca7affdcc0f99abdae  tests/kit-check.sh
+b245f22fb02e191f3ce0f3d7d44050bbfde33a68caf86c3fa745260ecbaed322  tests/kit-check.sh

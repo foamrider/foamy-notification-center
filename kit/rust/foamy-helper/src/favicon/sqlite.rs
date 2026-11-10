@@ -1,4 +1,4 @@
-// foamy-kit 0.7.0 d0de5bb002a6af039c90d728bde78e3fb11174388482588561abc0495cd6b81b — do not edit; change foamy-kit and run sync
+// foamy-kit 0.8.1 d0de5bb002a6af039c90d728bde78e3fb11174388482588561abc0495cd6b81b — do not edit; change foamy-kit and run sync
 //! A minimal read-only SQLite reader: exactly what the favicon lookup needs
 //! and nothing more. It reads the file format (rollback databases and
 //! committed WAL frames, UTF-8 only), walks table b-trees, decodes records

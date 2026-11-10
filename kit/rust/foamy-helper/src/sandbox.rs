@@ -1,4 +1,4 @@
-// foamy-kit 0.7.0 0a9ef7791d77077b52e4b34a54eb7a2abe5fba29beb7bcda6aa05fd91edfecd6 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.8.1 0a9ef7791d77077b52e4b34a54eb7a2abe5fba29beb7bcda6aa05fd91edfecd6 — do not edit; change foamy-kit and run sync
 //! Sandboxing for child processes (cargo feature `sandbox`): seccomp-BPF
 //! filters ([`BpfFilter`], generated with `seccompiler`), a Landlock
 //! restriction of what a child may execute ([`ExecOnly`], applied between
