@@ -1,11 +1,11 @@
-# foamy-kit 0.5.2 575b53b4dff70cd59f7e8797ae14303c8a9f9fd421bdbb8611d0d2e11b76b34e — do not edit; change foamy-kit and run sync
+# foamy-kit 0.7.0 a9b3009e14bc6ada2e83c131678566268d4fd987891925fd75739a61912a36f7 — do not edit; change foamy-kit and run sync
 # Shared library of the foamy plugin helpers; see src/lib.rs. Vendored into
 # plugins as kit/rust/foamy-helper and used by path. The version only changes
 # with the public API (a plugin then runs `cargo update -p foamy-helper`), so
 # a kit release that leaves this crate alone needs no new plugin Cargo.lock.
 [package]
 name = "foamy-helper"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 publish = false
@@ -26,7 +26,7 @@ sandbox = ["dep:libc", "dep:seccompiler", "dep:landlock"]
 tls = ["dep:rustls", "dep:rustls-graviola", "dep:rustls-native-certs"]
 
 [dependencies]
-rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "event"] }
+rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "event", "pipe"] }
 serde = { version = "1", default-features = false, features = ["std"] }
 serde_json = { version = "1", default-features = false, features = ["std"] }
 libc = { version = "0.2.153", optional = true }
