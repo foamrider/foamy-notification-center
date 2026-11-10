@@ -155,6 +155,39 @@ Item {
     return env
   }
 
+  // Buttons Foamy Notifications can still press for a notification it received
+  // live in this shell (its memory, at most 24 h): { key: [label, …] }. Only
+  // labels cross; Foamy runs the action, so nothing sender-chosen is stored or
+  // run here. Re-read when the panel opens and when Foamy says they changed.
+  property var liveActions: ({})
+  property bool liveActionsLoading: false
+  property bool liveActionsAgain: false
+  function refreshLiveActions() {
+    if (sourceKind !== "foamy") { liveActions = ({}); return }
+    if (liveActionsLoading) { liveActionsAgain = true; return }
+    liveActionsLoading = true
+    peer.call("foamy.notifications", "centerActions", [], function(ok, output) {
+      root.liveActionsLoading = false
+      root.liveActions = ok ? Model.parseLiveActions(output) : ({})
+      if (root.liveActionsAgain) { root.liveActionsAgain = false; root.refreshLiveActions() }
+    })
+  }
+  property bool pressingAction: false
+  function pressAction(row, index) {
+    if (pressingAction || focusProc.running || !row || !/^[0-9]+-[0-9]+$/.test(String(row.key))
+        || !(index >= 0 && index < (liveActions[row.key] || []).length)) return
+    focusError = ""
+    pressingAction = true
+    peer.call("foamy.notifications", "invokeCenterAction", [String(row.key), String(index)], function(ok, output) {
+      root.pressingAction = false
+      var result = ok ? String(output || "").trim() : ""
+      // Foamy persists handling, runs the action and tells us `handled`.
+      if (result === "invoked") { root.focusCompleted(); return }
+      root.focusError = result === "busy" ? "This notification is already being opened. Try again." : "This action is no longer available."
+      root.refreshLiveActions()
+    })
+  }
+
   property string focusError: ""
   property var focusEntry: null
   property bool invokingDefault: false
@@ -715,6 +748,7 @@ Item {
     function peerChanged(what: string): string {
       if (what === "store") root.resolveSource()
       else if (what === "preferences") root.peerPreferencesChanged()
+      else if (what === "actions") root.refreshLiveActions()
       else return "error: unknown"
       return "ok"
     }

@@ -8,6 +8,24 @@ function isPreviewFile(value) {
 }
 
 // Persist only a fixed image-editor intent; never execute an archived argv vector.
+// Foamy Notifications' `centerActions` reply: { key: [label, …] } for the
+// notifications whose buttons it can still press (in its memory, at most 24 h;
+// nothing about them is stored here). Anything malformed is dropped.
+function parseLiveActions(text) {
+  var out = {}
+  var value = null
+  try { value = JSON.parse(String(text || "")) } catch (e) { return out }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return out
+  var keys = Object.keys(value).slice(0, 400)
+  for (var i = 0; i < keys.length; i++) {
+    var labels = value[keys[i]]
+    if (!/^[0-9]+-[0-9]+$/.test(keys[i]) || !Array.isArray(labels) || labels.length === 0 || labels.length > 12) continue
+    if (!labels.every(function(label) { return typeof label === "string" && label.trim() !== "" })) continue
+    out[keys[i]] = labels.map(function(label) { return label.slice(0, 80) })
+  }
+  return out
+}
+
 function fileCommand(row) {
   if (!row || !isPreviewFile(row.file)) return null
   return [row.fileAction === "edit-screenshot" ? "omasnap" : "xdg-open", row.file]
@@ -110,6 +128,7 @@ function stackRows(entries, expanded, filter, browserGrouping, identity) {
 
 if (typeof module !== "undefined") {
   module.exports = {
+    parseLiveActions: parseLiveActions,
     isPreviewFile: isPreviewFile,
     fileCommand: fileCommand,
     CRITICAL_URGENCY: CRITICAL_URGENCY,

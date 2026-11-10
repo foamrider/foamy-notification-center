@@ -161,6 +161,14 @@ reload. Editing prefers Omasnap, falls back to Tensaku, and finally to
 `xdg-open` when neither editor is installed. Other images open with `xdg-open`. Missing files, unavailable apps, or immediate launch failures leave
 the entry available for retry.
 
+With Foamy Notifications, a notification it received in this shell keeps the
+popup's click and buttons here for 24 hours: the sender's own actions while the
+sender is live, and Omarchy click commands and `--action` buttons. Foamy holds
+them in memory and runs them (`centerActions`, `invokeCenterAction`); the center
+only shows their labels and passes on which one was pressed (number keys 1–9 on
+the keyboard cursor's row). They are gone after a shell restart, 100 newer
+notifications, or 24 hours, and the row then falls back as below.
+
 Sender commands (`exec` and `execArgv`) are never replayed or kept in the archive.
 Custom screenshot editors work while their popup action is live; after expiry,
 they use the image viewer. Existing archived commands are removed on the next
