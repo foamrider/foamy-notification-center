@@ -1,9 +1,10 @@
 # foamy-kit.lock: written by foamy-kit sync.sh; do not edit.
 # Hashes are of each file's body (the file without its stamp line);
 # notices are hashed whole. tests/kit-check.sh verifies them.
-version 0.5.2
-source cc3e46f0fae4
+version 0.7.0
+source 70c273dec6d6
 components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyPopup,FoamyPrefs,FoamySettings,FoamyStyle,FoamyWheelScroll,SafeTextField
+98bd9e4430551129a6f4c309ee8ba59b66514db5ca1d4c5b7151ec308f6d632b  .github/workflows/verify-native.yml
 31637cf414fddfbc7c18c7d107b4c9a77801568fd78ebb8212791fb66de476a9  kit/FoamyAction.qml
 4488b3dbaa2b0fab78fb66dea979e57bcc0f30e76e6443bb4a0f031fffc44709  kit/FoamyCursor.qml
 322db103ce6d6476aac66858d421c75258365a5a2017188906cce61c8b1610ee  kit/FoamyCursorSurface.qml
@@ -39,10 +40,12 @@ b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57  kit/LICENSE-LU
 717ba1949502290f8e47688ae2e323acd06c8ca47aec9f7596b15f678c1af4a2  kit/LICENSE-OMARCHY
 c741d6fcac65bfb155c54c3933addc244163c74642ceae4a28b68cec16367abf  kit/SafeTextField.qml
 5084c8e33fd38e0ba57b1cf2b732cd04a4985d714583f7445e45419d95ae3118  kit/clipboard.sh
+31cd6228f43b6b189e993ba517cbf8f18c4ba2681a4e71be49b853a39d6114ba  kit/native/build-native.sh
+eb004fb2f3a5ff6bc56fdd1dfba32c3aafcc8905f5f11b53c92370a8e77b9cc4  kit/native/native.py
 90b1a10f5f5005c94031f36fef0ad3d8e705cf4e13372dd8362ef4579e0a93df  kit/node-loader.cjs
 dbd237778c3ec2fd8ac78b585dfc01e883d8617e0bddd47dd92a15be0bd79d11  kit/qmldir
-575b53b4dff70cd59f7e8797ae14303c8a9f9fd421bdbb8611d0d2e11b76b34e  kit/rust/foamy-helper/Cargo.toml
-c313f9ebfeef38e6adc56fb455e4643404b50f89aa495d7f7ffbaa139f40f351  kit/rust/foamy-helper/src/child.rs
+a9b3009e14bc6ada2e83c131678566268d4fd987891925fd75739a61912a36f7  kit/rust/foamy-helper/Cargo.toml
+c63dc35ac197c621d9f2541be5c00fbafe38fb4f5c133ee57ffe19e3c7421f41  kit/rust/foamy-helper/src/child.rs
 45275bb9a332e9ce9aafab9c1df2e9bb388cb0954dea4086bd17016e285d035e  kit/rust/foamy-helper/src/favicon.rs
 d0de5bb002a6af039c90d728bde78e3fb11174388482588561abc0495cd6b81b  kit/rust/foamy-helper/src/favicon/sqlite.rs
 3b092b6e431e128eda90551c6e517778828ed7b80e3ffcfa9d7cb6a3add54ff6  kit/rust/foamy-helper/src/favicon/tests.rs
@@ -50,13 +53,13 @@ d0de5bb002a6af039c90d728bde78e3fb11174388482588561abc0495cd6b81b  kit/rust/foamy
 444eba5d6f73ead3d00fecbe31574cfc3c260cd220d162448a12ac28ef0ca13c  kit/rust/foamy-helper/src/hash.rs
 17d4cde5814661e1eedce8abdb7ea1e46ef8f9a588d3454920e5fdba99b83c0c  kit/rust/foamy-helper/src/io.rs
 34a2d3b505a93d36d0c874c5aa03e105e49ec885e85d941979b5b14aeba9db99  kit/rust/foamy-helper/src/json.rs
-f8d5a3d7073844931bdf3f4263650038bfc1cf0096f54fc8b04548fb706e841b  kit/rust/foamy-helper/src/lib.rs
+2031c896c17cb22f18bf68cedd06b6e6db13ddeea700850d743f7de891e80797  kit/rust/foamy-helper/src/lib.rs
 b5f018d5c973f1115da2ae6c35c7eb8700e6cc24d97cb7b917a04ca05560d45c  kit/rust/foamy-helper/src/lock.rs
 6e036b32a765a1adf8110629db1fca3c7d476d4f85f8ed7d3d44735222e2daab  kit/rust/foamy-helper/src/net.rs
-2a2d9259787593e3b1bac0a5267d440fb7d698f12a1166ddf439412e89431035  kit/rust/foamy-helper/src/process.rs
-d2213229d6dc4054ee87597496c93caa8f3645f6bad4fd37650cbad7cc6c0ec7  kit/rust/foamy-helper/src/sandbox.rs
-78ba4abf76f4bedcb2fcfb211a0b31af68055b15f6e093bf28cb860caec0be42  kit/rust/foamy-helper/src/sandbox/tests.rs
+0db730b49aa8ea779d896f40d055549a3090ec7c5d7915f1c48d101542d7eb46  kit/rust/foamy-helper/src/process.rs
+0a9ef7791d77077b52e4b34a54eb7a2abe5fba29beb7bcda6aa05fd91edfecd6  kit/rust/foamy-helper/src/sandbox.rs
+142ab84d9c2b5e899e60da9b94881e08196e4722af86835cf8388d6d95dffe88  kit/rust/foamy-helper/src/sandbox/tests.rs
 1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa  kit/rust/foamy-helper/src/tls.rs
 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e  rust-toolchain.toml
-59c3505e9a3a16728a521626b705613826f74569871c12b75afa196bcc4af467  tests/kit-check.sh
+dc69e77dff312e43bf037de031f36688aa527c39b07fcdca7affdcc0f99abdae  tests/kit-check.sh

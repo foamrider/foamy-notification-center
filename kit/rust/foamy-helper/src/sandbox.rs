@@ -1,4 +1,4 @@
-// foamy-kit 0.5.2 d2213229d6dc4054ee87597496c93caa8f3645f6bad4fd37650cbad7cc6c0ec7 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.7.0 0a9ef7791d77077b52e4b34a54eb7a2abe5fba29beb7bcda6aa05fd91edfecd6 — do not edit; change foamy-kit and run sync
 //! Sandboxing for child processes (cargo feature `sandbox`): seccomp-BPF
 //! filters ([`BpfFilter`], generated with `seccompiler`), a Landlock
 //! restriction of what a child may execute ([`ExecOnly`], applied between
@@ -33,6 +33,9 @@
 //!     .seccomp(&filter)
 //!     .bounded(["/usr/bin/magick", "PNG:/input", "RGB:-"])
 //!     .run()?;
+//!
+//! // A multithreaded decoder (ffmpeg): threads, but still no processes.
+//! let filter = BpfFilter::threaded_decoder()?.memfd()?;
 //! # Ok(()) }
 //! ```
 
@@ -51,30 +54,90 @@ use landlock::{
     AccessFs, CompatLevel, Compatible, PathBeneath, PathFd, Ruleset, RulesetAttr,
     RulesetCreatedAttr,
 };
-use seccompiler::{SeccompAction, SeccompFilter, TargetArch, sock_filter};
+use seccompiler::{
+    SeccompAction, SeccompCmpArgLen, SeccompCmpOp, SeccompCondition, SeccompFilter, SeccompRule,
+    TargetArch, sock_filter,
+};
 
 use crate::child::Bounded;
 
 const SECCOMP_RET_KILL_PROCESS: u32 = 0x8000_0000;
+const SECCOMP_RET_ERRNO: u32 = 0x0005_0000;
 /// Syscall numbers with this bit are the x32 ABI on x86_64.
 const X32_SYSCALL_BIT: u32 = 0x4000_0000;
 
 /// Syscalls an image decoder must not make: no new processes (`clone`,
 /// `clone3`, `fork`, `vfork`), namespaces (`unshare`, `setns`), mounts,
-/// `ptrace` or `bpf`. `artwork.py`'s list, per architecture.
+/// `ptrace` or `bpf` (`artwork.py`'s list), and since 0.6.0 no kernel
+/// attack surface a decoder never needs: io_uring (`io_uring_setup`,
+/// `io_uring_enter`, `io_uring_register`), the key store (`add_key`,
+/// `request_key`, `keyctl`) and `userfaultfd`. Per architecture, ascending.
 pub fn decoder_denied(arch: &str) -> Option<&'static [i64]> {
     match arch {
-        // clone, fork, vfork, ptrace, mount, unshare, setns, bpf, clone3
-        "x86_64" => Some(&[56, 57, 58, 101, 165, 272, 308, 321, 435]),
-        // mount, unshare, ptrace, clone, setns, bpf, clone3
-        "aarch64" => Some(&[40, 97, 117, 220, 268, 280, 435]),
+        // clone, fork, vfork, ptrace, mount, add_key, request_key, keyctl,
+        // unshare, setns, bpf, userfaultfd, io_uring_setup, io_uring_enter,
+        // io_uring_register, clone3
+        "x86_64" => Some(&[
+            56, 57, 58, 101, 165, 248, 249, 250, 272, 308, 321, 323, 425, 426, 427, 435,
+        ]),
+        // mount, unshare, ptrace, add_key, request_key, keyctl, clone,
+        // setns, bpf, userfaultfd, io_uring_setup, io_uring_enter,
+        // io_uring_register, clone3
+        "aarch64" => Some(&[
+            40, 97, 117, 217, 218, 219, 220, 268, 280, 282, 425, 426, 427, 435,
+        ]),
         _ => None,
     }
 }
 
+/// The syscalls [`BpfFilter::threaded_decoder`] denies outright: those of
+/// [`decoder_denied`] without `clone` (allowed for threads only) and
+/// `clone3` (answered with `ENOSYS`).
+pub fn threaded_decoder_denied(arch: &str) -> Option<&'static [i64]> {
+    match arch {
+        // fork, vfork, ptrace, mount, add_key, request_key, keyctl,
+        // unshare, setns, bpf, userfaultfd, io_uring_setup, io_uring_enter,
+        // io_uring_register
+        "x86_64" => Some(&[
+            57, 58, 101, 165, 248, 249, 250, 272, 308, 321, 323, 425, 426, 427,
+        ]),
+        // mount, unshare, ptrace, add_key, request_key, keyctl, setns, bpf,
+        // userfaultfd, io_uring_setup, io_uring_enter, io_uring_register (no
+        // fork or vfork: clone)
+        "aarch64" => Some(&[40, 97, 117, 217, 218, 219, 268, 280, 282, 425, 426, 427]),
+        _ => None,
+    }
+}
+
+/// `clone`'s syscall number, per architecture.
+fn clone_nr(arch: &str) -> Option<i64> {
+    match arch {
+        "x86_64" => Some(56),
+        "aarch64" => Some(220),
+        _ => None,
+    }
+}
+
+/// `clone3` on every architecture.
+const CLONE3: u32 = 435;
+
+/// The namespace flags `clone` takes (`CLONE_NEWTIME` is `clone3` and
+/// `unshare` only: in `clone`'s flags its bit is part of the exit signal).
+const CLONE_NEW: [u32; 7] = [
+    libc::CLONE_NEWNS as u32,
+    libc::CLONE_NEWCGROUP as u32,
+    libc::CLONE_NEWUTS as u32,
+    libc::CLONE_NEWIPC as u32,
+    libc::CLONE_NEWUSER as u32,
+    libc::CLONE_NEWPID as u32,
+    libc::CLONE_NEWNET as u32,
+];
+
 /// A classic BPF seccomp program: kill the process on a foreign
 /// architecture (and, on x86_64, for any x32 syscall), return `errno` for
-/// the listed syscalls, allow everything else.
+/// the listed syscalls (with [`threaded_decoder`](Self::threaded_decoder)
+/// also for `clone` with the wrong flags, and `ENOSYS` for `clone3`), allow
+/// everything else.
 #[derive(Debug, Clone)]
 pub struct BpfFilter {
     program: Vec<sock_filter>,
@@ -90,7 +153,8 @@ impl BpfFilter {
         BpfFilter::deny_for(std::env::consts::ARCH, syscalls, errno)
     }
 
-    /// `artwork.py`'s `decoder_filter()`: [`decoder_denied`] with `EPERM`.
+    /// `artwork.py`'s `decoder_filter()`, hardened in 0.6.0 (io_uring, the
+    /// key store and `userfaultfd` too): [`decoder_denied`] with `EPERM`.
     /// `Unsupported` on other architectures
     /// (`sandbox-architecture-unsupported`).
     pub fn decoder() -> io::Result<BpfFilter> {
@@ -100,10 +164,87 @@ impl BpfFilter {
         BpfFilter::deny_for(arch, denied, libc::EPERM as u32)
     }
 
+    /// The image decoder's filter for a decoder that runs threads (ffmpeg):
+    /// [`threaded_decoder_denied`] with `EPERM`; `clone` only for a thread
+    /// (`CLONE_THREAD` set, no `CLONE_NEW*` flag), otherwise `EPERM`;
+    /// `clone3` with `ENOSYS` (its flags are in memory, where seccomp can't
+    /// look), so glibc falls back to `clone`. No new processes or
+    /// namespaces, as with [`decoder`](Self::decoder); foreign
+    /// architectures and x32 are killed the same way. `Unsupported` on
+    /// other architectures (`sandbox-architecture-unsupported`).
+    pub fn threaded_decoder() -> io::Result<BpfFilter> {
+        BpfFilter::threaded_decoder_for(std::env::consts::ARCH)
+    }
+
+    fn threaded_decoder_for(arch: &str) -> io::Result<BpfFilter> {
+        let unsupported_arch = || unsupported("sandbox-architecture-unsupported");
+        let denied = threaded_decoder_denied(arch).ok_or_else(unsupported_arch)?;
+        let clone = clone_nr(arch).ok_or_else(unsupported_arch)?;
+        let mut rules: BTreeMap<i64, Vec<SeccompRule>> =
+            denied.iter().map(|&nr| (nr, Vec::new())).collect();
+        // The kernel reads only the low 32 bits of clone's flags
+        // (`lower_32_bits(clone_flags)`), so that is what is compared. A
+        // syscall matches if any of its rules does: no CLONE_THREAD, or any
+        // namespace flag.
+        let flags = |mask: u32, value: u32| -> io::Result<SeccompRule> {
+            let condition = SeccompCondition::new(
+                0,
+                SeccompCmpArgLen::Dword,
+                SeccompCmpOp::MaskedEq(u64::from(mask)),
+                u64::from(value),
+            )
+            .map_err(io::Error::other)?;
+            SeccompRule::new(vec![condition]).map_err(io::Error::other)
+        };
+        let mut clone_rules = vec![flags(libc::CLONE_THREAD as u32, 0)?];
+        for namespace in CLONE_NEW {
+            clone_rules.push(flags(namespace, namespace)?);
+        }
+        rules.insert(clone, clone_rules);
+        let mut program = BpfFilter::compile(arch, rules, libc::EPERM as u32)?;
+        // clone3 → ENOSYS (seccompiler has one match action per filter):
+        // after the architecture (and x32) check, before its own rules.
+        let at = if arch == "x86_64" { 6 } else { 3 };
+        let clone3 = [
+            sock_filter {
+                code: 0x20,
+                jt: 0,
+                jf: 0,
+                k: 0,
+            },
+            sock_filter {
+                code: 0x15,
+                jt: 0,
+                jf: 1,
+                k: CLONE3,
+            },
+            sock_filter {
+                code: 0x06,
+                jt: 0,
+                jf: 0,
+                k: SECCOMP_RET_ERRNO | libc::ENOSYS as u32,
+            },
+        ];
+        program.splice(at..at, clone3);
+        Ok(BpfFilter { program })
+    }
+
     fn deny_for(arch: &str, syscalls: &[i64], errno: u32) -> io::Result<BpfFilter> {
+        let rules: BTreeMap<i64, Vec<_>> = syscalls.iter().map(|&nr| (nr, Vec::new())).collect();
+        Ok(BpfFilter {
+            program: BpfFilter::compile(arch, rules, errno)?,
+        })
+    }
+
+    /// seccompiler's program for `rules` (matches return `errno`, the rest
+    /// is allowed) with the x32 check on x86_64.
+    fn compile(
+        arch: &str,
+        rules: BTreeMap<i64, Vec<SeccompRule>>,
+        errno: u32,
+    ) -> io::Result<Vec<sock_filter>> {
         let target =
             TargetArch::try_from(arch).map_err(|_| unsupported("unsupported architecture"))?;
-        let rules: BTreeMap<i64, Vec<_>> = syscalls.iter().map(|&nr| (nr, Vec::new())).collect();
         let filter = SeccompFilter::new(
             rules,
             SeccompAction::Allow,
@@ -140,7 +281,7 @@ impl BpfFilter {
             ];
             program.splice(3..3, x32);
         }
-        Ok(BpfFilter { program })
+        Ok(program)
     }
 
     /// The program as an array of `struct sock_filter` in native byte
