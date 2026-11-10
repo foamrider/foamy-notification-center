@@ -1,4 +1,4 @@
-// foamy-kit 0.5.2 2a2d9259787593e3b1bac0a5267d440fb7d698f12a1166ddf439412e89431035 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.7.0 0db730b49aa8ea779d896f40d055549a3090ec7c5d7915f1c48d101542d7eb46 — do not edit; change foamy-kit and run sync
 //! This process: exiting on a panic, dying with the parent, a new session,
 //! resource limits and the umask. Child processes get the same through
 //! [`crate::child::Bounded`].
@@ -9,7 +9,8 @@ use std::sync::OnceLock;
 
 pub use rustix::process::Resource;
 use rustix::process::{
-    Rlimit, Signal, getppid, getrlimit, set_parent_process_death_signal, setrlimit, setsid,
+    Rlimit, Signal, getppid, getpriority_process, getrlimit, set_parent_process_death_signal,
+    setpriority_process, setrlimit, setsid,
 };
 
 type Hook = Box<dyn Fn(&PanicHookInfo<'_>) + Sync + Send + 'static>;
@@ -94,12 +95,67 @@ pub fn set_umask(mask: u32) -> u32 {
     rustix::process::umask(rustix::fs::Mode::from_raw_mode(mask & 0o777)).as_raw_mode()
 }
 
+/// CPU and I/O priority for a child ([`crate::child::Bounded::nice`] and
+/// [`crate::child::Bounded::io_idle`]).
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Priority {
+    /// The niceness to raise to (a child already nicer keeps its own).
+    pub(crate) nice: Option<i32>,
+    /// The idle I/O scheduling class.
+    pub(crate) io_idle: bool,
+}
+
+/// `ioprio_set`'s number: rustix has no wrapper, and libc is only a
+/// dependency with some features. The numbers are fixed ABI.
+#[cfg(target_arch = "x86_64")]
+const SYS_IOPRIO_SET: std::ffi::c_long = 251;
+#[cfg(target_arch = "aarch64")]
+const SYS_IOPRIO_SET: std::ffi::c_long = 30;
+
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+unsafe extern "C" {
+    /// The C library's `syscall(2)` (glibc and musl; std links either).
+    fn syscall(number: std::ffi::c_long, ...) -> std::ffi::c_long;
+}
+
+/// `ioprio_set(IOPRIO_WHO_PROCESS, 0, IOPRIO_CLASS_IDLE << 13)`, what
+/// `ionice -c 3` does: this process gets disk time only when no one else
+/// wants it. Its threads and children inherit it. Async-signal-safe.
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+fn io_idle() -> io::Result<()> {
+    const IOPRIO_WHO_PROCESS: std::ffi::c_long = 1;
+    const IOPRIO_CLASS_IDLE: std::ffi::c_long = 3;
+    const IOPRIO_CLASS_SHIFT: u32 = 13;
+    // SAFETY: ioprio_set takes three integers (passed as longs, the
+    // width `syscall` reads) and no pointers.
+    let rc = unsafe {
+        syscall(
+            SYS_IOPRIO_SET,
+            IOPRIO_WHO_PROCESS,
+            0 as std::ffi::c_long,
+            IOPRIO_CLASS_IDLE << IOPRIO_CLASS_SHIFT,
+        )
+    };
+    if rc != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+fn io_idle() -> io::Result<()> {
+    Err(io::Error::from_raw_os_error(
+        rustix::io::Errno::NOSYS.raw_os_error(),
+    ))
+}
+
 /// Child-side setup for [`crate::child::Bounded`]; runs between `fork` and
 /// `exec`, so it only makes system calls (no allocation, no locks).
 pub(crate) fn child_setup(
     session: bool,
     parent: Option<rustix::process::Pid>,
     limits: &[(Resource, u64)],
+    priority: Priority,
 ) -> io::Result<()> {
     if session {
         setsid()?;
@@ -114,6 +170,15 @@ pub(crate) fn child_setup(
     }
     for &(resource, value) in limits {
         setrlimit(resource, bounded(resource, value))?;
+    }
+    if let Some(nice) = priority.nice
+        && nice > getpriority_process(None)?
+    {
+        // Raising the niceness needs no privilege; lowering it would.
+        setpriority_process(None, nice)?;
+    }
+    if priority.io_idle {
+        io_idle()?;
     }
     Ok(())
 }
@@ -134,5 +199,11 @@ mod tests {
         let wanted = bounded(Resource::Nofile, u64::MAX);
         assert_eq!(wanted.maximum, Some(hard.unwrap_or(u64::MAX)));
         assert_eq!(bounded(Resource::Nofile, 3).current, Some(3));
+    }
+
+    #[cfg(any(feature = "sandbox", feature = "favicon"))]
+    #[test]
+    fn ioprio_set_has_the_number_libc_knows() {
+        assert_eq!(SYS_IOPRIO_SET, libc::SYS_ioprio_set);
     }
 }
