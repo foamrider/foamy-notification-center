@@ -1,4 +1,4 @@
-// foamy-kit 0.7.0 3b092b6e431e128eda90551c6e517778828ed7b80e3ffcfa9d7cb6a3add54ff6 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.8.1 3b092b6e431e128eda90551c6e517778828ed7b80e3ffcfa9d7cb6a3add54ff6 — do not edit; change foamy-kit and run sync
 //! The favicon lookup against real SQLite files. The databases are written
 //! (and browsers holding them simulated) with Python's `sqlite3` module, the
 //! same library the Python helper used; without `python3` these tests are
