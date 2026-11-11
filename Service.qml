@@ -277,21 +277,16 @@ Item {
   signal entryAdded(var entry)
   signal entriesReset()
 
+  // The one-shot store commands run without a whole-command deadline: a list
+  // may first migrate a whole archive of images (store.rs normalize_archive),
+  // and killing it would throw that work away. What could hang is the wait
+  // for the store's file lock, and the helper bounds that: list, remove and
+  // clear wait at most 40 s (REQUEST_LOCK_WAIT, native/src/store.rs), then
+  // exit 1 with "notification store is busy", an ordinary failure here (the
+  // dismissal or clear error, rows restored by the reload; a failed list
+  // shows loadError until the next reload). seen takes no lock.
   function storeCommand(args) {
     return FoamyNative.command(root.pluginDir, root.helper, args)
-  }
-
-  // One-shot store commands (list, remove, clear, seen) under a deadline: the
-  // store waits for its file lock as long as it takes, so a stuck lock holder
-  // would stall listing and the removal and clear chains for good. A
-  // legitimate wait is one step of another store process, at most a few
-  // retained images of bounded conversions (5 s read, 2 s type, 5 s convert
-  // each, native/src/images.rs); 60 s is far above that. `timeout` signals its
-  // whole group; an exit at the deadline (124, or 137 after the SIGKILL) is an
-  // ordinary failure, retried as before. The watcher runs without one.
-  readonly property string storeDeadline: "60s"
-  function storeCall(args) {
-    return ["timeout", "--kill-after=1s", root.storeDeadline].concat(root.storeCommand(args))
   }
 
   function differsFrom(data) {
@@ -305,7 +300,7 @@ Item {
     listRevision = archiveRevision
     listLoadCount++
     // One row past the page says whether there is more.
-    listProc.command = root.storeCall(["list", String(root.listLimit + 1), root.searchQuery])
+    listProc.command = root.storeCommand(["list", String(root.listLimit + 1), root.searchQuery])
     listProc.running = true
   }
 
@@ -323,7 +318,7 @@ Item {
     root.lastSeen = stamp
     if (root.helperUnavailable) return
     if (markProc.running) { seenPending = String(stamp); return }
-    markProc.command = root.storeCall(["seen", String(stamp)])
+    markProc.command = root.storeCommand(["seen", String(stamp)])
     markProc.running = true
   }
 
@@ -357,7 +352,7 @@ Item {
     activeRemovalKeys = pendingRemovalKeys
     pendingRemovalKeys = []
     removalError = ""
-    removeProc.command = storeCall(["remove"].concat(activeRemovalKeys))
+    removeProc.command = storeCommand(["remove"].concat(activeRemovalKeys))
     removeProc.running = true
   }
 
@@ -582,7 +577,7 @@ Item {
     id: clearProc
     property string cut: ""
     // The cutoff captured at the click goes to the script and to Foamy alike.
-    command: root.storeCall(["clear", cut])
+    command: root.storeCommand(["clear", cut])
     environment: root.storeEnvironment
     onExited: function(code, status) {
       if (code === 0 && status === 0) { if (root.foamySource) root.releaseBefore(cut) }
@@ -776,7 +771,7 @@ Item {
     environment: root.storeEnvironment
     onExited: {
       if (!root.seenPending) return
-      command = root.storeCall(["seen", root.seenPending])
+      command = root.storeCommand(["seen", root.seenPending])
       root.seenPending = ""
       running = true
     }

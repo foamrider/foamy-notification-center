@@ -28,8 +28,12 @@
 //!   `{"ok":true,"removed":"<first key>","count":N}`; errors "remove needs a
 //!   key", "invalid notification key", "could not remove notifications"
 //! - `clear [MS]` (at most 16 digits; default now, never later) →
-//!   `{"ok":true,"cleared":true}`; error "clear cutoff must be a millisecond
-//!   timestamp"
+//!   `{"ok":true,"cleared":true}`; errors "clear cutoff must be a millisecond
+//!   timestamp", "could not clear notifications"
+//! - `list`, `remove` and `clear` wait at most 40 s for the store lock
+//!   (`store::REQUEST_LOCK_WAIT`), then fail with "notification store is
+//!   busy"; their work, once they hold it, is not cut short. Every other
+//!   command waits for the lock as long as it takes.
 //! - `seen [STAMP]` → `{"ok":true,"seen":<stamp>}` (reads, or writes
 //!   `STAMP\n`); `unread` → `{"ok":true,"unread":N}`
 //! - `seed [N]` → `{"ok":true,"seeded":N}`; `backfill` →
@@ -60,8 +64,9 @@
 //! `NC_STATE_FILE` (DND state; default the stock `notifications.json` and
 //! `quiet.json`), `NC_KEEP_DAYS` (30), `NC_MAX_ITEMS` (1000), `NC_PREVIEWS`
 //! (1), and test-only `NC_STORE` (default
-//! `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-notification-center`) and
-//! `NC_RETENTION_INTERVAL`. Non-integer limits fall back to their defaults.
+//! `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy-notification-center`),
+//! `NC_RETENTION_INTERVAL` and `NC_LOCK_WAIT_MS` (the requests' lock wait).
+//! Non-integer limits fall back to their defaults.
 //!
 //! Files under the store (0700; files 0600, written by atomic rename except
 //! appends): `archive.jsonl` (one row per line: key, imageFormat 1,
@@ -184,9 +189,10 @@ fn run(args: Vec<String>) -> ExitCode {
         "watch" => watch::run(&mut store),
         "list" => {
             or_fail(store.ensure());
-            if store.locked(Store::normalize_archive).is_err() {
-                fail("cannot normalize notification archive");
-            }
+            or_fail(store.request(
+                "cannot normalize notification archive",
+                Store::normalize_archive,
+            ));
             let limit = arg(1).unwrap_or("200");
             let query = arg(2).unwrap_or("");
             if !text::all_digits(limit) {
@@ -210,9 +216,7 @@ fn run(args: Vec<String>) -> ExitCode {
             if !keys.iter().all(|k| text::valid_key(k)) {
                 fail("invalid notification key");
             }
-            if store.locked(|s| s.remove_keys(keys)).is_err() {
-                fail("could not remove notifications");
-            }
+            or_fail(store.request("could not remove notifications", |s| s.remove_keys(keys)));
             print_line(&format!(
                 "{{\"ok\":true,\"removed\":{},\"count\":{}}}",
                 json::jq_str(&keys[0]),
@@ -225,7 +229,13 @@ fn run(args: Vec<String>) -> ExitCode {
             if cut.is_some_and(|c| c.len() > 16 || !text::all_digits(c)) {
                 fail("clear cutoff must be a millisecond timestamp");
             }
-            let _ = store.locked(|s| s.clear_all(cut));
+            // The cutoff is written first; a later step error leaves the
+            // archive cleared for every reader, as it always did. A lock it
+            // never got is a failure.
+            or_fail(store.request("could not clear notifications", |s| {
+                let _ = s.clear_all(cut);
+                Ok(())
+            }));
             print_line(r#"{"ok":true,"cleared":true}"#);
         }
         "seen" => {

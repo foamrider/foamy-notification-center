@@ -7,7 +7,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use foamy_helper::lock::FileLock;
 use rustix::fs::OFlags;
@@ -28,6 +28,19 @@ impl From<json::JqError> for Bad {
 }
 
 pub const DAY_MS: i128 = 86_400_000;
+
+/// How long `list`, `remove` and `clear` wait for the store lock before
+/// answering [`BUSY`]: they are requests the panel waits on, so a lock
+/// holder that never lets go (a stopped or wedged store process) must end in
+/// an error the panel shows, not a wait without end. A single step of
+/// another store process (one notification taken in: at most three images,
+/// each read 5 s, typed 2 s, converted 5 s at worst, see `images`) stays
+/// below it, so only batch work (an archive migration, the watcher's
+/// startup reconciliation) or a stuck holder makes a request report busy.
+/// The batch itself is never cut short; only the waiting request gives up.
+pub const REQUEST_LOCK_WAIT: Duration = Duration::from_secs(40);
+/// The error a request answers when [`REQUEST_LOCK_WAIT`] ran out.
+pub const BUSY: &str = "notification store is busy";
 
 pub fn now_ms() -> i128 {
     SystemTime::now()
@@ -180,6 +193,9 @@ pub struct Store {
     pub quiet: bool,
     /// The last ingest appended a row.
     pub ingest_added: bool,
+    /// [`Store::request`]'s lock wait: [`REQUEST_LOCK_WAIT`], or test-only
+    /// `NC_LOCK_WAIT_MS`.
+    pub request_wait: Duration,
 }
 
 fn var(name: &str) -> Option<String> {
@@ -247,6 +263,8 @@ impl Store {
             watching: false,
             quiet: false,
             ingest_added: false,
+            request_wait: u64::try_from(integer("NC_LOCK_WAIT_MS", -1))
+                .map_or(REQUEST_LOCK_WAIT, Duration::from_millis),
         }
     }
 
@@ -268,13 +286,48 @@ impl Store {
         }
     }
 
-    /// One writer at a time, for as long as one step takes (`flock` on `$store/lock`).
+    /// One writer at a time, for as long as one step takes (`flock` on
+    /// `$store/lock`), waiting for the lock as long as it takes. For the
+    /// watcher and the maintenance commands (`sync`, `seed`, `backfill`,
+    /// `prune`): nothing waits on their answer, and their own batches may
+    /// follow another's. The watcher stays a long-lived stream; a bounded
+    /// wait there would only turn another process's long migration into
+    /// watcher restarts, each starting the same reconciliation over.
     pub fn locked<T>(&mut self, step: impl FnOnce(&mut Store) -> Step<T>) -> Step<T> {
         let _lock = FileLock::exclusive(Path::new(&self.lock)).map_err(|error| {
             eprintln!("notification-center: {error}");
             Bad
         })?;
         step(self)
+    }
+
+    /// A request's step under the same lock, waiting at most `request_wait`
+    /// for it (polling, the kit's `exclusive_within`): `Err(BUSY)` when
+    /// another holder kept it all that time, `Err(failure)` when the lock
+    /// file can't be locked or the step fails. The step itself, once
+    /// started, runs to its end; only the wait is bounded.
+    pub fn request<T>(
+        &mut self,
+        failure: &str,
+        step: impl FnOnce(&mut Store) -> Step<T>,
+    ) -> Result<T, String> {
+        let wait = self.request_wait;
+        let _lock = match FileLock::exclusive_within(Path::new(&self.lock), wait) {
+            Ok(Some(lock)) => lock,
+            Ok(None) => {
+                eprintln!(
+                    "notification-center: {} stayed locked for {} ms",
+                    self.lock,
+                    wait.as_millis()
+                );
+                return Err(BUSY.into());
+            }
+            Err(error) => {
+                eprintln!("notification-center: {error}");
+                return Err(failure.into());
+            }
+        };
+        step(self).map_err(|Bad| failure.to_string())
     }
 
     /// `ensure_store`: the private store, its archive and tombstone files.
@@ -1279,4 +1332,106 @@ pub fn json_files(dir: &str) -> Vec<String> {
         .collect();
     names.sort();
     names
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::thread;
+    use std::time::Instant;
+
+    /// A store whose lock file lives in a fresh private directory.
+    struct Scratch(std::path::PathBuf);
+    impl Scratch {
+        fn new(name: &str) -> Scratch {
+            let dir = std::env::temp_dir().join(format!(
+                "nc-store-{name}-{}-{}",
+                std::process::id(),
+                now_ms()
+            ));
+            fs::DirBuilder::new().mode(0o700).create(&dir).unwrap();
+            Scratch(dir)
+        }
+        fn store(&self, wait: Duration) -> Store {
+            let mut store = Store::from_env(String::new());
+            store.lock = self.0.join("lock").to_string_lossy().into_owned();
+            store.request_wait = wait;
+            store
+        }
+    }
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_request_reports_busy_when_the_lock_stays_held_and_runs_once_free() {
+        let scratch = Scratch::new("busy");
+        let mut store = scratch.store(Duration::from_millis(80));
+        let held = FileLock::exclusive(Path::new(&store.lock)).unwrap();
+        let ran = Cell::new(false);
+        let start = Instant::now();
+        let refused = store.request("could not remove notifications", |_| {
+            ran.set(true);
+            Ok(())
+        });
+        let waited = start.elapsed();
+        assert_eq!(refused, Err(BUSY.to_string()));
+        assert!(!ran.get(), "the step ran without the lock");
+        assert!(
+            waited >= Duration::from_millis(80) && waited < Duration::from_secs(5),
+            "{waited:?}"
+        );
+        drop(held);
+        assert_eq!(
+            store.request("could not remove notifications", |_| {
+                ran.set(true);
+                Ok(7)
+            }),
+            Ok(7)
+        );
+        assert!(ran.get());
+    }
+
+    #[test]
+    fn a_request_takes_the_lock_as_soon_as_it_is_released() {
+        let scratch = Scratch::new("release");
+        let mut store = scratch.store(Duration::from_secs(10));
+        let held = FileLock::exclusive(Path::new(&store.lock)).unwrap();
+        let releaser = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(50));
+            drop(held);
+        });
+        let start = Instant::now();
+        assert_eq!(store.request("failed", |_| Ok(())), Ok(()));
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "{:?}",
+            start.elapsed()
+        );
+        releaser.join().unwrap();
+    }
+
+    #[test]
+    fn a_failed_step_or_lock_file_is_the_request_s_own_error_not_busy() {
+        let scratch = Scratch::new("failure");
+        let mut store = scratch.store(Duration::from_millis(50));
+        assert_eq!(
+            store.request::<()>("could not clear notifications", |_| Err(Bad)),
+            Err("could not clear notifications".to_string())
+        );
+        // A directory where the lock file belongs can't be locked at all.
+        store.lock = scratch.0.to_string_lossy().into_owned();
+        let ran = Cell::new(false);
+        assert_eq!(
+            store.request("could not clear notifications", |_| {
+                ran.set(true);
+                Ok(())
+            }),
+            Err("could not clear notifications".to_string())
+        );
+        assert!(!ran.get());
+    }
 }

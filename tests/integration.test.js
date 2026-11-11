@@ -45,7 +45,7 @@ test('watcher announces replacements, external clear and removal, and remains qu
 })
 test('queued archive refreshes and content comparisons do not drop updates',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
- const state=vm.createContext({entries:[{key:'1-1',body:'old'}],listLoadCount:0,loadPending:false,archiveRevision:2,listRevision:1,listProc:{running:true},storeCommand:a=>a,storeCall:a=>a,pageSize:500})
+ const state=vm.createContext({entries:[{key:'1-1',body:'old'}],listLoadCount:0,loadPending:false,archiveRevision:2,listRevision:1,listProc:{running:true},storeCommand:a=>a,pageSize:500})
  state.root=state
  for(const name of ['load','differsFrom']) {const start=source.indexOf(`  function ${name}(`);vm.runInContext(source.slice(start,source.indexOf('\n  }',start)+4),state)}
  assert.equal(state.differsFrom([{key:'1-1',body:'new'}]),true)
@@ -250,7 +250,7 @@ test('any archive-setting change restarts the running watcher, even without a so
  const env=source.slice(source.indexOf('  readonly property var storeEnvironment: {'),source.indexOf('\n  }\n',source.indexOf('  readonly property var storeEnvironment: {')))
  for(const name of ['NC_KEEP_DAYS','NC_MAX_ITEMS','NC_PREVIEWS','NC_SOURCE','NC_SRC_DIR','NC_SRC_HISTORY','NC_HANDLED','NC_STATE_FILE']) assert.ok(env.includes(name),name)
  const native=path.join(__dirname,'../native/src'),script=fs.readdirSync(native).filter(n=>n.endsWith('.rs')).map(n=>fs.readFileSync(path.join(native,n),'utf8')).join('\n')
- for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL'].includes(name)) assert.ok(env.includes(name),`watcher reads ${name} but the service does not pass it`)
+ for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL','NC_LOCK_WAIT_MS'].includes(name)) assert.ok(env.includes(name),`watcher reads ${name} but the service does not pass it`)
 })
 test('Clear all uses the cutoff captured at the click, so later arrivals survive (as in Foamy)',t=>{
  const f=fixture(t);f.run('list')
@@ -289,7 +289,7 @@ test('every store process the service launches gets the resolved store environme
  for(const b of store) assert.match(b,/environment: root\.storeEnvironment/,b.split('\n')[1])
  assert.match(source,/id: markProc\n    environment: root\.storeEnvironment/)
  // Commands are built from values captured when the work was requested.
- assert.match(source,/command: root\.storeCall\(\["clear", cut\]\)/)
+ assert.match(source,/command: root\.storeCommand\(\["clear", cut\]\)/)
 })
 test('a seen stamp taken while a write runs is written afterwards, not dropped',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
@@ -297,7 +297,7 @@ test('a seen stamp taken while a write runs is written afterwards, not dropped',
  let clock=10
  const commands=[],proc={running:false,command:[]}
  const ctx=vm.createContext({Date:{now:()=>clock},String,root:null,markProc:proc,seenPending:''})
- ctx.root=ctx;ctx.storeCall=a=>a
+ ctx.root=ctx;ctx.storeCommand=a=>a
  Object.defineProperty(proc,'running',{get(){return this._r||false},set(v){this._r=v;if(v)commands.push(this.command[1])}})
  vm.runInContext(fn,ctx)
  ctx.markSeen();clock=20;ctx.markSeen()
@@ -385,19 +385,40 @@ test('a flapping watcher backs off; a run that reports in or lasts 30 s restarts
  // No helper for this CPU: no restart, and running -> false after exited() adds none.
  const before=ctx.restarts.length;run(50,127);assert.equal(ctx.restarts.length,before);assert.equal(ctx.helperUnavailable,true)
 })
-test('one-shot store commands run under a deadline above the store\'s longest lock hold; the watcher does not',()=>{
+test('store commands run without a whole-command deadline; the helper bounds only its lock wait, above one step of another store process',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
- const take=name=>{const start=source.indexOf(`  function ${name}(`);return source.slice(start,source.indexOf('\n  }',start)+4)}
- const ctx=vm.createContext({FoamyNative:require('../kit/node-loader.cjs').load('FoamyNative'),pluginDir:'/plugin',helper:'foamy-notification-center-helper'})
- ctx.root=ctx;ctx.storeDeadline=source.match(/readonly property string storeDeadline: "([0-9]+s)"/)[1]
- for(const name of ['storeCommand','storeCall']) vm.runInContext(take(name),ctx)
- assert.deepEqual(Array.from(ctx.storeCall(['list','5'])).slice(0,4),['timeout','--kill-after=1s',ctx.storeDeadline,'bash'])
- // One locked step converts at most three images (icon, image, preview), each bounded by these deadlines.
+ // A list may migrate a whole archive first: nothing may kill it at a deadline.
+ assert.ok(!/storeCall|storeDeadline|"timeout"/.test(source),'a store command under a whole-command deadline')
+ for(const call of ['listProc.command = root.storeCommand(["list"','markProc.command = root.storeCommand(["seen"','removeProc.command = storeCommand(["remove"]','command: root.storeCommand(["clear", cut])','command = root.storeCommand(["seen", root.seenPending])','command: root.storeCommand(["watch"])'])
+  assert.ok(source.includes(call),call)
+ // One locked step takes in one notification: at most three images (icon, image, preview), each bounded by these deadlines.
  const images=fs.readFileSync(path.join(__dirname,'../native/src/images.rs'),'utf8')
  const step=['READ_DEADLINE','MIME_DEADLINE','CONVERT_DEADLINE'].map(n=>Number(images.match(new RegExp(n+': Duration = Duration::from_secs\\(([0-9]+)\\)'))[1])).reduce((a,b)=>a+b)
- assert.ok(parseInt(ctx.storeDeadline)>3*step,`${ctx.storeDeadline} must exceed ${3*step} s`)
- for(const call of ['listProc.command = root.storeCall(["list"','markProc.command = root.storeCall(["seen"','removeProc.command = storeCall(["remove"]','command: root.storeCall(["clear", cut])','command = root.storeCall(["seen", root.seenPending])'])
-  assert.ok(source.includes(call),call)
- assert.ok(!/storeCommand\(\["(list|remove|clear|seen)"/.test(source.replace('seenProc.command = root.storeCommand(["seen"])','')),'a one-shot store command without the deadline')
- assert.match(source,/command: root\.storeCommand\(\["watch"\]\)/)
+ const store=fs.readFileSync(path.join(__dirname,'../native/src/store.rs'),'utf8')
+ const wait=Number(store.match(/pub const REQUEST_LOCK_WAIT: Duration = Duration::from_secs\(([0-9]+)\)/)[1])
+ assert.ok(wait>3*step,`the request lock wait (${wait} s) must exceed ${3*step} s`)
+ assert.ok(source.includes(`wait at most ${wait} s (REQUEST_LOCK_WAIT`),'Service.qml names the helper\'s wait')
+})
+test('list, remove and clear answer "notification store is busy" while another holds the store lock, and work once it is free',async t=>{
+ const f=fixture(t);f.run('sync')
+ const lock=path.join(f.store,'lock'),env={...f.env,NC_LOCK_WAIT_MS:'200'}
+ const exec=(...args)=>helper.spawnSync(args,{env,encoding:'utf8',timeout:5000})
+ // flock(1) holds the store's own lock (closed before its child runs), in a group of its own.
+ const holder=spawn('flock',['--exclusive','--close',lock,'sleep','30'],{stdio:'ignore',detached:true})
+ const gone=new Promise(resolve=>holder.on('exit',resolve))
+ t.after(()=>{try{process.kill(-holder.pid,'SIGKILL')}catch{}})
+ for(let i=0;spawnSync('flock',['--nonblock',lock,'true']).status===0;i++){assert.ok(i<200,'the holder never took the lock');await new Promise(r=>setTimeout(r,25))}
+ for(const args of [['list'],['remove','1-1'],['clear',String(Date.now())]]){
+  const started=Date.now(),r=exec(...args)
+  assert.equal(r.status,1,`${args[0]}: ${r.stderr}`)
+  assert.deepEqual(JSON.parse(r.stdout),{ok:false,error:'notification store is busy'},args[0])
+  assert.ok(Date.now()-started>=200,`${args[0]} gave up before its wait`)
+ }
+ // Nothing was written without the lock; seen takes none and still works.
+ assert.ok(!fs.existsSync(path.join(f.store,'cleared_at')),'clear wrote its cutoff without the lock')
+ assert.equal(JSON.parse(exec('seen','5').stdout).seen,5)
+ process.kill(-holder.pid,'SIGKILL');await gone
+ assert.deepEqual(JSON.parse(exec('list').stdout),[])
+ assert.equal(JSON.parse(exec('remove','1-1').stdout).ok,true)
+ assert.equal(JSON.parse(exec('clear').stdout).cleared,true)
 })

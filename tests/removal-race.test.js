@@ -12,7 +12,7 @@ function service() {
     entries: [], removedKeys: {}, pageSize: 500, archiveRevision: 0,
     pendingRemovalKeys: [], activeRemovalKeys: [], removalError: "",
     removeProc: { running: false, command: [] },
-    entriesReset() {}, entryAdded() {}, storeCommand(args) { return args }, storeCall(args) { return args }, storeUnavailable() { return false },
+    entriesReset() {}, entryAdded() {}, storeCommand(args) { return args }, storeUnavailable() { return false },
     Quickshell: { execDetached() {} },
     quietRemovalKeys: {}, foamySource: true, peer: { call() {} },
     searchQuery: "", listLimit: 500, hasMore: false, unreadSource: [], reloadArchive: { restart() {} }
