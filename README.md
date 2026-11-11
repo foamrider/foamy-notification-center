@@ -356,7 +356,11 @@ bash tests/kit-check.sh
 ```
 `settings-ui.py` and `images-ui.py` require a running Wayland session. The
 tests load the installed Omarchy 4.5 shell (`/usr/share/omarchy`; only its QML
-and data, never its scripts). Set `OMARCHY_TEST_ROOT` to another Omarchy tree, or
+and data, never its scripts) through foamy-kit's `preview/hostenv.py`, from the
+kit checkout at `$FOAMY_KIT` (default `~/GitHub/Personal/foamy-kit`): every
+`omarchy` command is a logging stub or a test double, `omarchy-shell` reaches
+only the test's own shell, and the system bus and audio server are dead
+addresses. Set `OMARCHY_TEST_ROOT` to another Omarchy tree, or
 `FOAMY_HOST_45` to its `shell/` directory, to exercise that release without
 installing it. Both the stock service and Foamy service paths need validation; a
 fixture alone does not establish compatibility with a full OS upgrade.

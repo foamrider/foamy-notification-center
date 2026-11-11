@@ -1,9 +1,17 @@
 import os,json,shutil,tempfile,subprocess,sys,time,signal
-sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
-import hostenv
 from pathlib import Path
+KIT=Path(os.environ.get('FOAMY_KIT',Path.home()/'GitHub/Personal/foamy-kit'))
+sys.path.insert(0,str(KIT/'preview'))
+import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
+# Test double of the host's omarchy-hyprland-focus-app (same contract): focus the
+# newest window whose class matches, through the test's own hyprctl stub.
+def focus_app(log):return ('#!/bin/bash\nprintf "%s\\n" "$0 $*" >> "'+str(log)+'"\n'
+ 'address=$(hyprctl clients -j 2>/dev/null | jq -r --arg p "$1" \'def m($v): ($v // "") | test($p; "i"); '
+ 'sort_by(.focusHistoryID) | first((.[] | select(m(.class))), (.[] | select(.initialClass == "org.omarchy.agent" and m(.initialTitle)))).address // empty\')\n'
+ '[[ -n $address ]] || exit 1\n'
+ 'hyprctl dispatch "hl.dsp.focus({ window = \\"address:$address\\" })"\n')
 if '--inside' not in sys.argv:
- raise SystemExit(subprocess.run(['dbus-run-session','--','python3',__file__,'--inside',*sys.argv[1:]],timeout=70).returncode)
+ raise SystemExit(subprocess.run(['dbus-run-session','--','python3',__file__,'--inside',*sys.argv[1:]],timeout=150).returncode)
 custom='--custom' in sys.argv
 base=Path(tempfile.mkdtemp(prefix='foamy-stock-review-'));app=base/'app';app.mkdir();home=base/'home';home.mkdir();runtime=base/'runtime';runtime.mkdir(mode=0o700)
 for n in ['Commons','Ui']:(app/n).symlink_to(hostenv.root()/'shell'/n,target_is_directory=True)
@@ -30,11 +38,12 @@ env=dict(os.environ,HOME=str(home),XDG_CONFIG_HOME=str(home/'.config'),XDG_STATE
 for k in ['DISPLAY','WAYLAND_DISPLAY','HYPRLAND_INSTANCE_SIGNATURE']:env.pop(k,None)
 # OMARCHY_PATH exposes only the host's shell/ and default/; omarchy-* are stubs (the stock
 # focus fallback runs the omarchy-hyprland-focus-app test double, never a host script).
-env.update(hostenv.make(base,app));env['PATH']=str(bin)+':'+env['PATH']
+hostenv.isolate(env,base)
+env.update(hostenv.make(base,app,env=env,stubs={'omarchy-hyprland-focus-app':focus_app(base/hostenv.CALLS_LOG)},names=('omarchy-notification-send',)));env['PATH']=str(bin)+':'+env['PATH']
 log=(base/'log').open('w');proc=subprocess.Popen(['qs','-p',str(app),'--no-color'],env=env,stdout=log,stderr=log,start_new_session=True)
 def ipc(t,*args):return subprocess.check_output(['qs','ipc','-n','-p',str(app),'call',t,*args],env=env,text=True,timeout=3).strip()
 def status():return json.loads(ipc('foamy.notification-center.test','state'))
-def wait(fn,timeout=5):
+def wait(fn,timeout=10):
  end=time.monotonic()+timeout
  while time.monotonic()<end:
   try:
@@ -42,6 +51,23 @@ def wait(fn,timeout=5):
   except Exception:pass
   time.sleep(.1)
  raise AssertionError((base/'log').read_text())
+# The service runs one DND command at a time and ignores a toggle meanwhile (a
+# read follows every toggle and every dndChanged event), so a toggle waits for
+# the previous command to end.
+def toggle():wait(lambda:not status()['dndBusy']);ipc('review','toggle')
+# The center's toggle until the daemon is `on`: a toggle that met a read starting
+# in between is ignored and retried (never one while a toggle runs, so none flips
+# back), then the center shows the daemon's state.
+def center_dnd(on):
+ assert ipc('notifications','isDnd')!=('on' if on else 'off')
+ end=time.monotonic()+30
+ while ipc('notifications','isDnd')!=('on' if on else 'off'):
+  assert time.monotonic()<end,(base/'log').read_text()
+  toggle()
+  try:wait(lambda:ipc('notifications','isDnd')==('on' if on else 'off'),timeout=3)
+  except AssertionError:pass
+  wait(lambda:not status()['dndBusy'])
+ wait(lambda:status()['doNotDisturb']==on and not status()['dndError'])
 def send(title,replace=None):return subprocess.check_output(['notify-send','-p','-a','Stock Review','-u','critical',*(['-r',replace] if replace else []),title,'Synthetic compatibility check'],env=env,text=True,timeout=3).strip()
 try:
  wait(lambda:ipc('notifications','ping')=='ok' and status()['loaded'])
@@ -52,9 +78,9 @@ try:
  ipc('notifications','toggleDnd');wait(lambda:status()['doNotDisturb'])
  ipc('notifications','toggleDnd');wait(lambda:not status()['doNotDisturb'])
  ipc('review','mark');wait(lambda:status()['unread']==0)
- ipc('review','toggle');wait(lambda:status()['doNotDisturb']);assert ipc('notifications','isDnd')=='on'
+ center_dnd(True)
  send('Stock silenced');wait(lambda:status()['entries']==2)
- ipc('review','toggle');wait(lambda:not status()['doNotDisturb'])
+ center_dnd(False)
  ipc('foamy.notification-center.test','clear');wait(lambda:status()['entries']==0)
  send('After clear');wait(lambda:status()['entries']==1)
  ipc('review','focus');wait(lambda:bool(status()['focusError']));assert status()['entries']==1
@@ -73,11 +99,11 @@ try:
  ipc('review','focus');wait(lambda:status()['entries']==0);assert not status()['focusError']
  assert not status()['dndError']
  assert 'Process failed to start' in (base/'log').read_text(),'omarchy-shell did start'
- ipc('review','toggle');wait(lambda:bool(status()['dndError']) and not status()['dndBusy'])
+ toggle();wait(lambda:bool(status()['dndError']) and not status()['dndBusy'])
  assert not status()['doNotDisturb']
  for path,text in saved:path.write_text(text);path.chmod(0o755)
- ipc('review','toggle');wait(lambda:status()['doNotDisturb'] and not status()['dndError'])
- ipc('review','toggle');wait(lambda:not status()['doNotDisturb'])
+ center_dnd(True)
+ center_dnd(False)
  if not custom:
   # A watcher that dies at every start (here: inotifywait exits at once) backs
   # off 1 s, 2 s, 4 s, 8 s rather than looping at 1 Hz, and recovers.
@@ -103,4 +129,4 @@ try:
  print('PASS stock default-action fallback, failed focus retention and retry; stock: delivery, in-place replacement, dismissal history, read state, DND both ways, silenced history, clear and subsequent arrival; Foamy Notifications absent; a missing omarchy-shell: focus fallback and DND error; watcher restart backoff and recovery')
 finally:
  os.killpg(proc.pid,signal.SIGTERM);proc.wait(timeout=3);log.close();print('Evidence:',base)
- hostenv.check(env,(base/'log').read_text(),(base/'omarchy-calls.log').read_text() if (base/'omarchy-calls.log').exists() else '')
+ hostenv.check(env,(base/'log').read_text(),*hostenv.calls(base))

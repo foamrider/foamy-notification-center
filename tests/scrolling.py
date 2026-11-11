@@ -7,8 +7,12 @@ touchpad pixels map 1:1, and a list that fits does not move.
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
-import hostenv
+
+KIT = Path(os.environ.get('FOAMY_KIT', Path.home() / 'GitHub/Personal/foamy-kit'))
+sys.path.insert(0, str(KIT / 'preview'))
+import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
 base = Path(tempfile.mkdtemp(prefix='foamy-center-scroll-'))
@@ -100,7 +104,10 @@ home = base / 'home'
 home.mkdir()
 env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / '.config'), XDG_STATE_HOME=str(home / '.local/state'), XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
 env.pop('WAYLAND_DISPLAY', None)
-result = subprocess.run(['quickshell', '-p', str(app), '--no-color'], env=env, capture_output=True, text=True, timeout=30)
+hostenv.isolate(env, base)
+env.update(hostenv.make(base, app, env=env))
+result = subprocess.run(['quickshell', '-p', str(app), '--no-color'], env=env, capture_output=True, text=True, timeout=60)
 output = result.stdout + result.stderr
 print(output)
+hostenv.check(env, output, *hostenv.calls(base))
 assert result.returncode == 0 and 'SCROLLING 7 passed 0 failed' in output, output

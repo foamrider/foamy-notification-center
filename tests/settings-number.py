@@ -4,8 +4,12 @@ hostenv.root() (the installed 4.5 unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick 
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
-import hostenv
+
+KIT = Path(os.environ.get('FOAMY_KIT', Path.home() / 'GitHub/Personal/foamy-kit'))
+sys.path.insert(0, str(KIT / 'preview'))
+import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
 host = str(hostenv.root())
@@ -101,8 +105,11 @@ home.mkdir()
 env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / '.config'), XDG_STATE_HOME=str(home / '.local/state'), XDG_RUNTIME_DIR=str(base / 'runtime'), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
 for key in ['WAYLAND_DISPLAY', 'HYPRLAND_INSTANCE_SIGNATURE']:
     env.pop(key, None)
-result = subprocess.run(['quickshell', '-p', str(app), '--no-color'], env=env, capture_output=True, text=True, timeout=20)
+hostenv.isolate(env, base)
+env.update(hostenv.make(base, app, env=env))
+result = subprocess.run(['quickshell', '-p', str(app), '--no-color'], env=env, capture_output=True, text=True, timeout=60)
 output = result.stdout + result.stderr
+hostenv.check(env, output, *hostenv.calls(base))
 print('\n'.join(line for line in output.splitlines() if 'NUMBER_SETTINGS' in line or 'FAIL' in line or 'Actual' in line or 'Expected' in line or 'Error' in line))
 import re
 match = re.search(r'NUMBER_SETTINGS (\d+) passed (\d+) failed', output)

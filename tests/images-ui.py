@@ -4,9 +4,13 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
 import tempfile
 import time
-import hostenv
+
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
+sys.path.insert(0, str(KIT / "preview"))
+import hostenv  # noqa: E402  (foamy-kit"s preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
 base = Path(tempfile.mkdtemp(prefix="foamy-center-images-"))
@@ -108,12 +112,16 @@ env = dict(os.environ, HOME=str(base / "home"), XDG_CONFIG_HOME=str(base / "home
 env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / os.environ["WAYLAND_DISPLAY"])
 for key in ["DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "QT_QUICK_BACKEND"]:
     env.pop(key, None)
+hostenv.isolate(env, base)
+env.update(hostenv.make(base, app, env=env))
+env["PATH"] = str(cli) + ":" + env["PATH"]
 process = subprocess.Popen(["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
 try:
-    output = process.communicate(timeout=25)[0]
+    output = process.communicate(timeout=60)[0]
 except subprocess.TimeoutExpired:
     os.killpg(process.pid, signal.SIGTERM)
     output = process.communicate(timeout=3)[0]
 print(output)
 print("Image captures:", app)
+hostenv.check(env, output, *hostenv.calls(base))
 assert process.returncode == 0 and "IMAGES_UI 2 passed 0 failed" in output

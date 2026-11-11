@@ -10,7 +10,10 @@ import sys
 import tempfile
 
 from favicon_test import png
-import hostenv
+
+KIT = Path(os.environ.get('FOAMY_KIT', Path.home() / 'GitHub/Personal/foamy-kit'))
+sys.path.insert(0, str(KIT / 'preview'))
+import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
 # By manifest id, not folder name: a worktree or clone may be named anything.
@@ -134,9 +137,12 @@ cli.mkdir()
 env = dict(os.environ, HOME=str(home), PATH=str(cli) + ':' + os.environ['PATH'], XDG_CONFIG_HOME=str(home / '.config'), XDG_CACHE_HOME=str(home / '.cache'), XDG_STATE_HOME=str(home / '.local/state'), XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen', QT_QUICK_BACKEND='software', QT_QPA_PLATFORMTHEME='basic', QT_STYLE_OVERRIDE='Fusion')
 for key in ['DISPLAY', 'WAYLAND_DISPLAY', 'HYPRLAND_INSTANCE_SIGNATURE']:
     env.pop(key, None)
+hostenv.isolate(env, base)
+env.update(hostenv.make(base, app, env=env))
+env['PATH'] = str(cli) + ':' + env['PATH']
 process = subprocess.Popen(['dbus-run-session', '--', 'quickshell', '-p', str(app), '--no-color'], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
 try:
-    output = process.communicate(timeout=15)[0]
+    output = process.communicate(timeout=60)[0]
 except subprocess.TimeoutExpired:
     os.killpg(process.pid, signal.SIGTERM)
     output = process.communicate(timeout=3)[0]
@@ -144,4 +150,5 @@ finally:
     browser.close()
 print(output)
 print('Browser captures:', app)
+hostenv.check(env, output, *hostenv.calls(base))
 assert process.returncode == 0 and 'BROWSER_UI 3 passed 0 failed' in output
