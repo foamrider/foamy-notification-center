@@ -3,7 +3,6 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const {spawnSync, spawn} = require('node:child_process')
 const helper = require('./helper.cjs')
 function fixture(t) {
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'foamy-stock-arrays-'))

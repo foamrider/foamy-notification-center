@@ -1,4 +1,11 @@
-import os, json, shutil, tempfile, subprocess, sys, time, signal
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
 from pathlib import Path
 
 KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
@@ -241,7 +248,10 @@ try:
         fake = bin / "inotifywait"
         fake.write_text("#!/bin/sh\nexit 1\n")
         fake.chmod(0o755)
-        reconnects = lambda: (base / "log").read_text().count("Notification history watcher stopped; reconnecting")
+
+        def reconnects():
+            return (base / "log").read_text().count("Notification history watcher stopped; reconnecting")
+
         before = reconnects()
         os.kill(watchers()[0], signal.SIGTERM)
         time.sleep(8.5)

@@ -1,6 +1,10 @@
 """Exercise real Center list delegates with synthetic history and an isolated Qt surface."""
 
-import os, signal, subprocess, tempfile, sys
+import os
+import signal
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
