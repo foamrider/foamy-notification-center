@@ -1,4 +1,5 @@
 """Exercise the real panel and settings helper against disposable configuration."""
+
 import json
 import os
 from pathlib import Path
@@ -24,7 +25,14 @@ for name in ["Commons", "Ui"]:
 home = base / "home"
 config = home / ".config/omarchy/shell.json"
 config.parent.mkdir(parents=True)
-original = {"version": 1, "other": "preserved", "bar": {"layout": {"right": [{"id": "foamy.notification-center", "language": "nb", "browserGrouping": "hostname"}]}}, "plugins": [{"id": "foamy.notifications", "browserGrouping": "hostname", "useBrowserFavicons": True}]}
+original = {
+    "version": 1,
+    "other": "preserved",
+    "bar": {
+        "layout": {"right": [{"id": "foamy.notification-center", "language": "nb", "browserGrouping": "hostname"}]}
+    },
+    "plugins": [{"id": "foamy.notifications", "browserGrouping": "hostname", "useBrowserFavicons": True}],
+}
 config.write_text(json.dumps(original))
 cli = base / "bin"
 cli.mkdir()
@@ -34,7 +42,7 @@ cli.mkdir()
 # through omarchy-shell (hostenv's, which reaches only this test's shell), which
 # must answer "ok". Center saves take this CLI path (kit FoamyPrefs saveCommand:
 # the fixture bar has no updateEntryInline). Anything else fails loudly.
-OMARCHY = r'''#!/bin/bash
+OMARCHY = r"""#!/bin/bash
 printf '%s\n' "omarchy $*" >> "LOG"
 [[ ${1:-} == bar && ${2:-} == set && $# -ge 5 ]] || { echo "omarchy test double: unsupported: $*" >&2; exit 127; }
 id=$3 key=$4 value=$5
@@ -49,18 +57,31 @@ fi
 result=$(omarchy-shell shell setBarWidget "$id" "$key" "$json" "{}") || exit 1
 [[ $result == ok ]] || { echo "omarchy-bar: $result" >&2; exit 1; }
 echo "Set $key on $id"
-'''.replace("LOG", str(base / "omarchy-double.log"))
+""".replace("LOG", str(base / "omarchy-double.log"))
 image = home / "screenshot with spaces.png"
 image.write_bytes(png())
 (home / "editor-ready").write_text("")
 # The editor 4.5 names and the opener prefers; this stub (first on PATH) shadows an installed omasnap.
-(cli / "omasnap").write_text('#!/bin/bash\ngrep -q ready "$HOME/editor-ready" || exit 3\nprintf "%s" "$1" > "$HOME/editor-opened"\nsleep 1\n')
+(cli / "omasnap").write_text(
+    '#!/bin/bash\ngrep -q ready "$HOME/editor-ready" || exit 3\nprintf "%s" "$1" > "$HOME/editor-opened"\nsleep 1\n'
+)
 (cli / "omasnap").chmod(0o755)
 history = home / ".local/state/omarchy/notifications/history"
 history.mkdir(parents=True)
 stamp = int(time.time() * 1000)
-(history / f"{stamp}-1.json").write_text(json.dumps({"timestamp":stamp,"app":"omarchy-action","summary":"Screenshot saved to clipboard and file","body":"Edit with Super + Alt + , (or click this)","image":str(image),"execArgv":json.dumps(["omasnap",str(image)])}))
-(app / "shell.qml").write_text('''pragma ComponentBehavior: Bound
+(history / f"{stamp}-1.json").write_text(
+    json.dumps(
+        {
+            "timestamp": stamp,
+            "app": "omarchy-action",
+            "summary": "Screenshot saved to clipboard and file",
+            "body": "Edit with Super + Alt + , (or click this)",
+            "image": str(image),
+            "execArgv": json.dumps(["omasnap", str(image)]),
+        }
+    )
+)
+(app / "shell.qml").write_text("""pragma ComponentBehavior: Bound
 import QtQuick
 import QtTest
 import Quickshell
@@ -494,18 +515,36 @@ ShellRoot {
     }
   }
 }
-''')
+""")
 language = base / "language"
 language.write_text("en\n")
 # Avoid starting desktop portal daemons on the disposable test bus.
-env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"), OMARCHY_LANGUAGE_FILE=str(language), QT_QPA_PLATFORM="wayland", QT_QUICK_BACKEND="rhi", QT_QPA_PLATFORMTHEME="basic", QT_NO_XDG_DESKTOP_PORTAL="1")
+env = dict(
+    os.environ,
+    HOME=str(home),
+    XDG_CONFIG_HOME=str(home / ".config"),
+    XDG_CACHE_HOME=str(home / ".cache"),
+    XDG_STATE_HOME=str(home / ".local/state"),
+    OMARCHY_LANGUAGE_FILE=str(language),
+    QT_QPA_PLATFORM="wayland",
+    QT_QUICK_BACKEND="rhi",
+    QT_QPA_PLATFORMTHEME="basic",
+    QT_NO_XDG_DESKTOP_PORTAL="1",
+)
 # A private OMARCHY_PATH (the host's shell/ and default/ only) and logging
 # stubs for every omarchy command: no host script runs, and omarchy-shell
 # reaches only this test's shell.
 hostenv.isolate(env, base)
 env.update(hostenv.make(base, app, env=env, stubs={"omarchy": OMARCHY}))
 env["PATH"] = str(cli) + ":" + env["PATH"]
-process = subprocess.Popen(["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+process = subprocess.Popen(
+    ["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"],
+    env=env,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+    start_new_session=True,
+)
 try:
     # A hang guard, not a speed limit: the run takes about 13 s on an idle
     # machine and over 30 s under load; each step has its own tryCompare bound.

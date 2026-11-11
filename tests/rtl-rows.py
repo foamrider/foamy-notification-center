@@ -1,25 +1,26 @@
 """Verify text and dismiss hit regions do not overlap in either direction."""
+
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 
-KIT = Path(os.environ.get('FOAMY_KIT', Path.home() / 'GitHub/Personal/foamy-kit'))
-sys.path.insert(0, str(KIT / 'preview'))
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
+sys.path.insert(0, str(KIT / "preview"))
 import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
-base = Path(tempfile.mkdtemp(prefix='foamy-center-rtl-'))
-app = base / 'app'
+base = Path(tempfile.mkdtemp(prefix="foamy-center-rtl-"))
+app = base / "app"
 app.mkdir()
-for name in ['Commons', 'Ui']:
+for name in ["Commons", "Ui"]:
     # hostenv.root(): the installed 4.5 shell unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick another.
-    (app / name).symlink_to(hostenv.root() / 'shell' / name)
-(app / 'plugin').symlink_to(source)
-runtime = base / 'runtime'
+    (app / name).symlink_to(hostenv.root() / "shell" / name)
+(app / "plugin").symlink_to(source)
+runtime = base / "runtime"
 runtime.mkdir(mode=0o700)
-(app / 'shell.qml').write_text('''import QtQuick
+(app / "shell.qml").write_text("""import QtQuick
 import QtTest
 import Quickshell
 import Quickshell.Io
@@ -60,19 +61,31 @@ ShellRoot {
   }
  }
 }
-''')
+""")
 # A private home and config: on 4.5 the shell language is $XDG_CONFIG_HOME/omarchy/language.
-home = base / 'home'
+home = base / "home"
 home.mkdir()
-language = base / 'language'
-language.write_text('en\n')
-env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / '.config'), XDG_STATE_HOME=str(home / '.local/state'), XDG_RUNTIME_DIR=str(runtime), OMARCHY_LANGUAGE_FILE=str(language), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
-env.pop('WAYLAND_DISPLAY', None)
+language = base / "language"
+language.write_text("en\n")
+env = dict(
+    os.environ,
+    HOME=str(home),
+    XDG_CONFIG_HOME=str(home / ".config"),
+    XDG_STATE_HOME=str(home / ".local/state"),
+    XDG_RUNTIME_DIR=str(runtime),
+    OMARCHY_LANGUAGE_FILE=str(language),
+    QT_QPA_PLATFORM="offscreen",
+    QT_QPA_PLATFORMTHEME="generic",
+    QT_QUICK_BACKEND="software",
+)
+env.pop("WAYLAND_DISPLAY", None)
 hostenv.isolate(env, base)
 env.update(hostenv.make(base, app, env=env))
-result = subprocess.run(['quickshell', '-p', str(app), '--no-color'], env=env, capture_output=True, text=True, timeout=60)
+result = subprocess.run(
+    ["quickshell", "-p", str(app), "--no-color"], env=env, capture_output=True, text=True, timeout=60
+)
 output = result.stdout + result.stderr
 print(output)
-print('Row captures:', app)
+print("Row captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert result.returncode == 0 and 'RTL_ROWS 2 passed 0 failed' in output, output
+assert result.returncode == 0 and "RTL_ROWS 2 passed 0 failed" in output, output

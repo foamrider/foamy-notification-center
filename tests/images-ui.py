@@ -1,4 +1,5 @@
 """Exercise archive normalization through the real service and visible image controls."""
+
 import json
 import os
 from pathlib import Path
@@ -30,17 +31,41 @@ cli.mkdir()
 (cli / "omarchy-shell").chmod(0o755)
 icon = app / "icon.jpg"
 picture = app / "picture.png"
-subprocess.run(["magick", "-size", "64x64", "xc:#8aadf4", "-fill", "#24273a", "-draw", "circle 32,32 32,12", "-interlace", "Plane", str(icon)], check=True)
+subprocess.run(
+    [
+        "magick",
+        "-size",
+        "64x64",
+        "xc:#8aadf4",
+        "-fill",
+        "#24273a",
+        "-draw",
+        "circle 32,32 32,12",
+        "-interlace",
+        "Plane",
+        str(icon),
+    ],
+    check=True,
+)
 subprocess.run(["magick", "-size", "1440x900", "gradient:#8aadf4-#a6da95", str(picture)], check=True)
 bomb = bytearray(icon.read_bytes())
 frame = bomb.index(b"\xff\xc2")
-bomb[frame + 5:frame + 9] = (60000).to_bytes(2, "big") * 2
+bomb[frame + 5 : frame + 9] = (60000).to_bytes(2, "big") * 2
 (app / "rejected.jpg").write_bytes(bomb)
 stamp = int(time.time() * 1000)
-entry = {"timestamp": stamp, "app": "Image test", "appIcon": str(icon), "image": str(picture), "summary": "Picture retained", "body": "A progressive JPEG icon and a full picture preview.", "execArgv": ["viewer", str(picture)]}
+entry = {
+    "timestamp": stamp,
+    "app": "Image test",
+    "appIcon": str(icon),
+    "image": str(picture),
+    "summary": "Picture retained",
+    "body": "A progressive JPEG icon and a full picture preview.",
+    "execArgv": ["viewer", str(picture)],
+}
 notification = notifications / f"{stamp}-1.json"
 notification.write_text(json.dumps(entry))
-(app / "shell.qml").write_text('''import QtQuick
+(app / "shell.qml").write_text(
+    """import QtQuick
 import QtTest
 import Quickshell
 import Quickshell.Io
@@ -107,15 +132,37 @@ ShellRoot {
     }
   }
 }
-'''.replace("INPUT_PATH", json.dumps(str(notification))).replace("SOURCE_ENTRY", json.dumps(entry)))
-env = dict(os.environ, HOME=str(base / "home"), XDG_CONFIG_HOME=str(base / "home/.config"), XDG_CACHE_HOME=str(base / "cache"), XDG_STATE_HOME=str(base / "state"), XDG_RUNTIME_DIR=str(runtime), NC_SRC_DIR=str(notifications), NC_SRC_HISTORY=str(notifications / "history"), NC_STORE=str(base / "state/omarchy-notification-center"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QPA_PLATFORMTHEME="basic", QT_STYLE_OVERRIDE="Fusion")
+""".replace("INPUT_PATH", json.dumps(str(notification))).replace("SOURCE_ENTRY", json.dumps(entry))
+)
+env = dict(
+    os.environ,
+    HOME=str(base / "home"),
+    XDG_CONFIG_HOME=str(base / "home/.config"),
+    XDG_CACHE_HOME=str(base / "cache"),
+    XDG_STATE_HOME=str(base / "state"),
+    XDG_RUNTIME_DIR=str(runtime),
+    NC_SRC_DIR=str(notifications),
+    NC_SRC_HISTORY=str(notifications / "history"),
+    NC_STORE=str(base / "state/omarchy-notification-center"),
+    PATH=str(cli) + ":" + os.environ["PATH"],
+    QT_QPA_PLATFORM="wayland",
+    QT_QPA_PLATFORMTHEME="basic",
+    QT_STYLE_OVERRIDE="Fusion",
+)
 env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / os.environ["WAYLAND_DISPLAY"])
 for key in ["DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "QT_QUICK_BACKEND"]:
     env.pop(key, None)
 hostenv.isolate(env, base)
 env.update(hostenv.make(base, app, env=env))
 env["PATH"] = str(cli) + ":" + env["PATH"]
-process = subprocess.Popen(["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+process = subprocess.Popen(
+    ["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"],
+    env=env,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+    start_new_session=True,
+)
 try:
     output = process.communicate(timeout=60)[0]
 except subprocess.TimeoutExpired:

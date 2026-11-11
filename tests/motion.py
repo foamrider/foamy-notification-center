@@ -1,23 +1,35 @@
 """Exercise real Center list delegates with synthetic history and an isolated Qt surface."""
-import os,signal,subprocess,tempfile,sys
+
+import os, signal, subprocess, tempfile, sys
 from pathlib import Path
 
-KIT = Path(os.environ.get('FOAMY_KIT', Path.home() / 'GitHub/Personal/foamy-kit'))
-sys.path.insert(0, str(KIT / 'preview'))
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
+sys.path.insert(0, str(KIT / "preview"))
 import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
-source=Path(__file__).resolve().parents[1]
-base=Path(tempfile.mkdtemp(prefix='foamy-center-motion-'));app=base/'app';app.mkdir()
-(app/'Commons').symlink_to(hostenv.root()/'shell/Commons',target_is_directory=True)
+
+source = Path(__file__).resolve().parents[1]
+base = Path(tempfile.mkdtemp(prefix="foamy-center-motion-"))
+app = base / "app"
+app.mkdir()
+(app / "Commons").symlink_to(hostenv.root() / "shell/Commons", target_is_directory=True)
 # Include the plugin translator without registering unrelated fixture types.
-(app / 'kit').symlink_to(source / 'kit', target_is_directory=True)
-(app / 'i18n').symlink_to(source / 'i18n', target_is_directory=True)
-for name in ['Markup.js','BrowserIdentity.js']: (app / name).symlink_to(source / name)
-(app/'Ui').symlink_to(hostenv.root()/'shell/Ui',target_is_directory=True)
-(app/'components').symlink_to(source/'components',target_is_directory=True)
-for name in ['Model.js','Translations.js']:(app/name).symlink_to(source/name)
-s=(source/'Panel.qml').read_text();a=s.index('          delegate: Item {');b=s.index('\n            }\n          }\n        }\n\n        // --------------------------------------------------------- empty',a)
-delegate=s[a:b]
-(app/'shell.qml').write_text('''import QtQuick
+(app / "kit").symlink_to(source / "kit", target_is_directory=True)
+(app / "i18n").symlink_to(source / "i18n", target_is_directory=True)
+for name in ["Markup.js", "BrowserIdentity.js"]:
+    (app / name).symlink_to(source / name)
+(app / "Ui").symlink_to(hostenv.root() / "shell/Ui", target_is_directory=True)
+(app / "components").symlink_to(source / "components", target_is_directory=True)
+for name in ["Model.js", "Translations.js"]:
+    (app / name).symlink_to(source / name)
+s = (source / "Panel.qml").read_text()
+a = s.index("          delegate: Item {")
+b = s.index(
+    "\n            }\n          }\n        }\n\n        // --------------------------------------------------------- empty",
+    a,
+)
+delegate = s[a:b]
+(app / "shell.qml").write_text(
+    """import QtQuick
 import QtTest
 import Quickshell
 import qs.Commons
@@ -167,18 +179,42 @@ ShellRoot {
   }
  }
 }
-'''.replace('DELEGATE',delegate))
-home=base/'home';home.mkdir();runtime=base/'runtime';runtime.mkdir(mode=0o700)
-desktop='--desktop' in sys.argv
-env=dict(os.environ,HOME=str(home),XDG_CONFIG_HOME=str(home/'.config'),XDG_STATE_HOME=str(home/'.local/state'),QT_QPA_PLATFORM='wayland' if desktop else 'offscreen',QT_QUICK_BACKEND='rhi' if desktop else 'software',QT_QPA_PLATFORMTHEME='basic')
+""".replace("DELEGATE", delegate)
+)
+home = base / "home"
+home.mkdir()
+runtime = base / "runtime"
+runtime.mkdir(mode=0o700)
+desktop = "--desktop" in sys.argv
+env = dict(
+    os.environ,
+    HOME=str(home),
+    XDG_CONFIG_HOME=str(home / ".config"),
+    XDG_STATE_HOME=str(home / ".local/state"),
+    QT_QPA_PLATFORM="wayland" if desktop else "offscreen",
+    QT_QUICK_BACKEND="rhi" if desktop else "software",
+    QT_QPA_PLATFORMTHEME="basic",
+)
 if not desktop:
- env['XDG_RUNTIME_DIR']=str(runtime)
- for key in ['DISPLAY','WAYLAND_DISPLAY','HYPRLAND_INSTANCE_SIGNATURE']:env.pop(key,None)
-hostenv.isolate(env,base)
-env.update(hostenv.make(base,app,env=env))
-proc=subprocess.Popen(['dbus-run-session','--','qs','-p',str(app),'--no-color'],env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,start_new_session=True)
-try:output=proc.communicate(timeout=60)[0]
-except subprocess.TimeoutExpired:os.killpg(proc.pid,signal.SIGTERM);output=proc.communicate(timeout=3)[0]
-print(output);print('Captures:',app)
-hostenv.check(env,output,*hostenv.calls(base))
-assert proc.returncode==0 and 'CENTER_MOTION 6 passed 0 failed' in output
+    env["XDG_RUNTIME_DIR"] = str(runtime)
+    for key in ["DISPLAY", "WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE"]:
+        env.pop(key, None)
+hostenv.isolate(env, base)
+env.update(hostenv.make(base, app, env=env))
+proc = subprocess.Popen(
+    ["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"],
+    env=env,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+    start_new_session=True,
+)
+try:
+    output = proc.communicate(timeout=60)[0]
+except subprocess.TimeoutExpired:
+    os.killpg(proc.pid, signal.SIGTERM)
+    output = proc.communicate(timeout=3)[0]
+print(output)
+print("Captures:", app)
+hostenv.check(env, output, *hostenv.calls(base))
+assert proc.returncode == 0 and "CENTER_MOTION 6 passed 0 failed" in output
