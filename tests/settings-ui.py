@@ -182,7 +182,14 @@ ShellRoot {
         item.grabToImage(function(result) { verify(result.saveToFile(Qt.resolvedUrl(name + ".png").toString().replace("file://", ""))); done = true })
         tryVerify(function() { return done })
       }
-      function init() { panel.open(); tryCompare(panel, "opened", true); wait(200) }
+      // QtTest sends keyClick() to QGuiApplication::focusWindow(). On a real
+      // Wayland session the popup (a layer surface) becomes that window only
+      // when the compositor's keyboard focus arrives, asynchronously after it
+      // maps; a key sent before then goes to another window and is lost.
+      function init() {
+        panel.open(); tryCompare(panel, "opened", true); wait(200)
+        tryVerify(function() { return panel.view !== null && panel.view.Window.active }, 5000, "The panel never got keyboard focus")
+      }
       function cleanup() { panel.close(); wait(200) }
       function test_00_direction() {
         Kit.FoamyI18n.backend = translator;
@@ -224,9 +231,13 @@ ShellRoot {
         wait(150); capture(menu.panel, "snooze-menu")
         menu.activate(menu.entries.indexOf(snooze.items[0])); tryCompare(root,"snoozedMinutes",30)
         compare(header.menuOpen, false)
+        // The fixture changes on the IPC call; the service takes the next
+        // snooze only once that call's process has exited (one at a time).
+        tryCompare(store, "snoozeBusy", false)
         header.openMenu(true)
         menu.activate(menu.entries.indexOf(snooze))
         menu.activate(menu.entries.indexOf(snooze.items[3])); tryCompare(root,"snoozedMinutes",0)
+        tryCompare(store, "snoozeBusy", false)
         header.closeMenu()
       }
       function test_01_menu_and_settings_save() {
@@ -251,6 +262,9 @@ ShellRoot {
         verify(Math.abs(end.x - edge.x) <= 1, "menu trailing edge " + edge.x + " vs button " + end.x)
         verify(edge.y >= end.y - 1, "menu below the button")
         wait(150); capture(box, "overflow-menu")
+        // Silence is disabled while a DND read runs (one follows every snooze
+        // and the startup refresh); activating it then would do nothing.
+        tryCompare(store, "dndBusy", false)
         menu.activate(0)
         tryCompare(root, "dnd", true)
         tryCompare(panel, "dnd", true)
@@ -468,7 +482,9 @@ ShellRoot {
 env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QUICK_BACKEND="rhi", QT_QPA_PLATFORMTHEME="basic", QT_NO_XDG_DESKTOP_PORTAL="1", OMARCHY_PATH=str(hostenv.root()))
 process = subprocess.Popen(["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
 try:
-    output = process.communicate(timeout=30)[0]
+    # A hang guard, not a speed limit: the run takes about 13 s on an idle
+    # machine and over 30 s under load; each step has its own tryCompare bound.
+    output = process.communicate(timeout=120)[0]
 except subprocess.TimeoutExpired:
     os.killpg(process.pid, signal.SIGTERM)
     output = process.communicate(timeout=3)[0]
