@@ -4,11 +4,15 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 
 from favicon_test import png
-import hostenv
+
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
+sys.path.insert(0, str(KIT / "preview"))
+import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
 base = Path(tempfile.mkdtemp(prefix="foamy-center-settings-"))
@@ -25,8 +29,27 @@ config.write_text(json.dumps(original))
 cli = base / "bin"
 cli.mkdir()
 (cli / "python3").symlink_to("/usr/bin/python3")
-(cli / "omarchy-shell").write_text("#!/bin/sh\nexec qs ipc -n -p " + str(app) + " call \"$@\"\n")
-(cli / "omarchy-shell").chmod(0o755)
+# Test double of the host's `omarchy bar set ID KEY VALUE [--json]` (omarchy-bar
+# cmd_set, same contract): the value as JSON, then the shell's setBarWidget
+# through omarchy-shell (hostenv's, which reaches only this test's shell), which
+# must answer "ok". Center saves take this CLI path (kit FoamyPrefs saveCommand:
+# the fixture bar has no updateEntryInline). Anything else fails loudly.
+OMARCHY = r'''#!/bin/bash
+printf '%s\n' "omarchy $*" >> "LOG"
+[[ ${1:-} == bar && ${2:-} == set && $# -ge 5 ]] || { echo "omarchy test double: unsupported: $*" >&2; exit 127; }
+id=$3 key=$4 value=$5
+shift 5
+if [[ ${1:-} == --json ]]; then
+  json=$(jq -cn --argjson value "$value" '$value') || { echo "omarchy-bar: invalid JSON value: $value" >&2; exit 1; }
+  shift
+else
+  json=$(jq -cn --arg value "$value" '$value')
+fi
+(( $# == 0 )) || { echo "omarchy test double: placement is not modelled: $*" >&2; exit 127; }
+result=$(omarchy-shell shell setBarWidget "$id" "$key" "$json" "{}") || exit 1
+[[ $result == ok ]] || { echo "omarchy-bar: $result" >&2; exit 1; }
+echo "Set $key on $id"
+'''.replace("LOG", str(base / "omarchy-double.log"))
 image = home / "screenshot with spaces.png"
 image.write_bytes(png())
 (home / "editor-ready").write_text("")
@@ -50,14 +73,8 @@ import "plugin/Preferences.js" as PluginPreferences
 import "plugin/kit" as Kit
 ShellRoot {
   id: root
-  QtObject {
-    id: translator
-    property string language: "en"
-    property string formatLocale: "en-US"
-    property bool rightToLeft: false
-    function t(key, fallback) { return fallback }
-    function number(value) { return String(value) }
-  }
+  // The shell's language file: Arabic turns FoamyI18n.rightToLeft on.
+  FileView { id: language; path: Quickshell.env("OMARCHY_LANGUAGE_FILE") }
   property var config: ({})
   property bool failSave: false
   property bool finished: false
@@ -192,10 +209,9 @@ ShellRoot {
       }
       function cleanup() { panel.close(); wait(200) }
       function test_00_direction() {
-        Kit.FoamyI18n.backend = translator;
         for (var direction = 0; direction < 2; direction++) {
-          translator.rightToLeft = !!direction;
-          translator.language = direction ? "ar" : "en";
+          language.setText(direction ? "ar\n" : "en\n");
+          tryCompare(Kit.FoamyI18n, "rightToLeft", !!direction, 10000);
           panel.openSettings(); wait(150);
           var pane = control("notificationSettingsPane");
           compare(pane.LayoutMirroring.enabled, !!direction);
@@ -212,7 +228,8 @@ ShellRoot {
           capture(search.parent.parent, direction ? "rtl-search" : "ltr-search");
           panel.endSearch(); wait(200);
         }
-        Kit.FoamyI18n.backend = null;
+        language.setText("en\n");
+        tryCompare(Kit.FoamyI18n, "rightToLeft", false, 10000);
       }
       function test_00_snooze_menu() {
         // The header's kit ⋯ menu: Snooze is a submenu (opens in place, Back row first).
@@ -478,8 +495,16 @@ ShellRoot {
   }
 }
 ''')
+language = base / "language"
+language.write_text("en\n")
 # Avoid starting desktop portal daemons on the disposable test bus.
-env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QUICK_BACKEND="rhi", QT_QPA_PLATFORMTHEME="basic", QT_NO_XDG_DESKTOP_PORTAL="1", OMARCHY_PATH=str(hostenv.root()))
+env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"), OMARCHY_LANGUAGE_FILE=str(language), QT_QPA_PLATFORM="wayland", QT_QUICK_BACKEND="rhi", QT_QPA_PLATFORMTHEME="basic", QT_NO_XDG_DESKTOP_PORTAL="1")
+# A private OMARCHY_PATH (the host's shell/ and default/ only) and logging
+# stubs for every omarchy command: no host script runs, and omarchy-shell
+# reaches only this test's shell.
+hostenv.isolate(env, base)
+env.update(hostenv.make(base, app, env=env, stubs={"omarchy": OMARCHY}))
+env["PATH"] = str(cli) + ":" + env["PATH"]
 process = subprocess.Popen(["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
 try:
     # A hang guard, not a speed limit: the run takes about 13 s on an idle
@@ -491,3 +516,10 @@ except subprocess.TimeoutExpired:
 print(output)
 print("Settings captures:", app)
 assert process.returncode == 0 and "SETTINGS_UI 9 passed 0 failed" in output
+calls = hostenv.calls(base)
+hostenv.check(env, output, *calls)
+# The center's saves went through the omarchy double (the CLI save path),
+# never a host script.
+double = (base / "omarchy-double.log").read_text().splitlines() if (base / "omarchy-double.log").exists() else []
+saves = [line for line in double if line.startswith("omarchy bar set foamy.notification-center ")]
+assert len(saves) >= 3 and len(saves) == len(double), double
