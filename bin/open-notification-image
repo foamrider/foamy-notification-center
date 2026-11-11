@@ -5,8 +5,10 @@ case ${1:-} in
   edit-screenshot)
     # Prefer Omarchy's editor (omasnap); with the older tensaku-edit, or with
     # neither, the image still opens.
-    if command -v omasnap >/dev/null; then program=omasnap
-    elif command -v tensaku-edit >/dev/null; then program=tensaku-edit
+    if command -v omasnap >/dev/null; then
+      program=omasnap
+    elif command -v tensaku-edit >/dev/null; then
+      program=tensaku-edit
     else program=xdg-open; fi
     ;;
   view-image) program=xdg-open ;;
