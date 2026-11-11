@@ -250,7 +250,7 @@ test('any archive-setting change restarts the running watcher, even without a so
  const env=source.slice(source.indexOf('  readonly property var storeEnvironment: {'),source.indexOf('\n  }\n',source.indexOf('  readonly property var storeEnvironment: {')))
  for(const name of ['NC_KEEP_DAYS','NC_MAX_ITEMS','NC_PREVIEWS','NC_SOURCE','NC_SRC_DIR','NC_SRC_HISTORY','NC_HANDLED','NC_STATE_FILE']) assert.ok(env.includes(name),name)
  const native=path.join(__dirname,'../native/src'),script=fs.readdirSync(native).filter(n=>n.endsWith('.rs')).map(n=>fs.readFileSync(path.join(native,n),'utf8')).join('\n')
- for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL'].includes(name)) assert.ok(env.includes(name),`watcher reads ${name} but the service does not pass it`)
+ for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL','NC_LOCK_WAIT_MS'].includes(name)) assert.ok(env.includes(name),`watcher reads ${name} but the service does not pass it`)
 })
 test('Clear all uses the cutoff captured at the click, so later arrivals survive (as in Foamy)',t=>{
  const f=fixture(t);f.run('list')
@@ -324,10 +324,101 @@ test('a helper missing for this CPU is reported once, translated, and never rest
  ctx.load();assert.equal(ctx.listLoadCount,0,'no list read without a helper')
  // The watcher stops for good: its exit handler returns before scheduling a restart.
  const watch=source.slice(source.indexOf('    id: watchProc'),source.indexOf('\n  }',source.indexOf('    id: watchProc')))
- assert.match(watch,/onExited: function\(exitCode, exitStatus\) \{\n      if \(root\.storeUnavailable\(exitCode\)\) return/)
- assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) watchProc\.running = true/)
+ assert.match(watch,/onExited: function\(exitCode, exitStatus\) \{\n      launched = false\n      if \(root\.storeUnavailable\(exitCode\)\) return/)
+ assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) \{ watchProc\.launched = true; watchProc\.running = true \}/)
  // Every store command runs the bundled binary for this CPU.
  const cmd=vm.createContext({FoamyNative,root:{pluginDir:'/plugin',helper:'foamy-notification-center-helper'}})
  cmd.root.storeCommand=vm.runInContext('('+take('storeCommand').trim().replace(/^function storeCommand/,'function')+')',cmd)
  assert.deepEqual(Array.from(cmd.root.storeCommand(['list','5'])),['bash','-c','exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"','foamy-native','/plugin','foamy-notification-center-helper','list','5'])
+})
+
+const {processFixture}=require('./qml-process.cjs')
+function watchService(clock) {
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const take=name=>{const start=source.indexOf(`  function ${name}(`);assert.ok(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4)}
+ const ctx=vm.createContext({FoamyNative:require('../kit/node-loader.cjs').load('FoamyNative'),console:{warn(){ctx.warnings++}},warnings:0,
+  helperUnavailable:false,loadError:'',sourceRestartPending:false,archiveRevision:0,removedKeys:{},entries:[],JSON,String,
+  reloadArchive:{restart(){}},restarts:[],restartWatch:{interval:30000,restart(){ctx.restarts.push(ctx.restartWatch.interval)}}})
+ ctx.root=ctx
+ for(const name of ['watchBackoffMs','watchBackoffMaxMs','watchStableMs']) ctx[name]=Number(source.match(new RegExp('property int '+name+': ([0-9]+)'))[1])
+ ctx.watchStartedAt=0
+ for(const name of ['storeUnavailable','scheduleWatchRestart','absorb']) vm.runInContext(take(name),ctx)
+ ctx.watchProc=processFixture(source,'watchProc',ctx,{Date:{now:()=>clock.now}})
+ // restartWatch's trigger: what the Timer runs.
+ ctx.trigger=()=>{ctx.sourceRestartPending=false;ctx.watchProc.launched=true;ctx.watchProc.running=true}
+ return ctx
+}
+test('a watcher that keeps failing to start backs off to 60 s instead of a 1 Hz loop',()=>{
+ const clock={now:0},ctx=watchService(clock)
+ // Ten minutes of a watcher that can't start (no exited(), only running -> false).
+ let attempts=0
+ ctx.trigger()
+ while(clock.now<600000) {
+  attempts++;ctx.watchProc.failStart()
+  assert.equal(ctx.watchProc.launched,false)
+  clock.now+=ctx.restarts[ctx.restarts.length-1];ctx.trigger()
+ }
+ assert.deepEqual(ctx.restarts.slice(0,8),[1000,2000,4000,8000,16000,32000,60000,60000])
+ assert.ok(attempts<=16,`${attempts} attempts in 10 minutes`)
+ assert.equal(ctx.warnings,attempts,'one warning per failure')
+})
+test('a flapping watcher backs off; a run that reports in or lasts 30 s restarts after 1 s again',()=>{
+ const clock={now:1000},ctx=watchService(clock)
+ const run=(lasted,code=1,reported=false,sourceChange=false)=>{
+  ctx.trigger();ctx.watchStartedAt=clock.now
+  if(reported) ctx.absorb('{"event":"storeChanged"}')
+  if(sourceChange) ctx.sourceRestartPending=true
+  clock.now+=lasted;ctx.watchProc.exit(code,0)
+ }
+ // Dies at once (inotify limit, a store it can't create: an error line, exit 1).
+ ctx.absorb('{"ok":false,"error":"notification watcher failed to start"}')
+ for(let i=0;i<4;i++) run(50)
+ assert.deepEqual(ctx.restarts,[1000,2000,4000,8000])
+ // A source change keeps its 100 ms restart and leaves the backoff alone.
+ run(50,143,false,true);assert.equal(ctx.restarts.pop(),100)
+ run(50);assert.equal(ctx.restarts.pop(),16000)
+ // Up and synced: the next failure restarts after 1 s.
+ run(500,1,true);assert.equal(ctx.restarts.pop(),1000)
+ run(50);assert.equal(ctx.restarts.pop(),2000)
+ // A long run resets it too.
+ run(30000);assert.equal(ctx.restarts.pop(),1000)
+ // No helper for this CPU: no restart, and running -> false after exited() adds none.
+ const before=ctx.restarts.length;run(50,127);assert.equal(ctx.restarts.length,before);assert.equal(ctx.helperUnavailable,true)
+})
+test('store commands run without a whole-command deadline; the helper bounds only its lock wait, above one step of another store process',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ // A list may migrate a whole archive first: nothing may kill it at a deadline.
+ assert.ok(!/storeCall|storeDeadline|"timeout"/.test(source),'a store command under a whole-command deadline')
+ for(const call of ['listProc.command = root.storeCommand(["list"','markProc.command = root.storeCommand(["seen"','removeProc.command = storeCommand(["remove"]','command: root.storeCommand(["clear", cut])','command = root.storeCommand(["seen", root.seenPending])','command: root.storeCommand(["watch"])'])
+  assert.ok(source.includes(call),call)
+ // One locked step takes in one notification: at most three images (icon, image, preview), each bounded by these deadlines.
+ const images=fs.readFileSync(path.join(__dirname,'../native/src/images.rs'),'utf8')
+ const step=['READ_DEADLINE','MIME_DEADLINE','CONVERT_DEADLINE'].map(n=>Number(images.match(new RegExp(n+': Duration = Duration::from_secs\\(([0-9]+)\\)'))[1])).reduce((a,b)=>a+b)
+ const store=fs.readFileSync(path.join(__dirname,'../native/src/store.rs'),'utf8')
+ const wait=Number(store.match(/pub const REQUEST_LOCK_WAIT: Duration = Duration::from_secs\(([0-9]+)\)/)[1])
+ assert.ok(wait>3*step,`the request lock wait (${wait} s) must exceed ${3*step} s`)
+ assert.ok(source.includes(`wait at most ${wait} s (REQUEST_LOCK_WAIT`),'Service.qml names the helper\'s wait')
+})
+test('list, remove and clear answer "notification store is busy" while another holds the store lock, and work once it is free',async t=>{
+ const f=fixture(t);f.run('sync')
+ const lock=path.join(f.store,'lock'),env={...f.env,NC_LOCK_WAIT_MS:'200'}
+ const exec=(...args)=>helper.spawnSync(args,{env,encoding:'utf8',timeout:5000})
+ // flock(1) holds the store's own lock (closed before its child runs), in a group of its own.
+ const holder=spawn('flock',['--exclusive','--close',lock,'sleep','30'],{stdio:'ignore',detached:true})
+ const gone=new Promise(resolve=>holder.on('exit',resolve))
+ t.after(()=>{try{process.kill(-holder.pid,'SIGKILL')}catch{}})
+ for(let i=0;spawnSync('flock',['--nonblock',lock,'true']).status===0;i++){assert.ok(i<200,'the holder never took the lock');await new Promise(r=>setTimeout(r,25))}
+ for(const args of [['list'],['remove','1-1'],['clear',String(Date.now())]]){
+  const started=Date.now(),r=exec(...args)
+  assert.equal(r.status,1,`${args[0]}: ${r.stderr}`)
+  assert.deepEqual(JSON.parse(r.stdout),{ok:false,error:'notification store is busy'},args[0])
+  assert.ok(Date.now()-started>=200,`${args[0]} gave up before its wait`)
+ }
+ // Nothing was written without the lock; seen takes none and still works.
+ assert.ok(!fs.existsSync(path.join(f.store,'cleared_at')),'clear wrote its cutoff without the lock')
+ assert.equal(JSON.parse(exec('seen','5').stdout).seen,5)
+ process.kill(-holder.pid,'SIGKILL');await gone
+ assert.deepEqual(JSON.parse(exec('list').stdout),[])
+ assert.equal(JSON.parse(exec('remove','1-1').stdout).ok,true)
+ assert.equal(JSON.parse(exec('clear').stdout).cleared,true)
 })

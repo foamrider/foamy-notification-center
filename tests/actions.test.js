@@ -205,6 +205,25 @@ test("invalid app identity cannot become a stock focus regex",()=>{
  assert.equal(state.focusProc.command[3],"org\\.example\\.App")
 })
 
+test("a focus command that can't start runs the next fallback, then reports the error",()=>{
+ const {processFixture}=require("./qml-process.cjs")
+ const state=focusService()
+ state.focusProc=processFixture(serviceSource,"focusProc",state,{focusOutput:{text:""}})
+ state.focusNotification({key:"100-1",app:"Vivaldi"})
+ assert.deepEqual(Array.from(state.focusProc.command),["omarchy-shell","foamy.notifications","invokeDefault","100-1"])
+ // No omarchy-shell: no exited(), only running -> false. The stock focus fallback runs.
+ state.focusProc.failStart()
+ assert.deepEqual(Array.from(state.focusProc.command),["bash","/plugin/bin/focus-notification-app","/omarchy","Vivaldi"])
+ assert.equal(state.focusProc.launched,true);assert.equal(state.focusError,"")
+ // The fallback can't start either: the click says so instead of doing nothing.
+ state.focusProc.failStart()
+ assert.match(state.focusError,/Could not focus the sending app/);assert.equal(state.focusEntry,null)
+ assert.equal(state.removed.length,0);assert.equal(state.completed,0)
+ // A normal end (exited, then running -> false) finishes once.
+ state.focusNotification({key:"100-1",app:"Vivaldi"},false)
+ state.focusProc.exit(0,0)
+ assert.deepEqual(Array.from(state.removed),["100-1"]);assert.equal(state.completed,1);assert.equal(state.focusProc.launched,false)
+})
  test("no window silently retains history and clears stale focus feedback",()=>{
  const state=focusService();state.focusError="old error"
  state.focusNotification({key:"100-1",app:"Background"},false)
