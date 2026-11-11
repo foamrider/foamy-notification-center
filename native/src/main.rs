@@ -231,9 +231,10 @@ fn run(args: Vec<String>) -> ExitCode {
             }
             // The cutoff is written first; a later step error leaves the
             // archive cleared for every reader, as it always did. A lock it
-            // never got is a failure.
+            // never got, or a clear line it could not write, is a failure.
             or_fail(store.request("could not clear notifications", |s| {
-                let _ = s.clear_all(cut);
+                let stamp = s.raise_clear_line(cut)?;
+                let _ = s.drop_cleared(stamp);
                 Ok(())
             }));
             print_line(r#"{"ok":true,"cleared":true}"#);

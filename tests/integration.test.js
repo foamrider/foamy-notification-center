@@ -263,6 +263,19 @@ test('Clear all uses the cutoff captured at the click, so later arrivals survive
  f.run('clear',String(now-4000));assert.equal(fs.readFileSync(path.join(f.store,'cleared_at'),'utf8').trim(),String(now-3000))
  const bad=helper.spawnSync(['clear','../x'],{env:f.env,encoding:'utf8'});assert.notEqual(bad.status,0)
 })
+test('a clear whose clear line cannot be written fails and leaves the archive as it was',t=>{
+ // Without a durable clear line nothing keeps cleared ts-id keys out of the
+ // next sync (I1), so the rows must stay and the caller must hear it failed.
+ const f=fixture(t);f.run('list')
+ const now=Date.now(),archive=path.join(f.store,'archive.jsonl')
+ fs.writeFileSync(archive,JSON.stringify({key:`${now-5000}-1`,timestamp:now-5000,summary:'kept'})+'\n')
+ const before=fs.readFileSync(archive,'utf8')
+ fs.mkdirSync(path.join(f.store,'cleared_at'))
+ const r=helper.spawnSync(['clear',String(now-1000)],{env:f.env,encoding:'utf8',timeout:5000})
+ assert.equal(r.status,1,r.stdout)
+ assert.deepEqual(JSON.parse(r.stdout),{ok:false,error:'could not clear notifications'})
+ assert.equal(fs.readFileSync(archive,'utf8'),before)
+})
 test('a rewatch after a source directory appears keeps its pruned events',async t=>{
  const f=fixture(t),late=path.join(f.dir,'late','popups'),now=Date.now()
  const env={...f.env,NC_SOURCE:'foamy',NC_MAX_ITEMS:'2',NC_SRC_DIR:late,NC_SRC_HISTORY:path.join(f.dir,'late','history')}
