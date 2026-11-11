@@ -119,7 +119,7 @@ test('a first page that fits the viewport (collapsed stacks) still loads the nex
  store.listProc.running=true;ui.pageIfAtEnd();store.listProc.running=false;ui.pageIfAtEnd();assert.equal(store.listLimit,1000,'never past maxItems')
  ui.opened=false;store.listLimit=500;ui.pageIfAtEnd();assert.equal(store.listLimit,500,'closed: no paging')
  // Wiring: every change that can leave the list at its end re-checks.
- for(const hook of ['function onHasMoreChanged() { Qt.callLater(root.pageIfAtEnd) }','function onListingChanged() { Qt.callLater(root.pageIfAtEnd) }','onAtYEndChanged: Qt.callLater(root.pageIfAtEnd)','onContentHeightChanged: Qt.callLater(root.pageIfAtEnd)']) assert.ok(panel.includes(hook),hook)
+ for(const hook of [/function onHasMoreChanged\(\) \{\s*Qt\.callLater\(root\.pageIfAtEnd\)\s*\}/,/function onListingChanged\(\) \{\s*Qt\.callLater\(root\.pageIfAtEnd\)\s*\}/,/onAtYEndChanged: Qt\.callLater\(root\.pageIfAtEnd\)/,/onContentHeightChanged: Qt\.callLater\(root\.pageIfAtEnd\)/]) assert.match(panel,hook)
  assert.match(service,/readonly property bool listing: listProc\.running/)
 })
 test('search folds Unicode case like the panel and matches the query literally',t=>{
@@ -346,8 +346,8 @@ test('a helper missing for this CPU is reported once, translated, and never rest
  ctx.load();assert.equal(ctx.listLoadCount,0,'no list read without a helper')
  // The watcher stops for good: its exit handler returns before scheduling a restart.
  const watch=source.slice(source.indexOf('    id: watchProc'),source.indexOf('\n  }',source.indexOf('    id: watchProc')))
- assert.match(watch,/onExited: function\(exitCode, exitStatus\) \{\n      launched = false\n      if \(root\.storeUnavailable\(exitCode\)\) return/)
- assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) \{ watchProc\.launched = true; watchProc\.running = true \}/)
+ assert.match(watch,/onExited: function ?\(exitCode, exitStatus\) \{\n\s*launched = false\n\s*if \(root\.storeUnavailable\(exitCode\)\)\s*return\n/)
+ assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) \{\s*watchProc\.launched = true;?\s*watchProc\.running = true\s*\}/)
  // Every store command runs the bundled binary for this CPU.
  const cmd=vm.createContext({FoamyNative,root:{pluginDir:'/plugin',helper:'foamy-notification-center-helper'}})
  cmd.root.storeCommand=vm.runInContext('('+take('storeCommand').trim().replace(/^function storeCommand/,'function')+')',cmd)

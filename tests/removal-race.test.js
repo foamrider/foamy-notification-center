@@ -84,7 +84,7 @@ test("failed dismissal releases only failed tombstones and reloads for retry", (
   state.console = { warn() {} }
   state.exitCode = 1
   state.exitStatus = 0
-  const start = source.indexOf("    onExited: function(exitCode, exitStatus) {", source.indexOf("    id: removeProc"))
+  const start = source.indexOf("    onExited: function (exitCode, exitStatus) {", source.indexOf("    id: removeProc"))
   const end = source.indexOf("\n    }", start)
   vm.runInContext(source.slice(source.indexOf("{", start) + 1, end), state)
   assert.equal(reloads, 1)
@@ -118,7 +118,7 @@ test("callback cleanup runs only after durable dismissal and batches exact keys,
  answer=true;state.releaseRetry.running=false;state.pumpReleases()
  assert.equal(state.releasePending.length,0)
  state.activeRemovalKeys=['100-1'];state.removeErrors={text:''};state.exitCode=0;state.exitStatus=0
- const handler=source.indexOf("    onExited: function(exitCode, exitStatus) {",source.indexOf("    id: removeProc"))
+ const handler=source.indexOf("    onExited: function (exitCode, exitStatus) {",source.indexOf("    id: removeProc"))
  const before=calls.length
  vm.runInContext(source.slice(source.indexOf("{",handler)+1,source.indexOf("\n    }",handler)),state)
  assert.equal(calls[before][2],"100-1")
@@ -144,7 +144,7 @@ test("a queued Clear all keeps its own click-time cutoff (requests at 1000 and 2
  clock=2000;state.clearAll()            // click at 2000 while the first runs
  assert.deepEqual(started,["1000"]);assert.equal(state.clearPendingCut,"2000")
  clock=3000                             // the first clear exits at 3000
- const exit=source.indexOf("    onExited: function(code, status) {",source.indexOf("    id: clearProc"))
+ const exit=source.indexOf("    onExited: function (code, status) {",source.indexOf("    id: clearProc"))
  const body=source.slice(source.indexOf("{",exit)+1,source.indexOf("\n    }",exit))
  const proc=state.clearProc;proc._r=false
  const ctx=vm.createContext({code:0,status:0,Date:FakeDate,String,root:state,peer:{call(){}}})

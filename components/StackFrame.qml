@@ -6,7 +6,10 @@ import "../kit"
 // Separate list rows share one card outline while remaining independently virtualized.
 Canvas {
   id: root
-  transform: Scale { origin.x: root.width / 2; xScale: FoamyI18n.rightToLeft ? -1 : 1 }
+  transform: Scale {
+    origin.x: root.width / 2
+    xScale: FoamyI18n.rightToLeft ? -1 : 1
+  }
   property bool first: false
   property bool last: false
   property bool critical: false
@@ -50,9 +53,7 @@ Canvas {
     c.fill()
     var y = root.first ? 1 : 0
     var h = height - y - (root.last ? 1 : 0)
-    shape(1, y, width - 2, h,
-          Math.max(0, top - 1), Math.max(0, top - 1),
-          Math.max(0, bottom - 1), Math.max(0, bottom - 1))
+    shape(1, y, width - 2, h, Math.max(0, top - 1), Math.max(0, top - 1), Math.max(0, bottom - 1), Math.max(0, bottom - 1))
     c.fillStyle = root.fill
     c.fill()
     if (root.critical) {
@@ -60,10 +61,13 @@ Canvas {
       c.fillStyle = root.urgent
       c.beginPath()
       c.moveTo(top, 0)
-      if (top) c.arc(top, top, top, -Math.PI / 2, -Math.PI, true)
+      if (top)
+        c.arc(top, top, top, -Math.PI / 2, -Math.PI, true)
       c.lineTo(0, height - bottom)
-      if (bottom) c.arc(bottom, height - bottom, bottom, Math.PI, Math.PI / 2, true)
-      else c.lineTo(root.leading, height)
+      if (bottom)
+        c.arc(bottom, height - bottom, bottom, Math.PI, Math.PI / 2, true)
+      else
+        c.lineTo(root.leading, height)
       if (bottom) {
         for (var i = 0; i <= 24; i++) {
           var angle = Math.PI / 2 + i * Math.PI / 48

@@ -22,12 +22,17 @@ for name in ["Markup.js", "BrowserIdentity.js"]:
 for name in ["Model.js", "Translations.js"]:
     (app / name).symlink_to(source / name)
 s = (source / "Panel.qml").read_text()
-a = s.index("          delegate: Item {")
-b = s.index(
-    "\n            }\n          }\n        }\n\n        // --------------------------------------------------------- empty",
-    a,
-)
+# The list's delegate object, from "delegate: Item {" to its matching brace
+# (the panel's delegate source has no brace inside a string or comment).
+a = s.index("delegate: Item {")
+depth, b = 0, s.index("{", a)
+while True:
+    depth += {"{": 1, "}": -1}.get(s[b], 0)
+    b += 1
+    if depth == 0:
+        break
 delegate = s[a:b]
+assert delegate.count("{") == delegate.count("}") and "root.activate(entry)" in delegate, delegate
 (app / "shell.qml").write_text(
     """import QtQuick
 import QtTest

@@ -45,8 +45,10 @@ Ui.Panel {
   function open() {
     preparePopup()
     // Build and lay out the list before mapping so the first frame has its final height.
-    if (rowsDirty) rebuild(true)
-    if (list) list.forceLayout()
+    if (rowsDirty)
+      rebuild(true)
+    if (list)
+      list.forceLayout()
     controller.show()
   }
 
@@ -73,7 +75,10 @@ Ui.Panel {
   readonly property bool compact: setting("compact", false)
   readonly property bool useBrowserFavicons: setting("useBrowserFavicons", true)
   readonly property string browserGrouping: setting("browserGrouping", "browser")
-  onBrowserGroupingChanged: { expandedGroups = ({}); rebuild() }
+  onBrowserGroupingChanged: {
+    expandedGroups = ({})
+    rebuild()
+  }
   onUseBrowserFaviconsChanged: rebuild()
   readonly property bool showBody: setting("showBody", true)
   readonly property bool showPreview: setting("showPreview", true)
@@ -81,10 +86,15 @@ Ui.Panel {
   // ------------------------------------------------------------- the service
   //
   readonly property string language: FoamyI18n.language
-  function tr(label, value) { return FoamyI18n.t(label, value) }
+  function tr(label, value) {
+    return FoamyI18n.t(label, value)
+  }
 
   readonly property bool dnd: store ? store.doNotDisturb : false
-  function toggleDnd() { if (store) store.toggleDnd() }
+  function toggleDnd() {
+    if (store)
+      store.toggleDnd()
+  }
 
   property bool editingSettings: false
   property string settingsError: ""
@@ -94,8 +104,7 @@ Ui.Panel {
   readonly property bool popupPluginInstalled: {
     var registry = bar && "pluginRegistry" in bar ? bar.pluginRegistry : null
     // Use the host's manifest registry so a stale settings entry cannot imply installation.
-    return registry && registry.installedPlugins
-      ? !!registry.installedPlugins["foamy.notifications"] : popupSettingsAvailable
+    return registry && registry.installedPlugins ? !!registry.installedPlugins["foamy.notifications"] : popupSettingsAvailable
   }
   property var pendingPreferences: ({})
   property var preferenceActive: null
@@ -103,24 +112,34 @@ Ui.Panel {
   property bool awaitingPeerSave: false
 
   function openSettings() {
-    if (header) header.closeMenu()
+    if (header)
+      header.closeMenu()
     endSearch()
     editingSettings = true
     settingsError = ""
     reloadPopupPreferences()
-    if (settingsPane) settingsPane.resetScroll()
-    Qt.callLater(function() { if (root.opened && root.settingsPane) root.settingsPane.focusBack() })
+    if (settingsPane)
+      settingsPane.resetScroll()
+    Qt.callLater(function () {
+      if (root.opened && root.settingsPane)
+        root.settingsPane.focusBack()
+    })
   }
   function closeSettings() {
     editingSettings = false
-    Qt.callLater(function() { if (root.opened && root.keyCatcher) root.keyCatcher.forceActiveFocus() })
+    Qt.callLater(function () {
+      if (root.opened && root.keyCatcher)
+        root.keyCatcher.forceActiveFocus()
+    })
   }
   function reloadPopupPreferences() {
-    if (!editingSettings || popupSettingsLoading || preferenceActive !== null || !store) return
+    if (!editingSettings || popupSettingsLoading || preferenceActive !== null || !store)
+      return
     popupSettingsLoading = true
-    peer.call("foamy.notifications", "preferences", [], function(ok, output) {
+    peer.call("foamy.notifications", "preferences", [], function (ok, output) {
       try {
-        if (!ok) throw Error("Foamy Notifications is not answering")
+        if (!ok)
+          throw Error("Foamy Notifications is not answering")
         root.applyPopupPreferences(output)
       } catch (error) {
         root.popupSettingsAvailable = false
@@ -132,53 +151,74 @@ Ui.Panel {
   }
   function applyPopupPreferences(raw) {
     var result = JSON.parse(raw)
-    if (!result || !result.settings || typeof result.settings !== "object") throw Error("Invalid settings response")
+    if (!result || !result.settings || typeof result.settings !== "object")
+      throw Error("Invalid settings response")
     var values = {}
-    Preferences.popupFields.forEach(function(field) {
-      if (!Preferences.valid("popups", field.key, result.settings[field.key])) throw Error("Invalid popup setting")
+    Preferences.popupFields.forEach(function (field) {
+      if (!Preferences.valid("popups", field.key, result.settings[field.key]))
+        throw Error("Invalid popup setting")
       values[field.key] = result.settings[field.key]
     })
-    if (result.settings.browserGrouping === "none") values.groupDuplicates = false
+    if (result.settings.browserGrouping === "none")
+      values.groupDuplicates = false
     popupSettingsAvailable = true
     popupSettings = values
     return result
   }
   function savePreference(scope, key, value) {
-    if (!Preferences.valid(scope, key, value)) { settingsError = tr("Invalid setting."); return }
+    if (!Preferences.valid(scope, key, value)) {
+      settingsError = tr("Invalid setting.")
+      return
+    }
     settingsError = ""
     // Serialize edits; collapse queued edits to the same key.
-    pendingPreferences[scope + ":" + key] = {scope:scope,key:key,value:value}
+    pendingPreferences[scope + ":" + key] = {
+      scope: scope,
+      key: key,
+      value: value
+    }
     flushPreferences()
   }
   function flushPreferences() {
-    if (preferenceActive !== null || popupSettingsLoading) return
+    if (preferenceActive !== null || popupSettingsLoading)
+      return
     var keys = Object.keys(pendingPreferences)
-    if (!keys.length) return
+    if (!keys.length)
+      return
     var next = pendingPreferences[keys[0]]
     delete pendingPreferences[keys[0]]
     preferenceActive = next
     if (next.scope === "popups") {
       // Leading space: on FoamyPeerIpc's CLI path `qs ipc` would split a JSON
       // array argument into a list (or read a negative number as an option).
-      peer.call("foamy.notifications", "setPreference", [next.key, " " + JSON.stringify(next.value)], function(ok, output) {
-        if (ok && String(output).trim() === "saving") root.awaitingPeerSave = true
-        else root.finishPreference(false)
+      peer.call("foamy.notifications", "setPreference", [next.key, " " + JSON.stringify(next.value)], function (ok, output) {
+        if (ok && String(output).trim() === "saving")
+          root.awaitingPeerSave = true
+        else
+          root.finishPreference(false)
       })
       return
     }
     var result = Prefs.save(root.bar, root.moduleName, Preferences.centerFields, root.settings, next.key, next.value)
-    if (!result.ok) { finishPreference(false); return }
+    if (!result.ok) {
+      finishPreference(false)
+      return
+    }
     // Under coreutils timeout (its own process group), so a hung save is
     // killed whole, wrapper and children, before the 5 s watchdog below and
     // can't write a rolled-back value later.
-    if (result.command.length) { preferencesSave.command = Prefs.bounded(result.command, 4000); preferencesSave.running = true }
-    else finishPreference(true)
+    if (result.command.length) {
+      preferencesSave.command = Prefs.bounded(result.command, 4000)
+      preferencesSave.running = true
+    } else
+      finishPreference(true)
   }
   // A failed save: the field shows the stored value again and accepts the same
   // number as a fresh attempt ("Try again" must be able to retry it).
   signal preferenceFailed(string scope, string key)
   function finishPreference(ok) {
-    if (!preferenceActive) return
+    if (!preferenceActive)
+      return
     if (!ok) {
       settingsError = tr("Could not save settings. Try again.")
       console.warn("Foamy Notification Center: settings save failed for", preferenceActive.scope, preferenceActive.key)
@@ -186,32 +226,49 @@ Ui.Panel {
     }
     preferenceActive = null
     awaitingPeerSave = false
-    Qt.callLater(function() { root.flushPreferences(); root.reloadPopupPreferences() })
+    Qt.callLater(function () {
+      root.flushPreferences()
+      root.reloadPopupPreferences()
+    })
   }
   Connections {
     target: root.store
     function onPeerPreferencesChanged() {
-      if (!root.awaitingPeerSave) { root.reloadPopupPreferences(); return }
-      peer.call("foamy.notifications", "preferences", [], function(ok, output) {
+      if (!root.awaitingPeerSave) {
+        root.reloadPopupPreferences()
+        return
+      }
+      peer.call("foamy.notifications", "preferences", [], function (ok, output) {
         var result = null
-        try { result = ok ? root.applyPopupPreferences(output) : null } catch (e) { result = null }
-        if (result && result.saving) return
+        try {
+          result = ok ? root.applyPopupPreferences(output) : null
+        } catch (e) {
+          result = null
+        }
+        if (result && result.saving)
+          return
         root.finishPreference(!!result && !result.saveError)
       })
     }
   }
-  FoamyPeerIpc { id: peer }
+  FoamyPeerIpc {
+    id: peer
+  }
   Process {
     id: preferencesSave
     stdout: StdioCollector {}
-    onExited: function(code, status) { root.finishPreference(code === 0 && status === 0) }
+    onExited: function (code, status) {
+      root.finishPreference(code === 0 && status === 0)
+    }
   }
   Timer {
     interval: 5000
     running: root.preferenceActive !== null
     onTriggered: {
-      if (preferencesSave.running) preferencesSave.signal(9)
-      else root.finishPreference(false)
+      if (preferencesSave.running)
+        preferencesSave.signal(9)
+      else
+        root.finishPreference(false)
     }
   }
   FileView {
@@ -219,7 +276,10 @@ Ui.Panel {
     path: Quickshell.env("HOME") + "/.config/omarchy/shell.json"
     watchChanges: true
     printErrors: false
-    onFileChanged: { reload(); root.reloadPopupPreferences() }
+    onFileChanged: {
+      reload()
+      root.reloadPopupPreferences()
+    }
   }
 
   // ------------------------------------------------------------- the store
@@ -231,11 +291,15 @@ Ui.Panel {
 
   onStoreChanged: {
     // Let dependent bindings and the row model finish initializing first.
-    Qt.callLater(function() { root.pushSettings(); root.rebuild() })
+    Qt.callLater(function () {
+      root.pushSettings()
+      root.rebuild()
+    })
   }
 
   function pushSettings() {
-    if (!store) return
+    if (!store)
+      return
     store.keepDays = keepDays
     store.maxItems = maxItems
     store.showPreview = showPreview
@@ -249,16 +313,27 @@ Ui.Panel {
   // on scroll and whenever the content, hasMore or a read changes: collapsed
   // stacks can fit a whole page in the viewport, where atYEnd never changes.
   function pageIfAtEnd() {
-    if (opened && list && list.atYEnd && store && store.hasMore && !store.listing) store.loadMore()
+    if (opened && list && list.atYEnd && store && store.hasMore && !store.listing)
+      store.loadMore()
   }
 
   Connections {
     target: root.store
-    function onHasMoreChanged() { Qt.callLater(root.pageIfAtEnd) }
-    function onListingChanged() { Qt.callLater(root.pageIfAtEnd) }
-    function onEntryAdded(entry) { root.handleEntryAdded(entry) }
-    function onEntriesReset() { root.rebuild() }
-    function onBrowserIconsUpdated() { root.rebuild() }
+    function onHasMoreChanged() {
+      Qt.callLater(root.pageIfAtEnd)
+    }
+    function onListingChanged() {
+      Qt.callLater(root.pageIfAtEnd)
+    }
+    function onEntryAdded(entry) {
+      root.handleEntryAdded(entry)
+    }
+    function onEntriesReset() {
+      root.rebuild()
+    }
+    function onBrowserIconsUpdated() {
+      root.rebuild()
+    }
   }
 
   // -------------------------------------------------------------------- state
@@ -276,7 +351,9 @@ Ui.Panel {
   // What row ages are measured against. A preview sets fixedNow to the mock
   // time its sample was written for, so renders do not drift with the date.
   property double fixedNow: 0
-  function clockNow() { return fixedNow > 0 ? fixedNow : Date.now() }
+  function clockNow() {
+    return fixedNow > 0 ? fixedNow : Date.now()
+  }
   property double now: clockNow()
   onFixedNowChanged: now = clockNow()
 
@@ -296,37 +373,57 @@ Ui.Panel {
 
   function startSearch() {
     searching = true
-    Qt.callLater(function() { if (root.opened && root.searching && search) search.forceActiveFocus() })
+    Qt.callLater(function () {
+      if (root.opened && root.searching && search)
+        search.forceActiveFocus()
+    })
   }
 
   function endSearch() {
     searching = false
     filter = ""
-    if (store) store.searchQuery = ""
-    if (search) { search.text = ""; search.pasteError = "" }
-    Qt.callLater(function() { if (root.opened && keyCatcher) keyCatcher.forceActiveFocus() })
+    if (store)
+      store.searchQuery = ""
+    if (search) {
+      search.text = ""
+      search.pasteError = ""
+    }
+    Qt.callLater(function () {
+      if (root.opened && keyCatcher)
+        keyCatcher.forceActiveFocus()
+    })
   }
 
   Connections {
     target: root.store
-    function onFocusCompleted() { root.close() }
+    function onFocusCompleted() {
+      root.close()
+    }
   }
 
   function remove(key) {
-    if (store) store.remove(key)
+    if (store)
+      store.remove(key)
   }
 
   function clearAll() {
-    if (store) store.clearAll()
+    if (store)
+      store.clearAll()
   }
 
   function handleEntryAdded(entry) {
-    if (!entry || !entry.key) return
-    if (root.opened && store) { store.markSeen(); store.refreshLiveActions() }
+    if (!entry || !entry.key)
+      return
+    if (root.opened && store) {
+      store.markSeen()
+      store.refreshLiveActions()
+    }
     rebuild()
-    if (root.opened && list && list.atYBeginning) Qt.callLater(function() {
-      if (root.opened && list) list.positionViewAtBeginning()
-    })
+    if (root.opened && list && list.atYBeginning)
+      Qt.callLater(function () {
+        if (root.opened && list)
+          list.positionViewAtBeginning()
+      })
   }
 
   // ----------------------------------------------------------------- the list
@@ -339,8 +436,7 @@ Ui.Panel {
   readonly property var search: view ? view.search : null
   readonly property var header: view ? view.header : null
   readonly property var settingsPane: view ? view.settingsPane : null
-  readonly property real listAvailableHeight:
-    Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - (view ? view.chromeHeight : Style.space(80)))
+  readonly property real listAvailableHeight: Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - (view ? view.chromeHeight : Style.space(80)))
   property bool rowsDirty: true
   property var rows: []
   property var expandedGroups: ({})
@@ -353,17 +449,27 @@ Ui.Panel {
 
   function rebuild(forOpening) {
     // The archive and unread count stay live; display groups are needed only while open.
-    if (!root.opened && forOpening !== true) { rowsDirty = true; return }
+    if (!root.opened && forOpening !== true) {
+      rowsDirty = true
+      return
+    }
     rowsDirty = false
     var focused = cursorIndex >= 0 && cursorIndex < rows.length ? rows[cursorIndex].id : ""
     var next = Model.stackRows(entries, expandedGroups, filter, browserGrouping, BrowserIdentity)
-    var index = next.findIndex(function(row) { return row.id === focused })
-    var headers = next.filter(function(row) { return row.kind === "header" })
-    headers.forEach(function(row) {
+    var index = next.findIndex(function (row) {
+      return row.id === focused
+    })
+    var headers = next.filter(function (row) {
+      return row.kind === "header"
+    })
+    headers.forEach(function (row) {
       row.group.favicon = root.useBrowserFavicons && store ? store.faviconSource(row.group.iconEntry) : ""
     })
     rows = next
-    if (useBrowserFavicons && store) store.warmBrowserIcons(headers.map(function(row) { return row.group.iconEntry }).filter(Boolean))
+    if (useBrowserFavicons && store)
+      store.warmBrowserIcons(headers.map(function (row) {
+        return row.group.iconEntry
+      }).filter(Boolean))
     cursorIndex = index >= 0 ? index : Math.min(cursorIndex, rows.length - 1)
   }
 
@@ -375,43 +481,65 @@ Ui.Panel {
   }
 
   function removeGroup(group) {
-    if (store) store.removeMany(group.entries.map(function(entry) { return entry.key }))
+    if (store)
+      store.removeMany(group.entries.map(function (entry) {
+        return entry.key
+      }))
   }
 
   function moveCursor(dx, dy) {
     keyboardNavigation = true
-    if (dy < 0 && cursorIndex <= 0) { cursorOnSettings = true; cursorIndex = -1; return }
+    if (dy < 0 && cursorIndex <= 0) {
+      cursorOnSettings = true
+      cursorIndex = -1
+      return
+    }
     if (cursorOnSettings) {
-      if (dy > 0 && rows.length > 0) { cursorOnSettings = false; cursorIndex = 0 }
-      else return
-    } else if (rows.length === 0) { cursorOnSettings = true; return }
-    else if (dy) {
+      if (dy > 0 && rows.length > 0) {
+        cursorOnSettings = false
+        cursorIndex = 0
+      } else
+        return
+    } else if (rows.length === 0) {
+      cursorOnSettings = true
+      return
+    } else if (dy) {
       cursorIndex = Math.max(0, Math.min(rows.length - 1, cursorIndex + dy))
       cursorDismiss = false
     } else {
-      if (cursorIndex < 0) cursorIndex = 0
+      if (cursorIndex < 0)
+        cursorIndex = 0
       cursorDismiss = FoamyI18n.rightToLeft ? dx < 0 : dx > 0
     }
-    if (list) list.positionViewAtIndex(cursorIndex, ListView.Contain)
+    if (list)
+      list.positionViewAtIndex(cursorIndex, ListView.Contain)
   }
 
   function activateCursor(removeOnly) {
     if (cursorOnSettings) {
-      if (removeOnly) return
+      if (removeOnly)
+        return
       // Settings lives in the ⋯ menu while the header overflows (always, with
       // search, clear and the menu); open it with the first entry selected.
-      if (header && header.overflowing) header.openMenu(true)
-      else openSettings()
+      if (header && header.overflowing)
+        header.openMenu(true)
+      else
+        openSettings()
       return
     }
-    if (cursorIndex < 0 || cursorIndex >= rows.length) return
+    if (cursorIndex < 0 || cursorIndex >= rows.length)
+      return
     var row = rows[cursorIndex]
     if (removeOnly || cursorDismiss) {
-      if (row.kind === "header") removeGroup(row.group)
-      else remove(row.entry.key)
+      if (row.kind === "header")
+        removeGroup(row.group)
+      else
+        remove(row.entry.key)
     } else if (row.kind === "header") {
-      if (row.group.entries.length > 1) toggleGroup(row.group.key)
-    } else activate(row.entry)
+      if (row.group.entries.length > 1)
+        toggleGroup(row.group.key)
+    } else
+      activate(row.entry)
   }
 
   onFilterChanged: rebuild()
@@ -419,16 +547,20 @@ Ui.Panel {
   // --------------------------------------------------------------- activating
 
   function activate(row) {
-    if (!row || clickAction === "Nothing") return
-    if (store) store.focusNotification(row, clickAction === "Auto")
+    if (!row || clickAction === "Nothing")
+      return
+    if (store)
+      store.focusNotification(row, clickAction === "Auto")
   }
 
   // A button Foamy Notifications can still press (number keys on the cursor's row).
   function pressAction(row, index) {
-    if (store) store.pressAction(row, index)
+    if (store)
+      store.pressAction(row, index)
   }
   function pressCursorAction(index) {
-    if (cursorOnSettings || cursorIndex < 0 || cursorIndex >= rows.length || rows[cursorIndex].kind !== "message") return
+    if (cursorOnSettings || cursorIndex < 0 || cursorIndex >= rows.length || rows[cursorIndex].kind !== "message")
+      return
     pressAction(rows[cursorIndex].entry, index)
   }
 
@@ -438,13 +570,18 @@ Ui.Panel {
 
   onOpenedChanged: {
     // Action feedback belongs to this panel visit, not the persistent archive.
-    if (store) store.focusError = ""
+    if (store)
+      store.focusError = ""
     if (!opened) {
-      if (header) header.closeMenu()
+      if (header)
+        header.closeMenu()
       editingSettings = false
       searching = false
       filter = ""
-      if (search) { search.text = ""; search.pasteError = "" }
+      if (search) {
+        search.text = ""
+        search.pasteError = ""
+      }
       return
     }
     now = clockNow()
@@ -452,11 +589,15 @@ Ui.Panel {
     cursorOnSettings = false
     cursorIndex = -1
     cursorDismiss = false
-    if (store) store.load()
-    if (store) store.refreshLiveActions()
+    if (store)
+      store.load()
+    if (store)
+      store.refreshLiveActions()
     readMark = lastSeen
-    if (store) store.markSeen()
-    if (rowsDirty) rebuild()
+    if (store)
+      store.markSeen()
+    if (rowsDirty)
+      rebuild()
   }
 
   // --------------------------------------------------------------------- bar
@@ -490,14 +631,16 @@ Ui.Panel {
     active: root.badge === "Highlight" && root.unread > 0
     activeColor: Commons.Color.accent
     tooltipText: {
-      if (root.dnd) return root.unread > 0
-        ? root.tr("Silenced · %1 new", root.unread) : root.tr("Notifications silenced")
-      if (root.unread === 1) return root.tr("1 new notification")
-      if (root.unread > 1) return root.tr("%1 new notifications", root.unread)
+      if (root.dnd)
+        return root.unread > 0 ? root.tr("Silenced · %1 new", root.unread) : root.tr("Notifications silenced")
+      if (root.unread === 1)
+        return root.tr("1 new notification")
+      if (root.unread > 1)
+        return root.tr("%1 new notifications", root.unread)
       return root.tr("Notifications")
     }
 
-    onPressed: function(b) {
+    onPressed: function (b) {
       // Right-click silences without opening anything, because deciding you
       // want quiet and wanting to read the backlog are opposite impulses.
       if (b === Qt.RightButton) {
@@ -548,8 +691,8 @@ Ui.Panel {
     color: Commons.Color.accent
 
     Text {
-      textFormat: Text.PlainText
       id: countText
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       // Past ninety-nine the number has stopped being information and the
       // badge is only saying "a lot", which it can say in three characters.
@@ -572,8 +715,10 @@ Ui.Panel {
   Connections {
     target: root
     function onOpenedChanged() {
-      if (root.opened) root.preparePopup()
-      else popupUnload.restart()
+      if (root.opened)
+        root.preparePopup()
+      else
+        popupUnload.restart()
     }
   }
   Timer {
@@ -606,13 +751,14 @@ Ui.Panel {
     open: root.opened
     focusTarget: root.editingSettings && root.settingsPane ? root.settingsPane.backTarget : bodyItem
     contentWidth: popup.fittedContentWidth(Style.space(root.panelWidth))
-    contentHeight: Math.round(Math.min(
-      Math.max(popup.verticalContentInset, Math.max(popup.bodyImplicitHeight, popup.menuReserve) + popup.verticalContentInset),
-      popup.usableCardHeight))
+    contentHeight: Math.round(Math.min(Math.max(popup.verticalContentInset, Math.max(popup.bodyImplicitHeight, popup.menuReserve) + popup.verticalContentInset), popup.usableCardHeight))
 
     Behavior on contentHeight {
       enabled: root.opened
-      NumberAnimation { duration: FoamyMotion.slider; easing.type: Easing.OutCubic }
+      NumberAnimation {
+        duration: FoamyMotion.slider
+        easing.type: Easing.OutCubic
+      }
     }
 
     // The host's own geometry: on 4.5 the stock KeyboardPanel measures the bar
@@ -628,23 +774,29 @@ Ui.Panel {
         property alias search: search
         property alias header: header
         property alias settingsPane: settingsPane
-        readonly property real chromeHeight: header.height + (searchRow.visible ? searchRow.height + content.spacing : 0)
-          + (errorLine.visible ? errorLine.implicitHeight + content.spacing : 0) + content.spacing + Style.space(10)
+        readonly property real chromeHeight: header.height + (searchRow.visible ? searchRow.height + content.spacing : 0) + (errorLine.visible ? errorLine.implicitHeight + content.spacing : 0) + content.spacing + Style.space(10)
         implicitHeight: root.editingSettings ? settingsPane.implicitHeight : content.implicitHeight + Style.space(10)
         // While the search field or a menu has the keys, or Settings is open, this stands aside.
         blocked: search.inputActiveFocus || root.editingSettings || header.menuOpen
         onCloseRequested: root.searching ? root.endSearch() : root.close()
-        onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy) }
+        onMoveRequested: function (dx, dy) {
+          root.moveCursor(dx, dy)
+        }
         onActivateRequested: root.activateCursor(false)
         onDeleteRequested: root.activateCursor(true)
-        onTabRequested: function(direction) { root.switchPanel(direction) }
-        onTextKey: function(text) {
+        onTabRequested: function (direction) {
+          root.switchPanel(direction)
+        }
+        onTextKey: function (text) {
           // "/" searches, "s" opens Settings and 1–9 press the cursor row's
           // buttons; no other key starts anything, so the panel never swallows
           // what you were typing underneath.
-          if (text === "/") root.startSearch()
-          else if (text === "s") root.openSettings()
-          else if (/^[1-9]$/.test(text)) root.pressCursorAction(Number(text) - 1)
+          if (text === "/")
+            root.startSearch()
+          else if (text === "s")
+            root.openSettings()
+          else if (/^[1-9]$/.test(text))
+            root.pressCursorAction(Number(text) - 1)
         }
 
         Column {
@@ -668,8 +820,14 @@ Ui.Panel {
             menuHasCursor: root.keyboardNavigation && root.cursorOnSettings
             settingsHasCursor: root.keyboardNavigation && root.cursorOnSettings
             onSettingsClicked: root.openSettings()
-            onSettingsHovered: function(hovered) { if (hovered) root.keyboardNavigation = false }
-            onMenuHovered: function(hovered) { if (hovered) root.keyboardNavigation = false }
+            onSettingsHovered: function (hovered) {
+              if (hovered)
+                root.keyboardNavigation = false
+            }
+            onMenuHovered: function (hovered) {
+              if (hovered)
+                root.keyboardNavigation = false
+            }
             trailing: [
               FoamyAction {
                 objectName: "notificationSearchButton"
@@ -703,10 +861,30 @@ Ui.Panel {
                 // Hidden, not disabled, where the daemon has no timed snooze (stock 4.5-rc2).
                 visible: !!root.store && root.store.snoozeAvailable
                 enabled: visible && !root.store.snoozeBusy
-                FoamyMenuItem { objectName: "notificationSnooze30"; text: root.tr("30 minutes"); iconName: "clock"; onTriggered: root.store.snoozeAll(30) }
-                FoamyMenuItem { objectName: "notificationSnooze60"; text: root.tr("1 hour"); iconName: "clock"; onTriggered: root.store.snoozeAll(60) }
-                FoamyMenuItem { objectName: "notificationSnooze240"; text: root.tr("4 hours"); iconName: "clock"; onTriggered: root.store.snoozeAll(240) }
-                FoamyMenuItem { objectName: "notificationSnoozeResume"; text: root.tr("Resume snoozed notifications"); iconName: "bell-ring"; onTriggered: root.store.snoozeAll(0) }
+                FoamyMenuItem {
+                  objectName: "notificationSnooze30"
+                  text: root.tr("30 minutes")
+                  iconName: "clock"
+                  onTriggered: root.store.snoozeAll(30)
+                }
+                FoamyMenuItem {
+                  objectName: "notificationSnooze60"
+                  text: root.tr("1 hour")
+                  iconName: "clock"
+                  onTriggered: root.store.snoozeAll(60)
+                }
+                FoamyMenuItem {
+                  objectName: "notificationSnooze240"
+                  text: root.tr("4 hours")
+                  iconName: "clock"
+                  onTriggered: root.store.snoozeAll(240)
+                }
+                FoamyMenuItem {
+                  objectName: "notificationSnoozeResume"
+                  text: root.tr("Resume snoozed notifications")
+                  iconName: "bell-ring"
+                  onTriggered: root.store.snoozeAll(0)
+                }
               }
             ]
           }
@@ -727,10 +905,16 @@ Ui.Panel {
               enabled: root.searching
               placeholderText: root.tr("Search")
               translate: root.tr
-              onTextChanged: { root.filter = text; if (root.store) root.store.searchQuery = text.trim().slice(0, 256) }
-              onKeyPressed: function(event) {
-                if (event.key === Qt.Key_Escape) { event.accepted = true; root.endSearch() }
-                else if (event.key === Qt.Key_Down) {
+              onTextChanged: {
+                root.filter = text
+                if (root.store)
+                  root.store.searchQuery = text.trim().slice(0, 256)
+              }
+              onKeyPressed: function (event) {
+                if (event.key === Qt.Key_Escape) {
+                  event.accepted = true
+                  root.endSearch()
+                } else if (event.key === Qt.Key_Down) {
                   event.accepted = true
                   keyCatcher.forceActiveFocus()
                   root.cursorIndex = -1
@@ -768,141 +952,155 @@ Ui.Panel {
           }
 
           // ------------------------------------------------------ list
-        Loader {
-          id: listLoader
-          width: parent.width
-          active: true
-          visible: (root.rows.length > 0 || (item && item.contentHeight > 0))
-          // Keep the lightweight list; detach its model to release delegates after fade-out.
-          sourceComponent: Component {
-            NotificationList {
-              id: list
-              width: parent.width
-              // Construct only visible rows when restoring the detached model.
-              cacheBuffer: 0
-              // Paging (root.pageIfAtEnd): reaching the end, or content that
-              // already fits, loads the next page.
-              onAtYEndChanged: Qt.callLater(root.pageIfAtEnd)
-              onContentHeightChanged: Qt.callLater(root.pageIfAtEnd)
-              scrollbarWidth: Style.space(6)
-              scrollbarInset: Style.space(2)
-              // The flattened model keeps expanded stacks within the same virtualized list.
-              readonly property int cap: root.listHeight > 0
-                ? Math.min(Style.space(root.listHeight), root.listAvailableHeight) : root.listAvailableHeight
+          Loader {
+            id: listLoader
+            width: parent.width
+            active: true
+            visible: (root.rows.length > 0 || (item && item.contentHeight > 0))
+            // Keep the lightweight list; detach its model to release delegates after fade-out.
+            sourceComponent: Component {
+              NotificationList {
+                id: list
+                width: parent.width
+                // Construct only visible rows when restoring the detached model.
+                cacheBuffer: 0
+                // Paging (root.pageIfAtEnd): reaching the end, or content that
+                // already fits, loads the next page.
+                onAtYEndChanged: Qt.callLater(root.pageIfAtEnd)
+                onContentHeightChanged: Qt.callLater(root.pageIfAtEnd)
+                scrollbarWidth: Style.space(6)
+                scrollbarInset: Style.space(2)
+                // The flattened model keeps expanded stacks within the same virtualized list.
+                readonly property int cap: root.listHeight > 0 ? Math.min(Style.space(root.listHeight), root.listAvailableHeight) : root.listAvailableHeight
 
-              implicitHeight: Math.min(Math.max(contentHeight, root.rows.length > 0 ? Style.space(100) : 0), cap)
-              visible: root.rows.length > 0 || contentHeight > 0
-              rows: root.rows
-              contentActive: root.popupContentActive
-              animateChanges: root.opened
-              entranceDistance: Style.space(8)
-              spacing: 0
+                implicitHeight: Math.min(Math.max(contentHeight, root.rows.length > 0 ? Style.space(100) : 0), cap)
+                visible: root.rows.length > 0 || contentHeight > 0
+                rows: root.rows
+                contentActive: root.popupContentActive
+                animateChanges: root.opened
+                entranceDistance: Style.space(8)
+                spacing: 0
 
-              delegate: Item {
-                id: delegateRoot
-                required property string rowId
-                // Qt can deliver removal after the source map has already advanced.
-                property var retainedData: null
-                property var modelData: list.rowsById[rowId] || retainedData
-                onModelDataChanged: if (modelData) retainedData = modelData
-                required property int index
-                property real entranceOffset: 0
-                property bool retired: false
-                enabled: !retired
-                transform: Translate { y: delegateRoot.entranceOffset }
-                ListView.delayRemove: root.popupContentActive && exitMotion.running
-                ListView.onRemove: {
-                  // An invisible window does not advance row exit animations.
-                  if (!root.popupContentActive) return
-                  // Freeze departing content until Qt finishes its removal transition.
-                  modelData = modelData
-                  retired = true
-                  exitMotion.start()
-                }
-                SequentialAnimation {
-                  id: exitMotion
-                  NumberAnimation { target: delegateRoot; property: "opacity"; to: 0; duration: FoamyMotion.duration(120); easing.type: Easing.OutCubic }
-                  // Let ListView lay out the shrinking space, including its scroll extent.
-                  NumberAnimation { target: delegateRoot; property: "height"; to: 0; duration: FoamyMotion.duration(140); easing.type: Easing.OutCubic }
-                }
-                width: list.width
-                height: rowLoader.implicitHeight
-
-                Loader {
-                  id: rowLoader
-                  // ListView positions delegates; inset their content instead of the delegate itself.
-                  x: Style.space(14)
-                  width: parent.width - Style.space(28)
-                  sourceComponent: delegateRoot.modelData.kind === "header" ? headerDelegate : messageDelegate
-                }
-                Component {
-                  id: headerDelegate
-                  NotificationStackHeader {
-                    compact: root.compact
-                    group: delegateRoot.modelData.group
-                    expanded: delegateRoot.modelData.expanded
-                    language: root.language
-                    now: root.now
-                    readMark: root.readMark
-                    foreground: root.foreground
-                    fontFamily: root.fontFamily
-                    hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
-                    dismissHasCursor: hasCursor && root.cursorDismiss
-                    onPointerUsed: root.keyboardNavigation = false
-                    onToggleRequested: root.toggleGroup(group.key)
-                    onRemoveRequested: root.removeGroup(group)
+                delegate: Item {
+                  id: delegateRoot
+                  required property string rowId
+                  // Qt can deliver removal after the source map has already advanced.
+                  property var retainedData: null
+                  property var modelData: list.rowsById[rowId] || retainedData
+                  onModelDataChanged: if (modelData)
+                    retainedData = modelData
+                  required property int index
+                  property real entranceOffset: 0
+                  property bool retired: false
+                  enabled: !retired
+                  transform: Translate {
+                    y: delegateRoot.entranceOffset
                   }
-                }
-                Component {
-                  id: messageDelegate
-                  NotificationRow {
-                    compact: root.compact
-                    entry: delegateRoot.modelData.entry
-                    first: delegateRoot.modelData.first
-                    last: delegateRoot.modelData.last
-                    layered: delegateRoot.modelData.layered
-                    expanded: delegateRoot.modelData.expanded
-                    groupCritical: delegateRoot.modelData.group.critical
-                    language: root.language
-                    now: root.now
-                    showBody: root.showBody
-                    showPreview: root.showPreview
-                    foreground: root.foreground
-                    fontFamily: root.fontFamily
-                    hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
-                    dismissHasCursor: hasCursor && root.cursorDismiss
-                    onPointerUsed: root.keyboardNavigation = false
-                    actions: root.store && root.store.liveActions[entry.key] ? root.store.liveActions[entry.key] : []
-                    actionsEnabled: !!root.store && !root.store.pressingAction
-                    onClicked: root.activate(entry)
-                    onActionRequested: function(index) { root.pressAction(entry, index) }
-                    onRemoveRequested: root.remove(entry.key)
+                  ListView.delayRemove: root.popupContentActive && exitMotion.running
+                  ListView.onRemove: {
+                    // An invisible window does not advance row exit animations.
+                    if (!root.popupContentActive)
+                      return
+                    // Freeze departing content until Qt finishes its removal transition.
+                    modelData = modelData
+                    retired = true
+                    exitMotion.start()
+                  }
+                  SequentialAnimation {
+                    id: exitMotion
+                    NumberAnimation {
+                      target: delegateRoot
+                      property: "opacity"
+                      to: 0
+                      duration: FoamyMotion.duration(120)
+                      easing.type: Easing.OutCubic
+                    }
+                    // Let ListView lay out the shrinking space, including its scroll extent.
+                    NumberAnimation {
+                      target: delegateRoot
+                      property: "height"
+                      to: 0
+                      duration: FoamyMotion.duration(140)
+                      easing.type: Easing.OutCubic
+                    }
+                  }
+                  width: list.width
+                  height: rowLoader.implicitHeight
+
+                  Loader {
+                    id: rowLoader
+                    // ListView positions delegates; inset their content instead of the delegate itself.
+                    x: Style.space(14)
+                    width: parent.width - Style.space(28)
+                    sourceComponent: delegateRoot.modelData.kind === "header" ? headerDelegate : messageDelegate
+                  }
+                  Component {
+                    id: headerDelegate
+                    NotificationStackHeader {
+                      compact: root.compact
+                      group: delegateRoot.modelData.group
+                      expanded: delegateRoot.modelData.expanded
+                      language: root.language
+                      now: root.now
+                      readMark: root.readMark
+                      foreground: root.foreground
+                      fontFamily: root.fontFamily
+                      hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
+                      dismissHasCursor: hasCursor && root.cursorDismiss
+                      onPointerUsed: root.keyboardNavigation = false
+                      onToggleRequested: root.toggleGroup(group.key)
+                      onRemoveRequested: root.removeGroup(group)
+                    }
+                  }
+                  Component {
+                    id: messageDelegate
+                    NotificationRow {
+                      compact: root.compact
+                      entry: delegateRoot.modelData.entry
+                      first: delegateRoot.modelData.first
+                      last: delegateRoot.modelData.last
+                      layered: delegateRoot.modelData.layered
+                      expanded: delegateRoot.modelData.expanded
+                      groupCritical: delegateRoot.modelData.group.critical
+                      language: root.language
+                      now: root.now
+                      showBody: root.showBody
+                      showPreview: root.showPreview
+                      foreground: root.foreground
+                      fontFamily: root.fontFamily
+                      hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
+                      dismissHasCursor: hasCursor && root.cursorDismiss
+                      onPointerUsed: root.keyboardNavigation = false
+                      actions: root.store && root.store.liveActions[entry.key] ? root.store.liveActions[entry.key] : []
+                      actionsEnabled: !!root.store && !root.store.pressingAction
+                      onClicked: root.activate(entry)
+                      onActionRequested: function (index) {
+                        root.pressAction(entry, index)
+                      }
+                      onRemoveRequested: root.remove(entry.key)
+                    }
                   }
                 }
               }
             }
           }
-        }
 
-        // --------------------------------------------------------- empty
+          // --------------------------------------------------------- empty
 
-        Text {
-          textFormat: Text.PlainText
-          x: FoamyStyle.padding
-          width: parent.width - FoamyStyle.padding * 2
-          visible: root.rows.length === 0 && (!listLoader.item || listLoader.item.contentHeight <= 0)
-          horizontalAlignment: Text.AlignHCenter
-          topPadding: Style.space(22)
-          bottomPadding: Style.space(22)
-          text: !root.loaded ? root.tr("Reading the archive…")
-              : root.filter !== "" ? root.tr("Nothing matches “%1”", root.filter)
-              : root.tr("Nothing has come in yet")
-          wrapMode: Text.WordWrap
-          font.family: root.fontFamily
-          font.pixelSize: FoamyStyle.font.bodySmall
-          color: FoamyPalette.mutedText
-        }
-
+          Text {
+            textFormat: Text.PlainText
+            x: FoamyStyle.padding
+            width: parent.width - FoamyStyle.padding * 2
+            visible: root.rows.length === 0 && (!listLoader.item || listLoader.item.contentHeight <= 0)
+            horizontalAlignment: Text.AlignHCenter
+            topPadding: Style.space(22)
+            bottomPadding: Style.space(22)
+            text: !root.loaded ? root.tr("Reading the archive…") : root.filter !== "" ? root.tr("Nothing matches “%1”", root.filter) : root.tr("Nothing has come in yet")
+            wrapMode: Text.WordWrap
+            font.family: root.fontFamily
+            font.pixelSize: FoamyStyle.font.bodySmall
+            color: FoamyPalette.mutedText
+          }
         }
 
         FoamySettingsPage {
@@ -926,10 +1124,14 @@ Ui.Panel {
             loading: root.popupSettingsLoading
             saving: root.preferenceActive !== null
             page: settingsPane
-            onSave: function(scope, key, value) { root.savePreference(scope, key, value) }
+            onSave: function (scope, key, value) {
+              root.savePreference(scope, key, value)
+            }
             Connections {
               target: root
-              function onPreferenceFailed(scope, key) { settingsFields.saveFailed(scope, key) }
+              function onPreferenceFailed(scope, key) {
+                settingsFields.saveFailed(scope, key)
+              }
             }
           }
         }

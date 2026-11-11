@@ -63,5 +63,5 @@ test('a failed save is reported to the settings fields so the same number can be
   ctx.preferenceActive = { scope: 'center', key: 'maxItems' }; ctx.finishPreference(true)
   assert.deepEqual(failed, ['center:keepDays'])
   // The panel's settings page forwards it to SettingsPane.saveFailed (runtime: tests/settings-number.py).
-  assert.match(panel, /function onPreferenceFailed\(scope, key\) \{ settingsFields\.saveFailed\(scope, key\) \}/)
+  assert.match(panel, /function onPreferenceFailed\(scope, key\) \{\s*settingsFields\.saveFailed\(scope, key\)\s*\}/)
 })
