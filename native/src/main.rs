@@ -35,7 +35,8 @@
 //!   busy"; their work, once they hold it, is not cut short. Every other
 //!   command waits for the lock as long as it takes.
 //! - `seen [STAMP]` → `{"ok":true,"seen":<stamp>}` (reads, or writes
-//!   `STAMP\n`); `unread` → `{"ok":true,"unread":N}`
+//!   `STAMP\n`); errors "seen must be a millisecond timestamp", "could not
+//!   save seen"; `unread` → `{"ok":true,"unread":N}`
 //! - `seed [N]` → `{"ok":true,"seeded":N}`; `backfill` →
 //!   `{"ok":true,"filled":N}`; `prune` → `{"ok":true,"pruned":true}`
 //! - `watch` → archived rows (each the row's own line) and events, one per
@@ -248,7 +249,12 @@ fn run(args: Vec<String>) -> ExitCode {
                     {
                         fail("seen must be a millisecond timestamp");
                     }
-                    let _ = store.set_seen(stamp);
+                    // A stamp that never reached disk is lost at the next
+                    // start (the badge counts seen rows as new again), so
+                    // the caller hears it failed instead of `ok`.
+                    if store.set_seen(stamp).is_err() {
+                        fail("could not save seen");
+                    }
                     print_line(&format!("{{\"ok\":true,\"seen\":{stamp}}}"));
                 }
                 None => print_line(&format!("{{\"ok\":true,\"seen\":{}}}", store.seen())),

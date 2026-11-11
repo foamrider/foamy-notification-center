@@ -276,6 +276,15 @@ test('a clear whose clear line cannot be written fails and leaves the archive as
  assert.deepEqual(JSON.parse(r.stdout),{ok:false,error:'could not clear notifications'})
  assert.equal(fs.readFileSync(archive,'utf8'),before)
 })
+test('a seen stamp that cannot be written fails instead of answering ok',t=>{
+ // A stamp lost on disk makes the badge count already-seen rows as new after
+ // the next start, so the write's failure must reach the caller.
+ const f=fixture(t);f.run('seen','5')
+ fs.rmSync(path.join(f.store,'seen'));fs.mkdirSync(path.join(f.store,'seen'))
+ const r=helper.spawnSync(['seen','1730000000123'],{env:f.env,encoding:'utf8',timeout:5000})
+ assert.equal(r.status,1,r.stdout)
+ assert.deepEqual(JSON.parse(r.stdout),{ok:false,error:'could not save seen'})
+})
 test('a rewatch after a source directory appears keeps its pruned events',async t=>{
  const f=fixture(t),late=path.join(f.dir,'late','popups'),now=Date.now()
  const env={...f.env,NC_SOURCE:'foamy',NC_MAX_ITEMS:'2',NC_SRC_DIR:late,NC_SRC_HISTORY:path.join(f.dir,'late','history')}
