@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import qs.Commons
 import qs.Commons as Commons
-import qs.Ui
 // Not "Translations": 4.5 qs.Commons has a Translations type, and the clash breaks loading.
 import "../Translations.js" as CenterText
 import "../kit"

@@ -1,8 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
-import qs.Commons
-import qs.Commons as Commons
 import "Preferences.js" as Preferences
 import "kit"
 
