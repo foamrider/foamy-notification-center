@@ -1,4 +1,4 @@
-# foamy-kit 0.8.1 98bd9e4430551129a6f4c309ee8ba59b66514db5ca1d4c5b7151ec308f6d632b — do not edit; change foamy-kit and run sync
+# foamy-kit 0.9.0 98bd9e4430551129a6f4c309ee8ba59b66514db5ca1d4c5b7151ec308f6d632b — do not edit; change foamy-kit and run sync
 # Rebuilds this plugin's native helper from source on a GitHub-hosted runner
 # and compares it byte for byte with the committed bin/<arch>/<binary>.
 #

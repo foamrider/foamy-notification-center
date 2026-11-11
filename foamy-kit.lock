@@ -1,10 +1,11 @@
 # foamy-kit.lock: written by foamy-kit sync.sh; do not edit.
 # Hashes are of each file's body (the file without its stamp line);
-# notices are hashed whole. tests/kit-check.sh verifies them.
-version 0.8.1
-source 049fd989c0b0
+# notices and REVIEW.md are hashed whole. tests/kit-check.sh verifies them.
+version 0.9.0
+source 6b57e4c651ec
 components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyPopup,FoamyPrefs,FoamySettings,FoamyStyle,FoamyWheelScroll,SafeTextField
 98bd9e4430551129a6f4c309ee8ba59b66514db5ca1d4c5b7151ec308f6d632b  .github/workflows/verify-native.yml
+57b94f5ac808ce341f7cbcc82ad3a3b4cbaf8aecb570a3249d5dd3691ed9bcb4  REVIEW.md
 31637cf414fddfbc7c18c7d107b4c9a77801568fd78ebb8212791fb66de476a9  kit/FoamyAction.qml
 4488b3dbaa2b0fab78fb66dea979e57bcc0f30e76e6443bb4a0f031fffc44709  kit/FoamyCursor.qml
 322db103ce6d6476aac66858d421c75258365a5a2017188906cce61c8b1610ee  kit/FoamyCursorSurface.qml
@@ -41,7 +42,7 @@ b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57  kit/LICENSE-LU
 c741d6fcac65bfb155c54c3933addc244163c74642ceae4a28b68cec16367abf  kit/SafeTextField.qml
 5084c8e33fd38e0ba57b1cf2b732cd04a4985d714583f7445e45419d95ae3118  kit/clipboard.sh
 31cd6228f43b6b189e993ba517cbf8f18c4ba2681a4e71be49b853a39d6114ba  kit/native/build-native.sh
-4ddafaa0e228ff4d5298740369ca5afb397cabc50fb50e0660a05b184d540616  kit/native/native.py
+2003384e902a522533e61943c25b8e148d38fcef6442b9f61db7a69e71823905  kit/native/native.py
 90b1a10f5f5005c94031f36fef0ad3d8e705cf4e13372dd8362ef4579e0a93df  kit/node-loader.cjs
 dbd237778c3ec2fd8ac78b585dfc01e883d8617e0bddd47dd92a15be0bd79d11  kit/qmldir
 a9b3009e14bc6ada2e83c131678566268d4fd987891925fd75739a61912a36f7  kit/rust/foamy-helper/Cargo.toml
@@ -62,4 +63,4 @@ b5f018d5c973f1115da2ae6c35c7eb8700e6cc24d97cb7b917a04ca05560d45c  kit/rust/foamy
 1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa  kit/rust/foamy-helper/src/tls.rs
 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e  rust-toolchain.toml
-b245f22fb02e191f3ce0f3d7d44050bbfde33a68caf86c3fa745260ecbaed322  tests/kit-check.sh
+7e5e729a9eabccc7f573ad026e08a2c14ffbdd6fd2802fe7af434dd95f746994  tests/kit-check.sh

@@ -1,5 +1,5 @@
 .pragma library
-// foamy-kit 0.8.1 7836f63f858f18559db0cef11b66ff46098192247fa1a0a80bf0a7c396698f13 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 7836f63f858f18559db0cef11b66ff46098192247fa1a0a80bf0a7c396698f13 — do not edit; change foamy-kit and run sync
 
 // Inline widget settings: schema validation and saving, for every plugin.
 //

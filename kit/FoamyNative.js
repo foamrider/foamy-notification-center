@@ -1,5 +1,5 @@
 .pragma library
-// foamy-kit 0.8.1 16b017e91ba960a867a1c5cc056f7f8d7bad07c07722714b32765d7c6d53920a — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 16b017e91ba960a867a1c5cc056f7f8d7bad07c07722714b32765d7c6d53920a — do not edit; change foamy-kit and run sync
 // FoamyNative: launch a plugin's bundled native helper, bin/<arch>/<name>.
 //
 //   import "kit/FoamyNative.js" as FoamyNative
