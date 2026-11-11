@@ -93,7 +93,7 @@ Item {
   //
   // Contract v2 with foamy.notifications (README "Foamy Notifications contract"):
   // its file locations come from `storeInfo` over IPC; they are read-only here.
-  // Without Foamy the source is stock Omarchy (4.0 files or 4.5 arrays).
+  // Without Foamy the source is stock Omarchy's live/history arrays.
   property string sourceKind: ""
   property var sourceInfo: ({})
   FoamyPeerIpc { id: peer }
@@ -108,7 +108,7 @@ Item {
         root.useSource("foamy", info)
         return
       }
-      // An older Foamy answers ping but has no storeInfo: its 4.0-layout files.
+      // An older Foamy answers ping but has no storeInfo: its per-file layout.
       peer.call("foamy.notifications", "ping", [], function(pinged, answer) {
         root.useSource(pinged && String(answer).trim() === "ok" ? "legacy" : "stock", {})
       })
@@ -147,7 +147,7 @@ Item {
       env.NC_HANDLED = String(root.sourceInfo.handled || "")
       env.NC_STATE_FILE = String(root.sourceInfo.state || "")
     } else if (root.sourceKind === "legacy") {
-      // Foamy before contract v2 kept the 4.0 layout under XDG_STATE_HOME.
+      // Foamy before contract v2 kept one file per notification under XDG_STATE_HOME.
       var state = Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state"
       env.NC_SRC_DIR = state + "/omarchy/notifications"
       env.NC_STATE_FILE = state + "/omarchy/notifications.json"
@@ -378,7 +378,7 @@ Item {
 
   // Foamy releases callbacks and drops its own copies; we never delete its files.
   // Keys go to Foamy 100 at a time, one call in flight (FoamyPeerIpc runs at
-  // most 8 CLI calls on 4.0). Pending keys are kept, deduplicated and compacted
+  // most 8 CLI calls at once). Pending keys are kept, deduplicated and compacted
   // into full batches; the in-flight batch is removed only when Foamy answers
   // "ok", and a failed one is retried. These keys are already gone from the
   // archive, so no later prune would ask again. The bound (50,000 keys) is far
@@ -454,7 +454,7 @@ Item {
   readonly property bool snoozeBusy: snoozeProc.running
   property string snoozeError: ""
 
-  // Capability, not version: stock 4.5-rc2 and 4.0 have no `snoozes`, so the menu is hidden there.
+  // Capability, not version: stock 4.5-rc2 has no `snoozes`, so the menu is hidden there.
   function snoozeAll(minutes) {
     if (!snoozeAvailable || snoozeProc.running) return
     snoozeError = ""
@@ -484,7 +484,7 @@ Item {
       try {
         var value = JSON.parse(snoozeProbeOutput.text)
         root.snoozeAvailable = value !== null && typeof value === "object"
-      } catch (e) { /* Stock 4.0 has no timed snooze; its DND control remains available. */ }
+      } catch (e) { /* No timed snooze (stock 4.5-rc2); its DND control remains available. */ }
     }
   }
   Process {
@@ -517,7 +517,7 @@ Item {
 
   function refreshDnd() {
     if (dndProc.running) { dndRefresh.restart(); return }
-    // isDnd exists on stock 4.0, stock 4.5 and Foamy; dndState was removed in 4.5.
+    // isDnd exists on stock 4.5 and Foamy (4.5 has no dndState).
     dndProc.command = ["omarchy-shell", "notifications", "isDnd"]
     dndProc.launched = true
     dndProc.running = true

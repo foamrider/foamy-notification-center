@@ -158,7 +158,8 @@ Ui.Panel {
     delete pendingPreferences[keys[0]]
     preferenceActive = next
     if (next.scope === "popups") {
-      // Leading space: JSON stays out of the IPC CLI's option parser on 4.0.
+      // Leading space: on FoamyPeerIpc's CLI path `qs ipc` would split a JSON
+      // array argument into a list (or read a negative number as an option).
       peer.call("foamy.notifications", "setPreference", [next.key, " " + JSON.stringify(next.value)], function(ok, output) {
         if (ok && String(output).trim() === "saving") root.awaitingPeerSave = true
         else root.finishPreference(false)
@@ -588,8 +589,8 @@ Ui.Panel {
       }
     }
   }
-  // foamy-kit FoamyPopup: the stock qs.Ui.KeyboardPanel (4.0 and 4.5, so 4.5's
-  // full-screen bar window places the card under the bar) with the foamy
+  // foamy-kit FoamyPopup: the stock qs.Ui.KeyboardPanel (so the full-screen
+  // bar window places the card under the bar) with the foamy
   // surface. Its content is the lazy `body`, built on first open; the archive,
   // unread count and IPC live in Service.qml, outside it.
   FoamyPopup {
@@ -699,7 +700,7 @@ Ui.Panel {
                 objectName: "notificationSnooze"
                 text: root.tr("Snooze notifications")
                 iconName: "alarm-clock"
-                // Hidden, not disabled, where the daemon has no timed snooze (stock 4.0 and 4.5-rc2).
+                // Hidden, not disabled, where the daemon has no timed snooze (stock 4.5-rc2).
                 visible: !!root.store && root.store.snoozeAvailable
                 enabled: visible && !root.store.snoozeBusy
                 FoamyMenuItem { objectName: "notificationSnooze30"; text: root.tr("30 minutes"); iconName: "clock"; onTriggered: root.store.snoozeAll(30) }

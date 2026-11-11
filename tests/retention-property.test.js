@@ -2,7 +2,7 @@
 // native/src/main.rs: random arrivals (with equal-millisecond ties, some
 // days old), in-place updates, dismissals (also before first ingestion), count
 // and age retention limits that go down and up again, and syncs. Sources keep
-// their files after a dismissal, as stock 4.0 does. Invariants are checked
+// their files after a dismissal, as Foamy's per-file source does. Invariants are checked
 // after every sync.
 const test = require('node:test')
 const assert = require('node:assert/strict')

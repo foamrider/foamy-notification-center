@@ -363,4 +363,4 @@ fixture alone does not establish compatibility with a full OS upgrade.
 
 Language follows **Omarchy → Setup → Language** on Omarchy 4.5. Plugin language overrides are no longer used. Missing translations fall back to English.
 
-Translation checks: `python3 tests/i18n-runtime.py` checks live language switching on the installed Omarchy 4.5 shell. The 4.0 English fallback runs only when `FOAMY_HOST_40` names an Omarchy 4.0 `shell/` directory; otherwise the test prints a SKIP line.
+Translation checks: `python3 "$FOAMY_KIT/preview/i18n_runtime.py" .` (foamy-kit's shared check) switches the language live on the installed Omarchy 4.5 shell and checks the catalogs, their English fallback and literal values.
