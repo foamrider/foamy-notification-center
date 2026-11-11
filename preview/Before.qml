@@ -106,6 +106,14 @@ Item {
     property int keepDays: 30
     property int maxItems: 1000
     property bool showPreview: true
+    // Live actions (Foamy's buttons for a notification it still holds): none here.
+    readonly property bool listing: false
+    property var liveActions: ({})
+    property bool pressingAction: false
+    function refreshLiveActions() {
+    }
+    function pressAction(row, index) {
+    }
     function faviconSource(row) {
       return ""
     }
