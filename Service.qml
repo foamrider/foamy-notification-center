@@ -203,6 +203,7 @@ Item {
     invokingDefault = true
     // Probe the running daemon, not an installed plugin that may be disabled.
     focusProc.command = ["omarchy-shell", "foamy.notifications", "invokeDefault", String(row.key)]
+    focusProc.launched = true
     focusProc.running = true
   }
 
@@ -217,6 +218,7 @@ Item {
     var directory = root.omarchyPath || Quickshell.env("OMARCHY_PATH")
     var helper = decodeURIComponent(Qt.resolvedUrl("bin/focus-notification-app").toString().replace(/^file:\/\//, ""))
     focusProc.command = ["bash", helper, directory, focusEntry.app.replace(/\./g, "\\.")]
+    focusProc.launched = true
     focusProc.running = true
   }
 
@@ -237,6 +239,7 @@ Item {
           openingFile = true
           var helper = decodeURIComponent(Qt.resolvedUrl("bin/open-notification-image").toString().replace(/^file:\/\//, ""))
           focusProc.command = ["bash", helper, command[0] === "omasnap" ? "edit-screenshot" : "view-image", command[1]]
+          focusProc.launched = true
           focusProc.running = true
         } else focusSendingApp()
         return
@@ -258,11 +261,17 @@ Item {
     focusEntry = null
   }
 
+  // `launched`: started and not finished yet. A command that can't start
+  // (Quickshell emits no exited() then, only running -> false) ends like a
+  // failed one, 127: the next fallback runs or the error shows. After exited()
+  // (which may start the next step) running -> false finds nothing launched.
   Process {
     id: focusProc
+    property bool launched: false
     stdout: StdioCollector { id: focusOutput }
     stderr: StdioCollector {}
-    onExited: function(exitCode, exitStatus) { root.finishFocus(exitCode, exitStatus, focusOutput.text) }
+    onExited: function(exitCode, exitStatus) { launched = false; root.finishFocus(exitCode, exitStatus, focusOutput.text) }
+    onRunningChanged: if (!running && launched) { launched = false; root.finishFocus(127, 0, "") }
   }
 
   signal entryAdded(var entry)
@@ -270,6 +279,19 @@ Item {
 
   function storeCommand(args) {
     return FoamyNative.command(root.pluginDir, root.helper, args)
+  }
+
+  // One-shot store commands (list, remove, clear, seen) under a deadline: the
+  // store waits for its file lock as long as it takes, so a stuck lock holder
+  // would stall listing and the removal and clear chains for good. A
+  // legitimate wait is one step of another store process, at most a few
+  // retained images of bounded conversions (5 s read, 2 s type, 5 s convert
+  // each, native/src/images.rs); 60 s is far above that. `timeout` signals its
+  // whole group; an exit at the deadline (124, or 137 after the SIGKILL) is an
+  // ordinary failure, retried as before. The watcher runs without one.
+  readonly property string storeDeadline: "60s"
+  function storeCall(args) {
+    return ["timeout", "--kill-after=1s", root.storeDeadline].concat(root.storeCommand(args))
   }
 
   function differsFrom(data) {
@@ -283,7 +305,7 @@ Item {
     listRevision = archiveRevision
     listLoadCount++
     // One row past the page says whether there is more.
-    listProc.command = root.storeCommand(["list", String(root.listLimit + 1), root.searchQuery])
+    listProc.command = root.storeCall(["list", String(root.listLimit + 1), root.searchQuery])
     listProc.running = true
   }
 
@@ -301,7 +323,7 @@ Item {
     root.lastSeen = stamp
     if (root.helperUnavailable) return
     if (markProc.running) { seenPending = String(stamp); return }
-    markProc.command = root.storeCommand(["seen", String(stamp)])
+    markProc.command = root.storeCall(["seen", String(stamp)])
     markProc.running = true
   }
 
@@ -335,7 +357,7 @@ Item {
     activeRemovalKeys = pendingRemovalKeys
     pendingRemovalKeys = []
     removalError = ""
-    removeProc.command = storeCommand(["remove"].concat(activeRemovalKeys))
+    removeProc.command = storeCall(["remove"].concat(activeRemovalKeys))
     removeProc.running = true
   }
 
@@ -444,17 +466,24 @@ Item {
     snoozeProc.minutes = minutes
     // Clear the old global timer before setting a new one.
     snoozeProc.command = ["omarchy-shell", "notifications", "unsnooze", minutes > 0 ? "*" : ""]
+    snoozeProc.launched = true
     snoozeProc.running = true
   }
   function refreshSnooze() {
-    if (!snoozeProbe.running) snoozeProbe.running = true
+    if (snoozeProbe.running) return
+    snoozeProbe.launched = true
+    snoozeProbe.running = true
   }
+  // `launched` as for focusProc: a command that can't start ends like a failed one.
   Process {
     id: snoozeProbe
+    property bool launched: false
     command: ["omarchy-shell", "notifications", "snoozes"]
     stdout: StdioCollector { id: snoozeProbeOutput }
     stderr: StdioCollector {}
+    onRunningChanged: if (!running && launched) { launched = false; root.snoozeAvailable = false }
     onExited: function(code, status) {
+      launched = false
       root.snoozeAvailable = false
       if (code !== 0 || status !== 0) return
       try {
@@ -466,9 +495,16 @@ Item {
   Process {
     id: snoozeProc
     property int minutes: 0
+    property bool launched: false
     stdout: StdioCollector { id: snoozeOutput }
     stderr: StdioCollector {}
+    onRunningChanged: if (!running && launched) {
+      launched = false
+      minutes = 0
+      root.snoozeError = "Could not change notification snooze. Try again."
+    }
     onExited: function(code, status) {
+      launched = false
       var result = String(snoozeOutput.text).trim()
       if (code !== 0 || status !== 0 || !result || /not found|invalid|error|^no$|^full$/i.test(result)) {
         root.snoozeError = "Could not change notification snooze. Try again."
@@ -477,6 +513,7 @@ Item {
       if (minutes > 0) {
         command = ["omarchy-shell", "notifications", "snoozeAll", String(minutes)]
         minutes = 0
+        launched = true
         running = true
       }
       root.refreshDnd()
@@ -487,6 +524,7 @@ Item {
     if (dndProc.running) { dndRefresh.restart(); return }
     // isDnd exists on stock 4.0, stock 4.5 and Foamy; dndState was removed in 4.5.
     dndProc.command = ["omarchy-shell", "notifications", "isDnd"]
+    dndProc.launched = true
     dndProc.running = true
   }
 
@@ -494,6 +532,7 @@ Item {
     if (dndProc.running) return
     // Toggle in the daemon so a concurrent external change cannot invert stale UI state.
     dndProc.command = ["omarchy-shell", "notifications", "toggleDnd"]
+    dndProc.launched = true
     dndProc.running = true
   }
 
@@ -509,11 +548,14 @@ Item {
     console.warn("Notification silencing command failed:", exitCode, exitStatus)
   }
 
+  // `launched` as for focusProc: a command that can't start shows the error.
   Process {
     id: dndProc
+    property bool launched: false
     stdout: StdioCollector { id: dndOutput }
     stderr: StdioCollector {}
-    onExited: function(exitCode, exitStatus) { root.applyDndResult(exitCode, exitStatus, dndOutput.text); root.refreshSnooze() }
+    onExited: function(exitCode, exitStatus) { launched = false; root.applyDndResult(exitCode, exitStatus, dndOutput.text); root.refreshSnooze() }
+    onRunningChanged: if (!running && launched) { launched = false; root.applyDndResult(127, 0, ""); root.refreshSnooze() }
   }
 
   Timer { id: dndRefresh; interval: 200; onTriggered: root.refreshDnd() }
@@ -540,7 +582,7 @@ Item {
     id: clearProc
     property string cut: ""
     // The cutoff captured at the click goes to the script and to Foamy alike.
-    command: root.storeCommand(["clear", cut])
+    command: root.storeCall(["clear", cut])
     environment: root.storeEnvironment
     onExited: function(code, status) {
       if (code === 0 && status === 0) { if (root.foamySource) root.releaseBefore(cut) }
@@ -566,7 +608,9 @@ Item {
     // Stopping the old watcher during a config change is an expected lifecycle event.
     if (root.sourceRestartPending && entry && entry.error === "notification watcher stopped") return
     if (entry && entry.ok === false) { root.loadError = String(entry.error || "Could not read notification history."); console.warn("Notification history:", root.loadError); return }
-    if (entry && entry.event === "storeChanged") { archiveRevision++; reloadArchive.restart(); return }
+    // The watcher sends one once its watches are up and the store is synced:
+    // it started cleanly, so the next failure restarts it after 1 s again.
+    if (entry && entry.event === "storeChanged") { root.watchBackoffMs = 1000; archiveRevision++; reloadArchive.restart(); return }
     if (entry && entry.event === "dndChanged") { dndRefresh.restart(); return }
     if (entry && entry.event === "seenChanged") { root.readSeen(); return }
     if (entry && entry.event === "pruned") { root.releaseNotificationActions(entry.keys || []); return }
@@ -629,8 +673,30 @@ Item {
     }
   }
 
+  // Watcher restarts: 100 ms after a source or setting change
+  // (sourceRestartPending). Otherwise they back off while it keeps failing (an
+  // inotify limit, a store it can't create, a command that can't start): 1 s,
+  // doubling to 60 s, and 1 s again once a run reports in (its first
+  // storeChanged, see absorb) or lasted watchStableMs.
+  property int watchBackoffMs: 1000
+  readonly property int watchBackoffMaxMs: 60000
+  readonly property int watchStableMs: 30000
+  property double watchStartedAt: 0
+  function scheduleWatchRestart(now) {
+    if (!root.sourceRestartPending) {
+      if (watchStartedAt > 0 && now - watchStartedAt >= watchStableMs) watchBackoffMs = 1000
+      console.warn("Notification history watcher stopped; reconnecting")
+    }
+    watchStartedAt = 0
+    restartWatch.interval = root.sourceRestartPending ? 100 : watchBackoffMs
+    if (!root.sourceRestartPending) watchBackoffMs = Math.min(watchBackoffMs * 2, watchBackoffMaxMs)
+    restartWatch.restart()
+  }
+
   Process {
     id: watchProc
+    // `launched` as for focusProc: a watcher that can't start is restarted too.
+    property bool launched: false
     command: root.storeCommand(["watch"])
     environment: root.storeEnvironment
     // Started once the source is resolved (Component.onCompleted).
@@ -638,18 +704,25 @@ Item {
     stdout: SplitParser {
       onRead: function(line) { root.absorb(line) }
     }
+    onStarted: root.watchStartedAt = Date.now()
     onExited: function(exitCode, exitStatus) {
+      launched = false
       if (root.storeUnavailable(exitCode)) return
-      if (!root.sourceRestartPending) console.warn("Notification history watcher stopped; reconnecting")
-      restartWatch.interval = root.sourceRestartPending ? 100 : 1000
-      restartWatch.restart()
+      root.scheduleWatchRestart(Date.now())
+    }
+    onRunningChanged: if (!running && launched) {
+      launched = false
+      root.scheduleWatchRestart(Date.now())
     }
   }
 
   Timer {
     id: restartWatch
     interval: 30000
-    onTriggered: { root.sourceRestartPending = false; if (!watchProc.running && root.sourceKind && !root.helperUnavailable) watchProc.running = true }
+    onTriggered: {
+      root.sourceRestartPending = false
+      if (!watchProc.running && root.sourceKind && !root.helperUnavailable) { watchProc.launched = true; watchProc.running = true }
+    }
   }
 
   Timer { id: reloadArchive; interval: 75; onTriggered: root.load() }
@@ -703,7 +776,7 @@ Item {
     environment: root.storeEnvironment
     onExited: {
       if (!root.seenPending) return
-      command = root.storeCommand(["seen", root.seenPending])
+      command = root.storeCall(["seen", root.seenPending])
       root.seenPending = ""
       running = true
     }

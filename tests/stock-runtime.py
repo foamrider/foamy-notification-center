@@ -3,7 +3,7 @@ sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 import hostenv
 from pathlib import Path
 if '--inside' not in sys.argv:
- raise SystemExit(subprocess.run(['dbus-run-session','--','python3',__file__,'--inside',*sys.argv[1:]],timeout=25).returncode)
+ raise SystemExit(subprocess.run(['dbus-run-session','--','python3',__file__,'--inside',*sys.argv[1:]],timeout=70).returncode)
 custom='--custom' in sys.argv
 base=Path(tempfile.mkdtemp(prefix='foamy-stock-review-'));app=base/'app';app.mkdir();home=base/'home';home.mkdir();runtime=base/'runtime';runtime.mkdir(mode=0o700)
 for n in ['Commons','Ui']:(app/n).symlink_to(hostenv.root()/'shell'/n,target_is_directory=True)
@@ -34,8 +34,8 @@ env.update(hostenv.make(base,app));env['PATH']=str(bin)+':'+env['PATH']
 log=(base/'log').open('w');proc=subprocess.Popen(['qs','-p',str(app),'--no-color'],env=env,stdout=log,stderr=log,start_new_session=True)
 def ipc(t,*args):return subprocess.check_output(['qs','ipc','-n','-p',str(app),'call',t,*args],env=env,text=True,timeout=3).strip()
 def status():return json.loads(ipc('foamy.notification-center.test','state'))
-def wait(fn):
- end=time.monotonic()+5
+def wait(fn,timeout=5):
+ end=time.monotonic()+timeout
  while time.monotonic()<end:
   try:
    if fn():return
@@ -61,7 +61,46 @@ try:
  clients.write_text(json.dumps([{'class':'Stock Review','address':'0x123'}]))
  ipc('review','focus');wait(lambda:status()['entries']==0);assert dispatches.read_text()=='focused'
  assert not status()['focusError']
- print('PASS stock default-action fallback, failed focus retention and retry; stock: delivery, in-place replacement, dismissal history, read state, DND both ways, silenced history, clear and subsequent arrival; Foamy Notifications absent')
+ # An omarchy-shell that can't start (its interpreter is missing: exec fails, so
+ # Quickshell emits no exited()). The stubs stay first on PATH, so no host
+ # omarchy-shell is ever reached. The click still gets the stock focus
+ # fallback; the DND toggle shows its error.
+ shells=[path/'omarchy-shell' for path in map(Path,env['PATH'].split(':')) if (path/'omarchy-shell').exists()][:2]
+ assert shells==[bin/'omarchy-shell',Path(env['PATH'].split(':')[1])/'omarchy-shell'],shells
+ saved=[(path,path.read_text()) for path in shells]
+ for path in shells:path.write_text('#!/nonexistent/omarchy-shell-interpreter\n')
+ send('Shell missing');wait(lambda:status()['entries']==1)
+ ipc('review','focus');wait(lambda:status()['entries']==0);assert not status()['focusError']
+ assert not status()['dndError']
+ assert 'Process failed to start' in (base/'log').read_text(),'omarchy-shell did start'
+ ipc('review','toggle');wait(lambda:bool(status()['dndError']) and not status()['dndBusy'])
+ assert not status()['doNotDisturb']
+ for path,text in saved:path.write_text(text);path.chmod(0o755)
+ ipc('review','toggle');wait(lambda:status()['doNotDisturb'] and not status()['dndError'])
+ ipc('review','toggle');wait(lambda:not status()['doNotDisturb'])
+ if not custom:
+  # A watcher that dies at every start (here: inotifywait exits at once) backs
+  # off 1 s, 2 s, 4 s, 8 s rather than looping at 1 Hz, and recovers.
+  helper=str(app/'center/bin'/os.uname().machine/'foamy-notification-center-helper')
+  def watchers():
+   found=[]
+   for entry in Path('/proc').iterdir():
+    try:
+     if entry.name.isdigit() and (entry/'cmdline').read_bytes().split(b'\0')[:2]==[helper.encode(),b'watch']:found.append(int(entry.name))
+    except OSError:pass
+   return found
+  wait(lambda:len(watchers())==1 and status()['watching'])
+  fake=bin/'inotifywait';fake.write_text('#!/bin/sh\nexit 1\n');fake.chmod(0o755)
+  reconnects=lambda:(base/'log').read_text().count('Notification history watcher stopped; reconnecting')
+  before=reconnects();os.kill(watchers()[0],signal.SIGTERM)
+  time.sleep(8.5)
+  failures=reconnects()-before
+  # Exits at about 0, 1, 3 and 7 s (a 1 Hz loop: 9).
+  assert 3<=failures<=5,f'{failures} watcher restarts in 8.5 s'
+  fake.unlink()
+  wait(lambda:status()['watching'] and len(watchers())==1,timeout=12)
+  send('After watcher recovery');wait(lambda:status()['newest']=='After watcher recovery')
+ print('PASS stock default-action fallback, failed focus retention and retry; stock: delivery, in-place replacement, dismissal history, read state, DND both ways, silenced history, clear and subsequent arrival; Foamy Notifications absent; a missing omarchy-shell: focus fallback and DND error; watcher restart backoff and recovery')
 finally:
  os.killpg(proc.pid,signal.SIGTERM);proc.wait(timeout=3);log.close();print('Evidence:',base)
  hostenv.check(env,(base/'log').read_text(),(base/'omarchy-calls.log').read_text() if (base/'omarchy-calls.log').exists() else '')

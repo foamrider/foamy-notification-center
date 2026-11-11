@@ -45,7 +45,7 @@ test('watcher announces replacements, external clear and removal, and remains qu
 })
 test('queued archive refreshes and content comparisons do not drop updates',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
- const state=vm.createContext({entries:[{key:'1-1',body:'old'}],listLoadCount:0,loadPending:false,archiveRevision:2,listRevision:1,listProc:{running:true},storeCommand:a=>a,pageSize:500})
+ const state=vm.createContext({entries:[{key:'1-1',body:'old'}],listLoadCount:0,loadPending:false,archiveRevision:2,listRevision:1,listProc:{running:true},storeCommand:a=>a,storeCall:a=>a,pageSize:500})
  state.root=state
  for(const name of ['load','differsFrom']) {const start=source.indexOf(`  function ${name}(`);vm.runInContext(source.slice(start,source.indexOf('\n  }',start)+4),state)}
  assert.equal(state.differsFrom([{key:'1-1',body:'new'}]),true)
@@ -289,7 +289,7 @@ test('every store process the service launches gets the resolved store environme
  for(const b of store) assert.match(b,/environment: root\.storeEnvironment/,b.split('\n')[1])
  assert.match(source,/id: markProc\n    environment: root\.storeEnvironment/)
  // Commands are built from values captured when the work was requested.
- assert.match(source,/command: root\.storeCommand\(\["clear", cut\]\)/)
+ assert.match(source,/command: root\.storeCall\(\["clear", cut\]\)/)
 })
 test('a seen stamp taken while a write runs is written afterwards, not dropped',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
@@ -297,7 +297,7 @@ test('a seen stamp taken while a write runs is written afterwards, not dropped',
  let clock=10
  const commands=[],proc={running:false,command:[]}
  const ctx=vm.createContext({Date:{now:()=>clock},String,root:null,markProc:proc,seenPending:''})
- ctx.root=ctx;ctx.storeCommand=a=>a
+ ctx.root=ctx;ctx.storeCall=a=>a
  Object.defineProperty(proc,'running',{get(){return this._r||false},set(v){this._r=v;if(v)commands.push(this.command[1])}})
  vm.runInContext(fn,ctx)
  ctx.markSeen();clock=20;ctx.markSeen()
@@ -324,10 +324,80 @@ test('a helper missing for this CPU is reported once, translated, and never rest
  ctx.load();assert.equal(ctx.listLoadCount,0,'no list read without a helper')
  // The watcher stops for good: its exit handler returns before scheduling a restart.
  const watch=source.slice(source.indexOf('    id: watchProc'),source.indexOf('\n  }',source.indexOf('    id: watchProc')))
- assert.match(watch,/onExited: function\(exitCode, exitStatus\) \{\n      if \(root\.storeUnavailable\(exitCode\)\) return/)
- assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) watchProc\.running = true/)
+ assert.match(watch,/onExited: function\(exitCode, exitStatus\) \{\n      launched = false\n      if \(root\.storeUnavailable\(exitCode\)\) return/)
+ assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) \{ watchProc\.launched = true; watchProc\.running = true \}/)
  // Every store command runs the bundled binary for this CPU.
  const cmd=vm.createContext({FoamyNative,root:{pluginDir:'/plugin',helper:'foamy-notification-center-helper'}})
  cmd.root.storeCommand=vm.runInContext('('+take('storeCommand').trim().replace(/^function storeCommand/,'function')+')',cmd)
  assert.deepEqual(Array.from(cmd.root.storeCommand(['list','5'])),['bash','-c','exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"','foamy-native','/plugin','foamy-notification-center-helper','list','5'])
+})
+
+const {processFixture}=require('./qml-process.cjs')
+function watchService(clock) {
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const take=name=>{const start=source.indexOf(`  function ${name}(`);assert.ok(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4)}
+ const ctx=vm.createContext({FoamyNative:require('../kit/node-loader.cjs').load('FoamyNative'),console:{warn(){ctx.warnings++}},warnings:0,
+  helperUnavailable:false,loadError:'',sourceRestartPending:false,archiveRevision:0,removedKeys:{},entries:[],JSON,String,
+  reloadArchive:{restart(){}},restarts:[],restartWatch:{interval:30000,restart(){ctx.restarts.push(ctx.restartWatch.interval)}}})
+ ctx.root=ctx
+ for(const name of ['watchBackoffMs','watchBackoffMaxMs','watchStableMs']) ctx[name]=Number(source.match(new RegExp('property int '+name+': ([0-9]+)'))[1])
+ ctx.watchStartedAt=0
+ for(const name of ['storeUnavailable','scheduleWatchRestart','absorb']) vm.runInContext(take(name),ctx)
+ ctx.watchProc=processFixture(source,'watchProc',ctx,{Date:{now:()=>clock.now}})
+ // restartWatch's trigger: what the Timer runs.
+ ctx.trigger=()=>{ctx.sourceRestartPending=false;ctx.watchProc.launched=true;ctx.watchProc.running=true}
+ return ctx
+}
+test('a watcher that keeps failing to start backs off to 60 s instead of a 1 Hz loop',()=>{
+ const clock={now:0},ctx=watchService(clock)
+ // Ten minutes of a watcher that can't start (no exited(), only running -> false).
+ let attempts=0
+ ctx.trigger()
+ while(clock.now<600000) {
+  attempts++;ctx.watchProc.failStart()
+  assert.equal(ctx.watchProc.launched,false)
+  clock.now+=ctx.restarts[ctx.restarts.length-1];ctx.trigger()
+ }
+ assert.deepEqual(ctx.restarts.slice(0,8),[1000,2000,4000,8000,16000,32000,60000,60000])
+ assert.ok(attempts<=16,`${attempts} attempts in 10 minutes`)
+ assert.equal(ctx.warnings,attempts,'one warning per failure')
+})
+test('a flapping watcher backs off; a run that reports in or lasts 30 s restarts after 1 s again',()=>{
+ const clock={now:1000},ctx=watchService(clock)
+ const run=(lasted,code=1,reported=false,sourceChange=false)=>{
+  ctx.trigger();ctx.watchStartedAt=clock.now
+  if(reported) ctx.absorb('{"event":"storeChanged"}')
+  if(sourceChange) ctx.sourceRestartPending=true
+  clock.now+=lasted;ctx.watchProc.exit(code,0)
+ }
+ // Dies at once (inotify limit, a store it can't create: an error line, exit 1).
+ ctx.absorb('{"ok":false,"error":"notification watcher failed to start"}')
+ for(let i=0;i<4;i++) run(50)
+ assert.deepEqual(ctx.restarts,[1000,2000,4000,8000])
+ // A source change keeps its 100 ms restart and leaves the backoff alone.
+ run(50,143,false,true);assert.equal(ctx.restarts.pop(),100)
+ run(50);assert.equal(ctx.restarts.pop(),16000)
+ // Up and synced: the next failure restarts after 1 s.
+ run(500,1,true);assert.equal(ctx.restarts.pop(),1000)
+ run(50);assert.equal(ctx.restarts.pop(),2000)
+ // A long run resets it too.
+ run(30000);assert.equal(ctx.restarts.pop(),1000)
+ // No helper for this CPU: no restart, and running -> false after exited() adds none.
+ const before=ctx.restarts.length;run(50,127);assert.equal(ctx.restarts.length,before);assert.equal(ctx.helperUnavailable,true)
+})
+test('one-shot store commands run under a deadline above the store\'s longest lock hold; the watcher does not',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const take=name=>{const start=source.indexOf(`  function ${name}(`);return source.slice(start,source.indexOf('\n  }',start)+4)}
+ const ctx=vm.createContext({FoamyNative:require('../kit/node-loader.cjs').load('FoamyNative'),pluginDir:'/plugin',helper:'foamy-notification-center-helper'})
+ ctx.root=ctx;ctx.storeDeadline=source.match(/readonly property string storeDeadline: "([0-9]+s)"/)[1]
+ for(const name of ['storeCommand','storeCall']) vm.runInContext(take(name),ctx)
+ assert.deepEqual(Array.from(ctx.storeCall(['list','5'])).slice(0,4),['timeout','--kill-after=1s',ctx.storeDeadline,'bash'])
+ // One locked step converts at most three images (icon, image, preview), each bounded by these deadlines.
+ const images=fs.readFileSync(path.join(__dirname,'../native/src/images.rs'),'utf8')
+ const step=['READ_DEADLINE','MIME_DEADLINE','CONVERT_DEADLINE'].map(n=>Number(images.match(new RegExp(n+': Duration = Duration::from_secs\\(([0-9]+)\\)'))[1])).reduce((a,b)=>a+b)
+ assert.ok(parseInt(ctx.storeDeadline)>3*step,`${ctx.storeDeadline} must exceed ${3*step} s`)
+ for(const call of ['listProc.command = root.storeCall(["list"','markProc.command = root.storeCall(["seen"','removeProc.command = storeCall(["remove"]','command: root.storeCall(["clear", cut])','command = root.storeCall(["seen", root.seenPending])'])
+  assert.ok(source.includes(call),call)
+ assert.ok(!/storeCommand\(\["(list|remove|clear|seen)"/.test(source.replace('seenProc.command = root.storeCommand(["seen"])','')),'a one-shot store command without the deadline')
+ assert.match(source,/command: root\.storeCommand\(\["watch"\]\)/)
 })
