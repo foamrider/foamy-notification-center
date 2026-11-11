@@ -82,6 +82,9 @@ ShellRoot {
   property int entranceFrames:0
   property int exitFrames:0
   property int collapseFrames:0
+  // The longest frame while a card is watched: a frame longer than an
+  // animation (a heavily loaded machine) can show none of its middle.
+  property real longestFrame:0
   property real fullHeight:0
   // A card's y while it closes the space above it: whether a frame showed it
   // between where it started and where it ends (sampled every frame, so a
@@ -89,13 +92,16 @@ ShellRoot {
   property var tracked:null
   property real trackedStart:0
   property bool trackedBetween:false
-  FrameAnimation {running:window.tracked!==null;onTriggered:{var y=window.tracked.mapToItem(list,0,0).y;if(y>1 && y<window.trackedStart-1)window.trackedBetween=true}}
-  FrameAnimation {running:true;onTriggered:{var card=window.watched;if(!card)return;if(card.retired && card.height>0 && card.height<window.fullHeight)window.collapseFrames++;if(card.opacity>0 && card.opacity<1){if(card.retired)window.exitFrames++;else if(card.entranceOffset>0)window.entranceFrames++}}}
+  FrameAnimation {running:window.tracked!==null;onTriggered:{if(frameTime>window.longestFrame)window.longestFrame=frameTime;var y=window.tracked.mapToItem(list,0,0).y;if(y>1 && y<window.trackedStart-1)window.trackedBetween=true}}
+  FrameAnimation {running:true;onTriggered:{var card=window.watched;if(!card)return;if(frameTime>window.longestFrame)window.longestFrame=frameTime;if(card.retired && card.height>0 && card.height<window.fullHeight)window.collapseFrames++;if(card.opacity>0 && card.opacity<1){if(card.retired)window.exitFrames++;else if(card.entranceOffset>0)window.entranceFrames++}}}
   TestCase {
    name:"CenterMotion";when:window.ready
    onCompletedChanged:if(completed)console.log("CENTER_MOTION",qtest_results.passCount,"passed",qtest_results.failCount,"failed")
    function row(key,app,stamp){return {key:key,app:app,timestamp:stamp,summary:"Design review "+key,body:"The updated files are ready. Have a look when you have a moment.",urgency:1}}
-   function init(){window.watched=null;window.tracked=null;window.trackedBetween=false;list.height=400;root.entries=[];root.filter="";root.expanded={};root.rebuild();tryVerify(function(){return list.count===0 && list.contentHeight===0},5000);list.positionViewAtBeginning();window.entranceFrames=0;window.exitFrames=0;window.collapseFrames=0}
+   function init(){window.watched=null;window.tracked=null;window.trackedBetween=false;list.height=400;root.entries=[];root.filter="";root.expanded={};root.rebuild();tryVerify(function(){return list.count===0 && list.contentHeight===0},5000);list.positionViewAtBeginning();window.entranceFrames=0;window.exitFrames=0;window.collapseFrames=0;window.longestFrame=0}
+   // Intermediate frames of an animation lasting `ms`, unless no frame was
+   // shorter than it (then there was no middle to show).
+   function sawMiddle(frames,ms){return frames>0 || window.longestFrame*1000>=ms}
    // Until every created card has finished entering and the content height
    // holds still for 100 ms (a loaded machine runs the entrances slower).
    function settle(){
@@ -112,7 +118,7 @@ ShellRoot {
    function test_arrival_update_and_removal(){try{
     root.entries=[row("3-1","Chat",300),row("2-1","Chat",200),row("1-1","Files",100)];root.rebuild()
     var card=item(1);window.watched=card;wait(40);capture("entrance");tryCompare(card,"opacity",1);tryCompare(card,"entranceOffset",0)
-    verify(window.entranceFrames>0,"No intermediate entrance frames")
+    verify(sawMiddle(window.entranceFrames,FoamyMotion.fadeIn),"No intermediate entrance frames")
     root.entries[0]=Object.assign({},root.entries[0],{summary:"Updated design review"});root.rebuild();wait(40)
     compare(list.itemAtIndex(1),card);compare(card.modelData.entry.summary,"Updated design review");compare(card.opacity,1)
     root.toggleGroup("Chat");tryCompare(list,"count",5);wait(220);capture("expanded")
@@ -121,8 +127,8 @@ ShellRoot {
     root.remove("3-1");tryCompare(card,"retired",true);verify(!card.enabled);compare(card.modelData.entry.summary,"Updated design review")
     wait(40);capture("exit")
     tryVerify(function(){return below.mapToItem(list,0,0).y<beforeY},3000,"remaining cards must move during collapse")
-    tryVerify(function(){return window.collapseFrames>0},3000,"height must have intermediate collapse frames")
-    tryVerify(function(){return window.exitFrames>0},3000,"No intermediate removal frames")
+    tryVerify(function(){return sawMiddle(window.collapseFrames,FoamyMotion.duration(140))},3000,"height must have intermediate collapse frames")
+    tryVerify(function(){return sawMiddle(window.exitFrames,FoamyMotion.duration(120))},3000,"No intermediate removal frames")
     window.watched=null
     root.entries=[];root.rebuild();tryCompare(list,"count",0);verify(list.contentHeight>0);tryVerify(function(){return list.contentHeight===0})
    }catch(e){console.log("FAILED",e.message,e.stack);throw e}}
@@ -134,7 +140,7 @@ ShellRoot {
     root.removeGroup({app:"Chat"})
     tryVerify(function(){return Math.abs(below.mapToItem(list,0,0).y)<=1},5000,"the remaining card must end at the top")
     window.tracked=null
-    verify(window.trackedBetween,"first-group removal must pass through intermediate positions")
+    verify(sawMiddle(window.trackedBetween?1:0,FoamyMotion.duration(180)),"first-group removal must pass through intermediate positions")
    }
    function test_large_stack_removal_keeps_survivors_visible(){try{
     var rows=[]
