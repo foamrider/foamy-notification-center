@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 47322c3ae1a2a09e28908d622241117d1a19c0e6349953f26609ee72c5e5b512 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 551330bdcaa04e8f39138b3fb011675e5742d1c007586f7341d738307bc6c2ad — do not edit; change foamy-kit and run sync
 import QtQuick
 import Quickshell.Io
 import "FoamyIpcResolver.js" as Resolver
@@ -10,9 +10,9 @@ import "FoamyIpcResolver.js" as Resolver
 //   FoamyPeerIpc { id: peer }
 //   peer.call("foamy.notifications", "storeInfo", [], function(ok, output) { … })
 //
-// On 4.5 the call is answered in-process through IpcRegistry (the path the
-// omarchy-shell socket uses). When that doesn't run it (4.0, or a peer with
-// a plain IpcHandler) it falls back to `omarchy-shell <target> <method>
+// The call is answered in-process through IpcRegistry (the path the
+// omarchy-shell socket uses). When that doesn't run it (a peer with a plain
+// IpcHandler) it falls back to `omarchy-shell <target> <method>
 // <args…>`, at most `limit` processes at once. `done(ok, output)` is always
 // called later, never from inside call(). Arguments are strings. An
 // argument starting with "[" needs a leading space on the CLI path (qs ipc
@@ -21,17 +21,39 @@ QtObject {
   id: root
 
   // CLI calls in flight; bounded so a stuck shell cannot pile up processes.
+  // Each call is a finite job without a deadline of its own: omarchy-shell
+  // bounds itself. Its socket request and its `qs ipc` fallback each run
+  // under `timeout --kill-after=1s` with OMARCHY_SHELL_IPC_TIMEOUT (default
+  // 2s), so a call to a hung shell ends within about 6 s and frees its slot.
+  // Wrapping it in another timeout would only cut a call that may already
+  // have run.
   property int running: 0
   property int limit: 8
 
   function call(target, method, args, done) {
-    var list = (args || []).map(function(value) { return String(value) })
-    var finish = function(ok, output) { if (done) Qt.callLater(function() { done(ok, output) }) }
+    var list = (args || []).map(function (value) {
+      return String(value)
+    })
+    var finish = function (ok, output) {
+      if (done)
+        Qt.callLater(function () {
+          done(ok, output)
+        })
+    }
     var result = Resolver.call(root, target, method, list)
-    if (result.ran) { finish(true, result.output); return }
-    if (running >= limit) { finish(false, ""); return }
+    if (result.ran) {
+      finish(true, result.output)
+      return
+    }
+    if (running >= limit) {
+      finish(false, "")
+      return
+    }
     running++
-    runner.createObject(root, { command: ["omarchy-shell", String(target), String(method)].concat(list), done: finish })
+    runner.createObject(root, {
+      command: ["omarchy-shell", String(target), String(method)].concat(list),
+      done: finish
+    })
   }
 
   property Component runner: Component {
@@ -40,22 +62,27 @@ QtObject {
       property var done: null
       property bool finished: false
       running: true
-      stdout: StdioCollector { id: output }
+      stdout: StdioCollector {
+        id: output
+      }
       function complete(ok, text) {
-        if (finished) return
+        if (finished)
+          return
         finished = true
         root.running = Math.max(0, root.running - 1)
-        if (proc.done) proc.done(ok, text)
+        if (proc.done)
+          proc.done(ok, text)
         proc.destroy()
       }
-      onExited: function(code, status) {
+      onExited: function (code, status) {
         var text = String(output.text || "").trim()
         // omarchy-shell exits 0 with an error line when the target is missing.
         complete(code === 0 && status === 0 && !/^(error|No such|Target not found|Function not found)/i.test(text), text)
       }
       // After exited() this does nothing. Without it (omarchy-shell missing)
       // Quickshell emits no exited(), only running -> false.
-      onRunningChanged: if (!running) complete(false, "")
+      onRunningChanged: if (!running)
+        complete(false, "")
     }
   }
 }

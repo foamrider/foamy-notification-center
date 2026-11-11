@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 8e654a2f36d869b397f67b1a0fda1279c6f0bae09857400f930381296f8b7496 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 49c955616edf180046cf8343245205f3b1e36980ca48ef34185b1ca79152c77d — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -78,13 +78,23 @@ Item {
   // layouts that keep clear of them.
   readonly property real buttonsWidth: trailingRow.width + (settingsButton.visible ? settingsButton.width + row.spacing : 0)
 
-  signal settingsClicked()
+  signal settingsClicked
   signal settingsHovered(bool hovered)
   signal menuHovered(bool hovered)
 
-  function openMenu(keyboard) { if (showsMenuButton) overflowMenu.open(!!keyboard) }
-  function closeMenu() { overflowMenu.close() }
-  function toggleMenu(keyboard) { if (overflowMenu.opened) closeMenu(); else openMenu(keyboard) }
+  function openMenu(keyboard) {
+    if (showsMenuButton)
+      overflowMenu.open(!!keyboard)
+  }
+  function closeMenu() {
+    overflowMenu.close()
+  }
+  function toggleMenu(keyboard) {
+    if (overflowMenu.opened)
+      closeMenu()
+    else
+      openMenu(keyboard)
+  }
 
   implicitWidth: row.implicitWidth + horizontalPadding * 2
   implicitHeight: Math.max(FoamyStyle.settingsButtonSize, showTitle ? textColumn.implicitHeight : 0) + topPadding + bottomPadding
@@ -96,39 +106,57 @@ Item {
   readonly property int _menuCount: {
     var n = 0
     for (var i = 0; i < menuItems.length; i++)
-      if (menuItems[i] && menuItems[i].visible !== false && !menuItems[i].separator) n++
+      if (menuItems[i] && menuItems[i].visible !== false && !menuItems[i].separator)
+        n++
     return n
   }
   property var _watched: []
   property var _proxies: []
 
-  function _isAction(item) { return !!item && typeof item.clicked === "function" && "iconName" in item }
+  function _isAction(item) {
+    return !!item && typeof item.clicked === "function" && "iconName" in item
+  }
 
   function _relayout() {
     // Item.visible is the effective visibility: only meaningful while shown.
-    if (!root.visible) return
+    if (!root.visible)
+      return
     var all = [], shown = []
-    for (var i = 0; i < trailing.length; i++) if (trailing[i]) all.push(trailing[i])
-    for (i = 0; i < all.length; i++) if (all[i].visible) shown.push(all[i])
+    for (var i = 0; i < trailing.length; i++)
+      if (trailing[i])
+        all.push(trailing[i])
+    for (i = 0; i < all.length; i++)
+      if (all[i].visible)
+        shown.push(all[i])
     var settings = showSettings ? 1 : 0
     var overflowing = shown.length + settings + (_menuCount > 0 ? 1 : 0) > maxButtons
     var keep = [], moved = []
     if (!overflowing) {
       keep = shown
     } else {
-      var pinned = shown.filter(function(item) { return !root._isAction(item) })
+      var pinned = shown.filter(function (item) {
+        return !root._isAction(item)
+      })
       var slots = Math.max(0, maxButtons - 1 - pinned.length)
       for (i = 0; i < shown.length; i++) {
-        if (!_isAction(shown[i])) keep.push(shown[i])
-        else if (slots > 0) { keep.push(shown[i]); slots-- }
-        else moved.push(shown[i])
+        if (!_isAction(shown[i]))
+          keep.push(shown[i])
+        else if (slots > 0) {
+          keep.push(shown[i])
+          slots--
+        } else
+          moved.push(shown[i])
       }
     }
     var old = _proxies
     var proxies = []
-    for (i = 0; i < moved.length; i++) proxies.push(proxyComponent.createObject(root, { action: moved[i] }))
+    for (i = 0; i < moved.length; i++)
+      proxies.push(proxyComponent.createObject(root, {
+        action: moved[i]
+      }))
     _proxies = proxies
-    for (i = 0; i < old.length; i++) old[i].destroy()
+    for (i = 0; i < old.length; i++)
+      old[i].destroy()
     _overflow = moved
     _shown = keep
     _overflowing = overflowing
@@ -142,13 +170,16 @@ Item {
   // relayout. Mirrored by hand in RTL.
   function _place() {
     var order = _shown.slice()
-    if (menuButton.visible) order.push(menuButton)
+    if (menuButton.visible)
+      order.push(menuButton)
     var x = 0, height = 0
     var placed = []
     for (var i = 0; i < order.length; i++) {
       var item = order[i]
-      if (!item.visible) continue
-      if (placed.length) x += trailingRow.spacing
+      if (!item.visible)
+        continue
+      if (placed.length)
+        x += trailingRow.spacing
       item.x = x
       x += item.width
       height = Math.max(height, item.height)
@@ -157,10 +188,14 @@ Item {
     trailingRow.implicitWidth = x
     trailingRow.implicitHeight = height
     for (i = 0; i < placed.length; i++) {
-      if (_mirrored) placed[i].x = x - placed[i].x - placed[i].width
+      if (_mirrored)
+        placed[i].x = x - placed[i].x - placed[i].width
       placed[i].y = (height - placed[i].height) / 2
     }
-    for (i = 0; i < _overflow.length; i++) { _overflow[i].x = -100000; _overflow[i].y = 0 }
+    for (i = 0; i < _overflow.length; i++) {
+      _overflow[i].x = -100000
+      _overflow[i].y = 0
+    }
   }
   readonly property bool _mirrored: LayoutMirroring.enabled
   on_MirroredChanged: _place()
@@ -171,12 +206,16 @@ Item {
     item.heightChanged.disconnect(_queueRelayout)
   }
   function _watch() {
-    for (var i = 0; i < _watched.length; i++) if (_watched[i]) _unwatch(_watched[i])
+    for (var i = 0; i < _watched.length; i++)
+      if (_watched[i])
+        _unwatch(_watched[i])
     var list = []
     for (i = 0; i < trailing.length; i++) {
       var item = trailing[i]
-      if (!item) continue
-      if (item.parent !== trailingRow) item.parent = trailingRow
+      if (!item)
+        continue
+      if (item.parent !== trailingRow)
+        item.parent = trailingRow
       item.visibleChanged.connect(_queueRelayout)
       item.widthChanged.connect(_queueRelayout)
       item.heightChanged.connect(_queueRelayout)
@@ -188,17 +227,32 @@ Item {
   // A child Timer, not Qt.callLater: it dies with the header, so a header
   // destroyed before the relayout runs (popup opened and closed in one
   // frame, a bar removed) doesn't call into a dead object.
-  function _queueRelayout() { if (!relayoutTimer.running) relayoutTimer.start() }
-  Timer { id: relayoutTimer; interval: 0; onTriggered: root._relayout() }
+  function _queueRelayout() {
+    if (!relayoutTimer.running)
+      relayoutTimer.start()
+  }
+  Timer {
+    id: relayoutTimer
+    interval: 0
+    onTriggered: root._relayout()
+  }
 
   onTrailingChanged: _watch()
   onShowSettingsChanged: _queueRelayout()
   onMaxButtonsChanged: _queueRelayout()
   on_MenuCountChanged: _queueRelayout()
-  onVisibleChanged: if (visible) _queueRelayout(); else overflowMenu.close()
-  Component.onCompleted: { _watch(); _relayout() }
+  onVisibleChanged: if (visible)
+    _queueRelayout()
+  else
+    overflowMenu.close()
+  Component.onCompleted: {
+    _watch()
+    _relayout()
+  }
   Component.onDestruction: {
-    for (var i = 0; i < _watched.length; i++) if (_watched[i]) _unwatch(_watched[i])
+    for (var i = 0; i < _watched.length; i++)
+      if (_watched[i])
+        _unwatch(_watched[i])
   }
 
   Component {
@@ -209,10 +263,14 @@ Item {
       iconName: action ? action.iconName : ""
       enabled: !!action && action.active !== false
       destructive: !!action && action.destructive === true
-      onTriggered: if (action) action.clicked()
+      onTriggered: if (action)
+        action.clicked()
     }
   }
-  FoamyMenuItem { id: menuSeparator; separator: true }
+  FoamyMenuItem {
+    id: menuSeparator
+    separator: true
+  }
   FoamyMenuItem {
     id: settingsEntry
     objectName: "foamyMenuSettings"
@@ -227,8 +285,12 @@ Item {
     mirrored: root.LayoutMirroring.enabled
     items: {
       var list = root._proxies.slice()
-      for (var i = 0; i < root.menuItems.length; i++) list.push(root.menuItems[i])
-      if (root.settingsInMenu) { list.push(menuSeparator); list.push(settingsEntry) }
+      for (var i = 0; i < root.menuItems.length; i++)
+        list.push(root.menuItems[i])
+      if (root.settingsInMenu) {
+        list.push(menuSeparator)
+        list.push(settingsEntry)
+      }
       return list
     }
   }
@@ -300,7 +362,10 @@ Item {
         font.pixelSize: FoamyStyle.font.bodySmall
       }
     }
-    Item { visible: !root.showTitle; Layout.fillWidth: true }
+    Item {
+      visible: !root.showTitle
+      Layout.fillWidth: true
+    }
 
     // Laid out by _place(): kept trailing actions, then ⋯.
     Item {
@@ -338,5 +403,4 @@ Item {
       onHoveredChanged: root.settingsHovered(hovered)
     }
   }
-
 }

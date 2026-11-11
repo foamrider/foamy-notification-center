@@ -1,0 +1,41 @@
+# foamy-kit 0.9.0 83e74c61df1740955057fad78e77dc347f783f735dd61b7a21b49461641bc270 — do not edit; change foamy-kit and run sync
+# Runs this repository's validation command, `tests/validate.sh --ci`, on a
+# GitHub-hosted runner: kit-check, Oxlint, Ruff (lint and format), Vulture,
+# ShellCheck, shfmt and the repository's own tests in their --ci form, with
+# the tools mise.toml pins. Synced from foamy-kit; edit it there.
+#
+# What --ci leaves out, as SKIP lines in the job log: the checks that need the
+# Omarchy host (omarchy-plugin-validate, Qt 6 qmllint and qmlformat, the
+# Quickshell runtime tests), the foamy-kit design lint (no kit checkout here)
+# and the native helper tests, which verify-native.yml runs.
+name: Checks
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: tests/validate.sh --ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the commit under review
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the tools mise.toml pins
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          version: 2026.11.5
+
+      - name: Validate
+        run: bash tests/validate.sh --ci

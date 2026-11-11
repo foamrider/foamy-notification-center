@@ -1,19 +1,19 @@
-// foamy-kit 0.9.0 9560787e2fe14c573f84942540ba4c4686cde246420984419379ed8769a77697 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 04c7e30a4501692cfa778a7999d12f42e81c03047cf06a1a8c69a966f74b915a — do not edit; change foamy-kit and run sync
 import QtQuick
 import "FoamyIpcResolver.js" as Resolver
 
-// Keeps one FoamyIpc first for its target in 4.5's IpcRegistry, so the
+// Keeps one FoamyIpc first for its target in the shell's IpcRegistry, so the
 // omarchy-shell socket answers from it even when another service registers
 // the same target (foamy-lock vs the stock omarchy.lock on target "lock").
 // IpcRegistry keeps its handlers in a plain array mutated in place, so it has
 // no change signal to react to. The preference therefore re-claims on start,
-// on recheck(), and every `interval` ms for as long as it is active on 4.5 —
+// on recheck(), and every `interval` ms for as long as it is active —
 // whether or not a rival was seen at the last check, because a handler can
 // be registered or moved ahead at any time (a hijacked "lock" route is a
 // security problem, not a cosmetic one). The check is one short array scan.
 // `interval: 0` turns the timer off; only do that for targets where losing
-// first place is harmless. Call recheck() for a fresh `others` count. 4.0 has no registry: `answering` stays
-// false and nothing happens.
+// first place is harmless. Call recheck() for a fresh `others` count.
+// Without a registry `answering` stays false and nothing happens.
 //
 //   FoamyIpc { id: lockIpc; target: "lock"; … }
 //   FoamyIpcPreference { id: lockRoute; handler: lockIpc }
@@ -30,7 +30,8 @@ QtObject {
   property bool answering: false
 
   function recheck() {
-    if (!active || !handler) return
+    if (!active || !handler)
+      return
     answering = Resolver.prefer(preference, handler)
     others = Resolver.others(preference, handler).length
   }

@@ -1,0 +1,15 @@
+# foamy-kit 0.9.0 4d8c9ad0403a76291a2c89eff71dcdd370281814bbb9055e9c7bf88961b7d6ac — do not edit; change foamy-kit and run sync
+# Pinned developer and CI tools for foamy-kit and every Foamy plugin.
+# `mise install` in the repository installs exactly these versions;
+# tests/validate.sh runs them through `mise env` and fails when one is missing
+# or a different version. CI installs the same file (jdx/mise-action).
+# Not here: python3 (>= 3.11, from the system: the tests use its packages),
+# Qt 6 qmllint/qmlformat and Quickshell (the Omarchy host), rustup (FoamyNative
+# reads rust-toolchain.toml).
+[tools]
+node = "26.13.0"
+"aqua:astral-sh/ruff" = "0.17.3"
+"aqua:oxc-project/oxc/oxlint" = "1.91.0"
+"pipx:vulture" = "2.16"
+"aqua:mvdan/sh" = "3.14.1"
+"aqua:koalaman/shellcheck" = "0.11.0"

@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 0a9ef7791d77077b52e4b34a54eb7a2abe5fba29beb7bcda6aa05fd91edfecd6 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 d5632ef6e28002762e9c05ee86b8ac12a2a8503e5097a1f4014d5c276b19f0dc — do not edit; change foamy-kit and run sync
 //! Sandboxing for child processes (cargo feature `sandbox`): seccomp-BPF
 //! filters ([`BpfFilter`], generated with `seccompiler`), a Landlock
 //! restriction of what a child may execute ([`ExecOnly`], applied between
@@ -48,6 +48,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use std::time::Duration;
 
 use landlock::{
@@ -67,8 +68,11 @@ const SECCOMP_RET_ERRNO: u32 = 0x0005_0000;
 const X32_SYSCALL_BIT: u32 = 0x4000_0000;
 
 /// Syscalls an image decoder must not make: no new processes (`clone`,
-/// `clone3`, `fork`, `vfork`), namespaces (`unshare`, `setns`), mounts,
-/// `ptrace` or `bpf` (`artwork.py`'s list), and since 0.6.0 no kernel
+/// `clone3`, `fork`, `vfork`), namespaces (`unshare`, `setns`), `mount`
+/// (only the classic call: the newer mount API, `umount2` and
+/// `pivot_root` are not listed; without namespaces, which are denied, a
+/// mount needs privileges the decoder doesn't have anyway), `ptrace` or
+/// `bpf` (`artwork.py`'s list), and since 0.6.0 no kernel
 /// attack surface a decoder never needs: io_uring (`io_uring_setup`,
 /// `io_uring_enter`, `io_uring_register`), the key store (`add_key`,
 /// `request_key`, `keyctl`) and `userfaultfd`. Per architecture, ascending.
@@ -353,11 +357,17 @@ fn install(program: &[sock_filter]) -> io::Result<()> {
 }
 
 /// A Landlock ruleset that handles only "execute": a child restricted by it
-/// may execute (and map as its ELF interpreter) exactly the allowed files,
-/// and nothing else, whatever its configuration says. Everything else
+/// may `execve` (and have the kernel load as an ELF interpreter) only the
+/// allowed files, whatever its configuration says, so it can't start the
+/// filters, hooks or helpers it would run by path. Everything else
 /// (reading, writing, networking) stays as it was. Equivalent to
 /// `setpriv --landlock-access fs:execute --landlock-rule
 /// path-beneath:execute:<path>…`, applied in the child just before `exec`.
+///
+/// It is not a barrier against code that already runs in the child:
+/// Landlock checks `execve`, not `mmap`, so an allowed dynamic loader runs
+/// any readable binary given as its argument (`ld-linux-x86-64.so.2
+/// /bin/sh -c …`), and an allowed interpreter runs any script.
 #[derive(Debug)]
 pub struct ExecOnly {
     ruleset: OwnedFd,
@@ -393,7 +403,9 @@ impl ExecOnly {
     }
 
     /// Allows `program` and its ELF interpreter (the dynamic loader), as
-    /// github_status does for Git.
+    /// github_status does for Git. The loader can run other binaries when
+    /// invoked directly (see [`ExecOnly`]); a program that execs only by
+    /// path, as Git does, can't use that.
     pub fn for_program(program: &Path) -> io::Result<ExecOnly> {
         let mut paths = vec![program.to_path_buf()];
         paths.extend(elf_interpreter(program));
@@ -403,7 +415,8 @@ impl ExecOnly {
     /// github_status's `_probe_sandbox`: finds `name` in `PATH` (resolved
     /// to its real path), restricts execution to it and its interpreter,
     /// and checks that the restriction works (`<program> <args>` exits 0)
-    /// and bites (`/bin/sh -c 'exit 0'` cannot run). Returns the program to
+    /// and bites (`/bin/sh -c 'exit 0'` cannot be executed directly; through
+    /// the allowed loader it could, see [`ExecOnly`]). Returns the program to
     /// run and the restriction, or `None`: then run unrestricted, as the
     /// Python helper did without setpriv or Landlock. Probe once and keep
     /// the result.
@@ -536,14 +549,19 @@ pub fn which(name: &str) -> Option<PathBuf> {
 
 /// A bubblewrap command line, built option by option in the order given
 /// (bubblewrap applies mounts in order). File descriptors handed to it
-/// (`--ro-bind-fd`, `--bind-fd`, `--seccomp`) are inherited by bubblewrap
-/// when run through [`bounded`](Self::bounded); they must stay open until
-/// then.
+/// (`--ro-bind-fd`, `--bind-fd`, `--seccomp`) are duplicated: bubblewrap
+/// inherits them under the numbers its options name when run through
+/// [`bounded`](Self::bounded), even if the caller closed them by then
+/// (`.seccomp(BpfFilter::decoder()?.memfd()?)` is fine). A duplicate that
+/// can't be made fails the run.
 #[derive(Debug, Clone)]
 pub struct Bwrap {
     program: PathBuf,
     args: Vec<OsString>,
-    fds: Vec<RawFd>,
+    /// Number, duplicate, rewind before exec (`--seccomp`).
+    fds: Vec<(RawFd, Arc<OwnedFd>, bool)>,
+    /// `errno` of a duplicate that could not be made.
+    broken: Option<i32>,
 }
 
 impl Bwrap {
@@ -553,6 +571,7 @@ impl Bwrap {
             program: program.into(),
             args: Vec::new(),
             fds: Vec::new(),
+            broken: None,
         }
     }
 
@@ -584,8 +603,20 @@ impl Bwrap {
         self
     }
 
-    fn with_fd(mut self, option: &str, fd: BorrowedFd<'_>, rest: Option<&OsStr>) -> Bwrap {
-        self.fds.push(fd.as_raw_fd());
+    fn with_fd(
+        mut self,
+        option: &str,
+        fd: BorrowedFd<'_>,
+        rest: Option<&OsStr>,
+        rewind: bool,
+    ) -> Bwrap {
+        match fd.try_clone_to_owned() {
+            Ok(owned) => self.fds.push((fd.as_raw_fd(), Arc::new(owned), rewind)),
+            Err(error) => {
+                let code = error.raw_os_error().unwrap_or(libc::EMFILE);
+                self.broken.get_or_insert(code);
+            }
+        }
         let number = fd.as_raw_fd().to_string();
         self.args.push(option.into());
         self.args.push(number.into());
@@ -612,12 +643,12 @@ impl Bwrap {
 
     /// `--ro-bind-fd <fd> <dest>`: an open directory, bound read-only.
     pub fn ro_bind_fd(self, fd: impl AsFd, dest: impl AsRef<OsStr>) -> Bwrap {
-        self.with_fd("--ro-bind-fd", fd.as_fd(), Some(dest.as_ref()))
+        self.with_fd("--ro-bind-fd", fd.as_fd(), Some(dest.as_ref()), false)
     }
 
     /// `--bind-fd <fd> <dest>`: an open directory, bound writable.
     pub fn bind_fd(self, fd: impl AsFd, dest: impl AsRef<OsStr>) -> Bwrap {
-        self.with_fd("--bind-fd", fd.as_fd(), Some(dest.as_ref()))
+        self.with_fd("--bind-fd", fd.as_fd(), Some(dest.as_ref()), false)
     }
 
     /// `--dev <dest>`: a fresh minimal `/dev`.
@@ -711,9 +742,14 @@ impl Bwrap {
     }
 
     /// `--seccomp <fd>`: bubblewrap installs the filter in `fd` (see
-    /// [`BpfFilter::memfd`]) just before executing the command.
+    /// [`BpfFilter::memfd`]) just before executing the command. Bubblewrap
+    /// reads it from the fd's offset, which every copy shares, so each run
+    /// seeks it back to the start before exec: the same filter and builder
+    /// serve any number of runs ([`works`](Self::works) and then the real
+    /// one), one after the other. Runs that overlap in time (a
+    /// [`crate::child::Pipeline`]'s two stages) need a memfd each.
     pub fn seccomp(self, fd: impl AsFd) -> Bwrap {
-        self.with_fd("--seccomp", fd.as_fd(), None)
+        self.with_fd("--seccomp", fd.as_fd(), None, true)
     }
 
     /// `--`: the end of the options (github_status's prefix ends with it).
@@ -747,8 +783,11 @@ impl Bwrap {
         S: AsRef<OsStr>,
     {
         let mut bounded = Bounded::new(&self.program).args(&self.args).args(command);
-        for &fd in &self.fds {
-            bounded = bounded.inherit_raw_fd(fd);
+        for (number, fd, rewind) in &self.fds {
+            bounded = bounded.inherit_shared(*number, Arc::clone(fd), *rewind);
+        }
+        if let Some(code) = self.broken {
+            bounded = bounded.fail_spawn(io::Error::from_raw_os_error(code));
         }
         bounded
     }

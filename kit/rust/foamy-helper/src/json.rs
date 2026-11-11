@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 34a2d3b505a93d36d0c874c5aa03e105e49ec885e85d941979b5b14aeba9db99 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 f086c00ed761a46bea42c7ff4e69cb7a0558d6b5c8c26794f95bf0d96de2a316 — do not edit; change foamy-kit and run sync
 //! JSON lines: one compact JSON value per `\n`-terminated line, and
 //! [`run`], the entry point that prints JSON for every outcome (success,
 //! failure and panic) so the QML side always gets a reply it can parse.
@@ -7,6 +7,7 @@ use std::fmt;
 use std::io::{self, BufRead, ErrorKind, Write};
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -164,12 +165,21 @@ fn reply_for<T: Serialize>(
     }
 }
 
+/// Set by whichever of [`run`] and its panic hook prints first: the other
+/// prints nothing.
+static REPLIED: AtomicBool = AtomicBool::new(false);
+
 /// Runs a one-shot helper and prints exactly one JSON reply on standard
 /// output: `main`'s value (exit 0) or `render(&failure)` (the failure's exit
 /// code). A panic prints `render` of an `INTERNAL` failure and exits with
 /// 101 straight from the panic hook (the panic message still goes to
 /// standard error), so a helper bug never ends in `SIGABRT` and a core dump
-/// under the kit's `panic = "abort"`.
+/// under the kit's `panic = "abort"`. A panic in another thread after the
+/// reply exits 101 without a second one.
+///
+/// When the caller wraps the helper in `timeout`, call
+/// [`crate::process::set_run_budget`] with less than that first, so every
+/// child ends in time and this reply is printed before the wrapper kills.
 ///
 /// ```no_run
 /// use foamy_helper::{Failure, json};
@@ -186,9 +196,15 @@ where
     let render = Arc::new(render);
     let on_panic = Arc::clone(&render);
     crate::process::exit_on_panic_after(101, move || {
-        let _ = print_line(&on_panic(&Failure::coded("INTERNAL", "internal error")));
+        if !REPLIED.swap(true, Ordering::SeqCst) {
+            let _ = print_line(&on_panic(&Failure::coded("INTERNAL", "internal error")));
+        }
     });
     let (reply, exit) = reply_for(main(), &*render);
+    if REPLIED.swap(true, Ordering::SeqCst) {
+        // Another thread panicked: the hook printed and is exiting.
+        return ExitCode::from(101);
+    }
     match print_line(&reply) {
         Ok(()) => ExitCode::from(exit),
         Err(_) => ExitCode::from(if exit == 0 { 1 } else { exit }),
@@ -272,6 +288,50 @@ mod tests {
         )
         .unwrap();
         assert!(output.is_empty());
+    }
+
+    /// [`a_panic_after_the_reply_prints_no_second_one`]'s child: a thread
+    /// that panics once `run` has replied. Run normally it does nothing.
+    #[test]
+    fn late_panic_child() {
+        if std::env::var_os("FOAMY_JSON_TEST").is_none() {
+            return;
+        }
+        let exit = run(
+            || -> Result<Value, Failure> {
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    panic!("a bug in a worker thread");
+                });
+                Ok(json!({"ok": true}))
+            },
+            error_reply,
+        );
+        assert_eq!(exit, ExitCode::SUCCESS);
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
+
+    #[test]
+    fn a_panic_after_the_reply_prints_no_second_one() {
+        let output = crate::child::Bounded::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "json::tests::late_panic_child",
+                "--nocapture",
+                "--test-threads=1",
+                "-q",
+            ])
+            .env("FOAMY_JSON_TEST", "1")
+            .timeout(std::time::Duration::from_secs(30))
+            .run()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(101), "{output:?}");
+        let replies: Vec<&str> = std::str::from_utf8(&output.stdout)
+            .unwrap()
+            .lines()
+            .filter(|line| line.starts_with('{'))
+            .collect();
+        assert_eq!(replies, ["{\"ok\":true}"], "{output:?}");
     }
 
     #[test]

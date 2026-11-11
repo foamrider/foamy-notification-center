@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 71758bdddfde7d4b7304ac51cc01c40c1d0a1c24f49a735069ec4b10ff8c51e2 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 1bb18fb7d0ff321fc90f800e64f87c4e03ee3713a5e958f6363144fe24984b49 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Whether a panel shows its settings page, with the one safe ordering.
@@ -22,17 +22,19 @@ QtObject {
   property bool editing: false
   property bool holdOnClose: false
 
-  signal shown()
-  signal hidden()
+  signal shown
+  signal hidden
 
   function show() {
     editing = true
-    if (panel && !panel.opened) panel.open()
+    if (panel && !panel.opened)
+      panel.open()
     shown()
   }
 
   function hide() {
-    if (!editing) return
+    if (!editing)
+      return
     editing = false
     hidden()
   }
@@ -41,7 +43,8 @@ QtObject {
     target: state.panel
     ignoreUnknownSignals: true
     function onOpenedChanged() {
-      if (state.panel && !state.panel.opened && !state.holdOnClose) state.hide()
+      if (state.panel && !state.panel.opened && !state.holdOnClose)
+        state.hide()
     }
   }
 }

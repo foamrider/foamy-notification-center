@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 45275bb9a332e9ce9aafab9c1df2e9bb388cb0954dea4086bd17016e285d035e — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 f13ac89b575cec786e8e5a1daf8f4d9a52265ca928b89653e689f0f103aba62b — do not edit; change foamy-kit and run sync
 //! Website favicons from the local caches of Chromium-family browsers,
 //! **without any web request** (cargo feature `favicon`). A port of
 //! foamy-notifications' and foamy-notification-center's
@@ -22,6 +22,9 @@
 //! transaction sidecars, refused when it changes while being copied, checked
 //! structurally) and never written to disk. Only PNGs of 1–256 px and
 //! 24 B–64 KiB are accepted, for `https://<host>/…` first, then `http://`.
+//! Of a host's icons, the one its root page (`https://<host>/`) maps to
+//! wins, then the one most of its pages map to, then the bitmap closest to
+//! 32 px and the newest (the Python helper used only the last two).
 //!
 //! SQLite is read by a small built-in reader (`favicon/sqlite.rs`), not the
 //! C library: see the kit CHANGELOG (0.5.0) for why.
@@ -373,16 +376,35 @@ fn text_length(bytes: &[u8]) -> usize {
         .count()
 }
 
-/// One row of the join, ordered like `ORDER BY abs(b.width - 32),
-/// b.last_updated DESC` (ties in scan order).
+/// One favicon bitmap of an icon the host's pages map to, ranked by
+/// [`rank`].
 struct Candidate<'a> {
+    /// The icon is mapped from the site's root page, `<scheme><host>/`.
+    root: bool,
+    /// How many of the host's pages map to the icon.
+    pages: usize,
     distance: f64,
     updated: sqlite::Value,
     order: usize,
     record: std::rc::Rc<Record<'a>>,
 }
 
-/// The Python helper's query, per scheme (`https://` first):
+/// The lookup's order: the icon of the site's root page first, then the
+/// icon most of the host's pages map to, then the bitmap closest to 32 px,
+/// the newest, and scan order. One page whose icon differs from the rest
+/// (a hidden sign-out frame showing the identity provider's logo, say)
+/// therefore can't outrank the site's own icon by being newer.
+fn rank(a: &Candidate<'_>, b: &Candidate<'_>) -> std::cmp::Ordering {
+    b.root
+        .cmp(&a.root)
+        .then(b.pages.cmp(&a.pages))
+        .then_with(|| a.distance.total_cmp(&b.distance))
+        .then_with(|| b.updated.sql_cmp(&a.updated))
+        .then(a.order.cmp(&b.order))
+}
+
+/// The Python helper's query, per scheme (`https://` first), with a ranking
+/// of its own ([`rank`]; Python ordered by size and recency only):
 ///
 /// ```sql
 /// SELECT b.image_data FROM icon_mapping m
@@ -390,7 +412,9 @@ struct Candidate<'a> {
 /// WHERE m.page_url >= '<scheme><host>/' AND m.page_url < '<scheme><host>0'
 ///   AND b.width BETWEEN 1 AND 256 AND b.height BETWEEN 1 AND 256
 ///   AND length(b.image_data) BETWEEN 24 AND 65536
-/// ORDER BY abs(b.width - 32), b.last_updated DESC LIMIT 8
+/// GROUP BY b.id
+/// ORDER BY max(m.page_url = '<scheme><host>/') DESC, count(*) DESC,
+///   abs(b.width - 32), b.last_updated DESC LIMIT 8
 /// ```
 ///
 /// and the first of those rows that is a [`valid_png`].
@@ -408,19 +432,25 @@ fn query(db: &Database, host: &str, deadline: Instant) -> sqlite::Result<Vec<u8>
 
     // `page_url >= p AND page_url < q` where q is p with its final '/'
     // replaced by '0' (the next byte) is exactly "page_url starts with p",
-    // for text compared bytewise; other storage classes never match.
+    // for text compared bytewise; other storage classes never match. One
+    // byte more than the longest prefix tells the root page from a longer
+    // URL.
     let prefixes = [format!("https://{host}/"), format!("http://{host}/")];
     let longest = prefixes.iter().map(String::len).max().unwrap_or(0);
-    let mut wanted: [std::collections::HashMap<Key, usize>; 2] = Default::default();
+    // Per scheme and icon: the pages mapped to it, and whether the root
+    // page is one of them.
+    let mut wanted: [std::collections::HashMap<Key, (usize, bool)>; 2] = Default::default();
     db.scan(mapping.root, &mut |record| {
-        let sqlite::Value::Text(url) = mapping.get(&record, page_url, longest)? else {
+        let sqlite::Value::Text(url) = mapping.get(&record, page_url, longest + 1)? else {
             return Ok(());
         };
         for (scheme, prefix) in prefixes.iter().enumerate() {
             if url.starts_with(prefix.as_bytes())
                 && let Some(key) = mapping.get(&record, mapped_icon, 4096)?.join_key()
             {
-                *wanted[scheme].entry(key).or_default() += 1;
+                let (pages, root) = wanted[scheme].entry(key).or_default();
+                *pages += 1;
+                *root |= url.len() == prefix.len();
             }
         }
         Ok(())
@@ -435,8 +465,8 @@ fn query(db: &Database, host: &str, deadline: Instant) -> sqlite::Result<Vec<u8>
         let Some(key) = bitmaps.get(&record, icon, 4096)?.join_key() else {
             return Ok(());
         };
-        let counts = [wanted[0].get(&key).copied(), wanted[1].get(&key).copied()];
-        if counts.iter().all(Option::is_none) {
+        let mapped = [wanted[0].get(&key).copied(), wanted[1].get(&key).copied()];
+        if mapped.iter().all(Option::is_none) {
             return Ok(());
         }
         let in_range = |value: Option<f64>| value.is_some_and(|v| (1.0..=256.0).contains(&v));
@@ -464,25 +494,22 @@ fn query(db: &Database, host: &str, deadline: Instant) -> sqlite::Result<Vec<u8>
         let distance = (w.unwrap_or_default() - 32.0).abs();
         let last = bitmaps.get(&record, updated, 4096)?;
         let record = std::rc::Rc::new(record);
-        for (scheme, count) in counts.iter().enumerate() {
-            // One join row per matching mapping row.
-            for _ in 0..count.unwrap_or(0).min(8) {
-                order += 1;
-                let list = &mut best[scheme];
-                list.push(Candidate {
-                    distance,
-                    updated: last.clone(),
-                    order,
-                    record: std::rc::Rc::clone(&record),
-                });
-                list.sort_by(|a, b| {
-                    a.distance
-                        .total_cmp(&b.distance)
-                        .then_with(|| b.updated.sql_cmp(&a.updated))
-                        .then(a.order.cmp(&b.order))
-                });
-                list.truncate(8);
-            }
+        for (scheme, mapped) in mapped.iter().enumerate() {
+            let Some((pages, root)) = *mapped else {
+                continue;
+            };
+            order += 1;
+            let list = &mut best[scheme];
+            list.push(Candidate {
+                root,
+                pages,
+                distance,
+                updated: last.clone(),
+                order,
+                record: std::rc::Rc::clone(&record),
+            });
+            list.sort_by(rank);
+            list.truncate(8);
         }
         Ok(())
     })?;

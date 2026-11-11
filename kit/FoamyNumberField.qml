@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 2927c0c2f4281cc06f6b7b3e837fe8dd97d07c3769e2c9356541891693121aa4 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 9e5bd4a934de4279686019163e44ddc3d3f4a7e6f3635f7bb64703a24c1931a6 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -57,10 +57,8 @@ Item {
   property bool hasCursor: false
   property bool compact: false
   // Characters the compact field is sized for (digits, sign, decimal mark).
-  property int compactDigits: Math.max(format(Math.abs(to)).length + (to < 0 ? 1 : 0),
-                                       format(Math.abs(from)).length + (from < 0 ? 1 : 0), 1)
-  readonly property real compactFieldWidth: Math.ceil(digitMetrics.advanceWidth * compactDigits)
-    + FoamyStyle.controlPaddingX * 2 + FoamyStyle.borderWidth * 2 + FoamyStyle.gapSmall
+  property int compactDigits: Math.max(format(Math.abs(to)).length + (to < 0 ? 1 : 0), format(Math.abs(from)).length + (from < 0 ? 1 : 0), 1)
+  readonly property real compactFieldWidth: Math.ceil(digitMetrics.advanceWidth * compactDigits) + FoamyStyle.controlPaddingX * 2 + FoamyStyle.borderWidth * 2 + FoamyStyle.gapSmall
   property string invalidText: FoamyI18n.t("Enter a number from %1 to %2", [FoamyI18n.number(from, decimals), FoamyI18n.number(to, decimals)])
   property alias field: field
 
@@ -79,7 +77,9 @@ Item {
   implicitWidth: FoamyStyle.popupWidth - FoamyStyle.padding * 2
   implicitHeight: column.implicitHeight
 
-  function format(v) { return FoamyI18n.number(v, decimals) }
+  function format(v) {
+    return FoamyI18n.number(v, decimals)
+  }
 
   // Western digits, "." decimal: from the language's digits and marks.
   function normalize(text) {
@@ -87,11 +87,16 @@ Item {
     var s = String(text).trim()
     for (var i = 0; i < s.length; i++) {
       var code = s.charCodeAt(i)
-      if (code >= 0x0660 && code <= 0x0669) out += String(code - 0x0660)
-      else if (code >= 0x06F0 && code <= 0x06F9) out += String(code - 0x06F0)
-      else if (s[i] === "," || s[i] === "٫") out += "."
-      else if (s[i] === "−") out += "-"
-      else out += s[i]
+      if (code >= 0x0660 && code <= 0x0669)
+        out += String(code - 0x0660)
+      else if (code >= 0x06F0 && code <= 0x06F9)
+        out += String(code - 0x06F0)
+      else if (s[i] === "," || s[i] === "٫")
+        out += "."
+      else if (s[i] === "−")
+        out += "-"
+      else
+        out += s[i]
     }
     return out
   }
@@ -99,15 +104,19 @@ Item {
   // The number in `text`, or NaN when it isn't a valid value for this field.
   function parse(text) {
     var s = normalize(text)
-    if (!/^-?\d+(\.\d+)?$/.test(s)) return NaN
+    if (!/^-?\d+(\.\d+)?$/.test(s))
+      return NaN
     var v = Number(s)
-    if (decimals === 0 && Math.floor(v) !== v) return NaN
-    if (v < from || v > to) return NaN
+    if (decimals === 0 && Math.floor(v) !== v)
+      return NaN
+    if (v < from || v > to)
+      return NaN
     return Number(v.toFixed(decimals))
   }
 
   function show() {
-    field.text = format(value)   // the internal editor, never `value`
+    // the internal editor, never `value`
+    field.text = format(value)
     dirty = false
   }
 
@@ -118,7 +127,8 @@ Item {
   function saveFailed() {
     lastCommitted = ""
     hasCommitted = false
-    if (!dirty) show()
+    if (!dirty)
+      show()
   }
 
   function cancelEdit() {
@@ -128,11 +138,13 @@ Item {
 
   // Returns true when the draft is settled (committed, unchanged or reverted).
   function commitEdit(revertInvalid) {
-    if (!dirty) return true
+    if (!dirty)
+      return true
     var v = parse(field.text)
     if (isNaN(v)) {
       errorText = invalidText
-      if (revertInvalid) show()
+      if (revertInvalid)
+        show()
       return revertInvalid === true
     }
     errorText = ""
@@ -143,13 +155,15 @@ Item {
       committed(v)
     }
     dirty = false
-    field.text = text            // shows the commit until `value` catches up
+    // shows the commit until `value` catches up
+    field.text = text
     return true
   }
 
   function step(direction) {
     var current = parse(field.text)
-    if (isNaN(current)) current = value
+    if (isNaN(current))
+      current = value
     var next = Math.min(to, Math.max(from, current + direction * stepSize))
     field.text = format(next)
     dirty = true
@@ -160,15 +174,22 @@ Item {
 
   // Escape and Up/Down; true when the key was handled (and must be consumed).
   function handleKey(key) {
-    if (key === Qt.Key_Escape) { cancelEdit(); return true }
-    if (key === Qt.Key_Up || key === Qt.Key_Down) { step(key === Qt.Key_Up ? 1 : -1); return true }
+    if (key === Qt.Key_Escape) {
+      cancelEdit()
+      return true
+    }
+    if (key === Qt.Key_Up || key === Qt.Key_Down) {
+      step(key === Qt.Key_Up ? 1 : -1)
+      return true
+    }
     return false
   }
 
   onValueChanged: {
     lastCommitted = ""
     hasCommitted = false
-    if (!dirty) show()
+    if (!dirty)
+      show()
   }
   Component.onCompleted: show()
 
@@ -235,7 +256,10 @@ Item {
           font.pixelSize: FoamyStyle.font.bodySmall
         }
       }
-      Item { visible: root.compact && root.label === "" && root.description === ""; Layout.fillWidth: true }
+      Item {
+        visible: root.compact && root.label === "" && root.description === ""
+        Layout.fillWidth: true
+      }
 
       SafeTextField {
         id: field
@@ -247,11 +271,21 @@ Item {
         horizontalAlignment: root.compact ? Text.AlignRight : Text.AlignLeft
         Accessible.name: root.label
         Accessible.description: root.description
-        onTextEdited: { root.dirty = true; root.errorText = ""; root.lastCommitted = ""; root.hasCommitted = false }
-        onPasteErrorChanged: if (pasteError !== "") root.pasteFailed(FoamyI18n.t(pasteError))
+        onTextEdited: {
+          root.dirty = true
+          root.errorText = ""
+          root.lastCommitted = ""
+          root.hasCommitted = false
+        }
+        onPasteErrorChanged: if (pasteError !== "")
+          root.pasteFailed(FoamyI18n.t(pasteError))
         onAccepted: root.commitEdit(false)
-        onEditingFinished: if (!field.inputActiveFocus) root.commitEdit(true)
-        onKeyPressed: function(event) { if (root.handleKey(event.key)) event.accepted = true }
+        onEditingFinished: if (!field.inputActiveFocus)
+          root.commitEdit(true)
+        onKeyPressed: function (event) {
+          if (root.handleKey(event.key))
+            event.accepted = true
+        }
       }
 
       Text {

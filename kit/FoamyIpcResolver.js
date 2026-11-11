@@ -1,10 +1,10 @@
 .pragma library
-// foamy-kit 0.9.0 429b18a7c00baf4488c6792a95e4be71207aefa1a237436cef34e33122956915 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 72e0502f9cd35ca638b6af1c5e3e5411738a161cff2ed18f5751e11e9365f48c — do not edit; change foamy-kit and run sync
 
-// Finds 4.5's IpcRegistry at runtime. 4.0 has no such singleton, and a
-// static `import qs.Commons` reference to it would stop the plugin loading
-// there, so the lookup happens inside a throwaway object. The answer is
-// cached for the engine (one shell generation).
+// Finds the shell's IpcRegistry (qs.Commons). A `.pragma library` file has
+// no QML imports of its own, so the lookup happens inside a throwaway object
+// created in the caller's context. The answer is cached for the engine (one
+// shell generation); null when the registry can't be reached.
 var cached = undefined
 
 function registry(context) {
@@ -21,13 +21,13 @@ function registry(context) {
   return cached
 }
 
-// True when omarchy-shell can reach handlers over the shell socket (4.5).
+// True when omarchy-shell can reach handlers over the shell socket.
 function fastPath(context) {
   return registry(context) !== null
 }
 
 // Enabled handlers for `target`, in the order IpcRegistry asks them (the
-// first one answers). Empty on 4.0.
+// first one answers). Empty without a registry.
 function handlersFor(context, target) {
   var found = registry(context)
   if (!found || !Array.isArray(found.handlers)) return []
@@ -45,7 +45,7 @@ function others(context, handler) {
 // Make `handler` the one IpcRegistry (and so the omarchy-shell socket)
 // answers for its target, by moving it to the front of the registry list.
 // Nothing else is removed, disabled or called. Returns true when `handler`
-// now answers; false on 4.0 (no registry) or when it is disabled. A handler
+// now answers; false without a registry or when it is disabled. A handler
 // registered later goes behind it, but a later prefer() by someone else
 // wins: use FoamyIpcPreference to keep re-claiming.
 function prefer(context, handler) {
@@ -61,7 +61,7 @@ function prefer(context, handler) {
   return handlersFor(context, handler.target)[0] === handler
 }
 
-// Call another plugin's IPC function in-process, exactly as the 4.5
+// Call another plugin's IPC function in-process, exactly as the
 // omarchy-shell socket would: { ran: true, output } or { ran: false } (no
 // registry, no such target or function, wrong argument count). Arguments
 // are passed as strings. FoamyPeerIpc adds the omarchy-shell fallback.

@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 4a41e34e4016ff77806d7adc747f5c645e421d12b0f673a58173aa135b6bd0ad — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 c0b06867bfa1e08d7f7ba42acb6718cb9db71120664edb068455af5008280069 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -42,7 +42,12 @@ ColumnLayout {
 
   signal buttonHovered(bool hovered)
 
-  function toggle() { if (expanded) close(); else open() }
+  function toggle() {
+    if (expanded)
+      close()
+    else
+      open()
+  }
   function open() {
     expanded = true
     revealTimer.start()
@@ -54,10 +59,15 @@ ColumnLayout {
     interval: 0
     onTriggered: {
       for (var item = root.parent; item; item = item.parent)
-        if (typeof item.ensureVisible === "function") { item.ensureVisible(note); return }
+        if (typeof item.ensureVisible === "function") {
+          item.ensureVisible(note)
+          return
+        }
     }
   }
-  function close() { expanded = false }
+  function close() {
+    expanded = false
+  }
 
   spacing: FoamyStyle.gapSmall
 
@@ -101,12 +111,20 @@ ColumnLayout {
         Accessible.name: root.buttonTooltip
         Accessible.checkable: true
         Accessible.checked: root.expanded
-        Keys.onEscapePressed: function(event) { if (root.expanded) { root.close(); event.accepted = true } else event.accepted = false }
+        Keys.onEscapePressed: function (event) {
+          if (root.expanded) {
+            root.close()
+            event.accepted = true
+          } else
+            event.accepted = false
+        }
         onClicked: root.toggle()
         onHoveredChanged: root.buttonHovered(hovered)
       }
     }
-    Item { Layout.fillWidth: true }
+    Item {
+      Layout.fillWidth: true
+    }
   }
 
   Rectangle {
@@ -122,7 +140,11 @@ ColumnLayout {
     color: FoamyPalette.noteFill
     border.width: FoamyStyle.borderWidth
     border.color: FoamyPalette.divider
-    Behavior on opacity { NumberAnimation { duration: FoamyMotion.fadeIn } }
+    Behavior on opacity {
+      NumberAnimation {
+        duration: FoamyMotion.fadeIn
+      }
+    }
 
     Text {
       id: noteText

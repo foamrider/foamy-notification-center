@@ -144,33 +144,38 @@ inference artifacts, not defects. Type checking would cost more than it finds.
 
 ## 3. Run deterministic checks
 
-The target for every repository is one documented validation command, with
-pinned tools and configuration, that returns nonzero on failure and runs in CI
-where the environment allows. AI review or a successful parse does not
-replace linting.
+Every repository has one validation command, `tests/validate.sh`, synced
+from foamy-kit with its configuration. Run `mise install` once (`mise.toml`
+pins the tools), then `tests/validate.sh` on the Omarchy host. It runs every
+row of the table below that applies, prints a PASS, FAIL or SKIP line for
+each, and returns nonzero on any failure. The synced `checks.yml` workflow
+runs `tests/validate.sh --ci` on every push and pull request; `--ci` skips,
+with a stated reason, what needs the host (omarchy-plugin-validate, Qt's
+qmllint and qmlformat, Quickshell). The repository's own tests run from its
+`tests/suite.sh`. AI review or a successful parse does not replace linting.
 
-Most Foamy repositories do not meet that target yet. Until they do:
-
-- Run every check that exists. Report each missing row from the table below
-  as a should-fix finding with the proposed command and configuration. Report
-  a repository's gap once (in the first review that finds it, or an issue),
-  not again on every change.
+- Run `tests/validate.sh` and report its summary. A repository that has not
+  adopted it yet (no `tests/suite.sh`, unformatted files, no baselines) runs
+  every check that exists and reports the missing ones once as a should-fix
+  finding, in the first review that finds the gap or an issue, not on every
+  change.
 - A missing tool or an unsupported parser is a stated validation gap, never a
-  passing check.
+  passing check; `tests/validate.sh` fails when a pinned tool is missing.
 - Once a check is configured, a new failure in it is a blocker.
 
 Use the rows that apply; a QML-only plugin needs no Rust toolchain.
 
 | Source | Target checks |
 | --- | --- |
-| QML | `qmllint` with the real Qt, Quickshell and host import paths, including its unused-import warnings; the kit design lint (`check.sh`); a configured `qmlformat` comparison or the repository's established formatter check. Run the host harness for dynamic behavior. |
+| QML | `qmllint` with the real Qt, Quickshell and host import paths, unused imports as errors (the `qmllint` check of `tests/validate.sh`, baseline in `tests/lint/qmllint-baseline.txt`); the kit design lint (`check.sh`); `qmlformat` with the shared `.qmlformat.ini`. Run the host harness for dynamic behavior. |
 | JavaScript | Oxlint and a formatter check over every JavaScript file, including QML-loaded ones. |
 | Python | Ruff lint and format checks, with its complexity rule (`C901`) at a configured threshold; Vulture for dead code, with reviewed dynamic entry points. |
 | Shell | ShellCheck, `bash -n` and the repository's formatter check. Quoting and process handling need linting even when `bash -n` passes. |
 | Rust helpers | `kit/native/build-native.sh . --test` (format, Clippy and tests); compiler unused-code diagnostics; locked dependencies and the prescribed build/verify workflow when native inputs change. |
 | All plugins | `omarchy-plugin-validate <plugin>`, `bash tests/kit-check.sh`, the kit's `check.sh <plugin>`, the relevant tests, and any configured secret or dependency checks. |
 
-- Pin tools and configuration in the developer/CI setup. Review a new
+- Pin tools and configuration in the developer/CI setup (`mise.toml`,
+  `ruff.toml`, `.oxlintrc.json`, `.qmlformat.ini`). Review a new
   dependency's maintenance, license and security before adoption, and obtain
   approval first. Do not install scanners merely to satisfy this table, or
   run an unpinned network download during review.
@@ -195,8 +200,10 @@ Use the rows that apply; a QML-only plugin needs no Rust toolchain.
   Investigate regressions; do not move code into wrappers to lower a score.
   Thresholds belong in repository configuration, with a reason.
 - When adopting a tool in an existing repository, record current findings in
-  a reviewed baseline and fail on new ones. Do not silently expand the
-  baseline.
+  a reviewed baseline and fail on new ones
+  (`tests/validate.sh --update-baseline <check>` writes
+  `tests/lint/<check>-baseline.txt`; review its diff). Do not silently expand
+  the baseline.
 
 ## 4. Defend boundaries and preserve invariants
 
@@ -253,6 +260,14 @@ Use the rows that apply; a QML-only plugin needs no Rust toolchain.
   menus and host-owned renderers too: Qt AutoText can interpret markup and
   image references even when the main label is safe. If a sink requires
   markup, escape for that sink and bound the text before rendering.
+- Plain text alone does not bound a host tooltip's size: the bar's tooltip
+  window is sized to its text, with no width, wrap or line limit. Cap
+  app-controlled text in lines and characters, with a visible "…", before
+  `bar.showTooltip` (`FoamyText.tooltip()`).
+- A line-mode `SplitParser` or a `StdioCollector` is not a memory bound:
+  Quickshell buffers the whole line or stream before QML sees it, and a
+  chunk-mode parser can split a UTF-8 character. Bound the producer instead
+  (a fixed `head -c` wrapper, or a helper that reads with a limit).
 - Validate URL schemes, origins and redirects for the intended operation.
   Do not forward credentials across origins. Bound delivered and decompressed
   bytes and decoded image dimensions; a remote `Image.source` or an inline

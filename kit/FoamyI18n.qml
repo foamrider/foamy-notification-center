@@ -1,14 +1,15 @@
 pragma Singleton
-// foamy-kit 0.9.0 1823e930a714d5adabc6349dc4e43ca810b971939970c5c503cb219fe96533b9 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 ef1cbd050ad9980e584bd165d7a6e3543cfb9da7de868e7a86f16159ff1ecd9d — do not edit; change foamy-kit and run sync
 import QtQuick
-import Quickshell.Io
+import qs.Commons
+import "FoamyI18nText.js" as I18nText
 
-// Plugin strings with the 4.5 language picker, English on 4.0.
+// Plugin strings with the Omarchy language picker.
 //
 // Catalogs live in the plugin's i18n/ directory (en.json, da.json, …), keyed
-// by their English text. On 4.5 the shell's Commons.Translations type is
-// created at runtime so 4.0 can still load the plugin; on 4.0 strings come
-// from i18n/en.json (or the key itself).
+// by their English text, and are read by the shell's Commons.Translations:
+// a string missing from the picked language falls back to its base
+// language, then to en.json, then to the key itself.
 //
 //   FoamyI18n.t("Updated %1 minutes ago", minutes)     %1 / {name} holes
 //   FoamyI18n.tn("%1 devices", count)                  plural entry {"one":…,"other":…}
@@ -21,66 +22,30 @@ import Quickshell.Io
 // %1 or {x} stays literal.
 QtObject {
   id: root
-  property var backend: null
   // The plugin's catalogs: kit/ sits in the plugin root, beside i18n/.
   property url catalogDirectory: Qt.resolvedUrl("../i18n")
-  readonly property string language: backend ? backend.language : "en"
-  // 4.0 keeps the system calendar locale rather than forcing en-US.
-  readonly property string formatLocale: backend ? backend.formatLocale : Qt.locale().name
-  readonly property bool rightToLeft: backend ? backend.rightToLeft : false
-  readonly property bool translationsAvailable: backend !== null
-
-  Component.onCompleted: {
-    // Resolve the 4.5 type at runtime so 4.0 can still load the plugin in English.
-    try {
-      backend = Qt.createQmlObject('import qs.Commons; Translations { readonly property string formatLocale: I18n.formatLocale; readonly property bool rightToLeft: I18n.rightToLeft; function number(value, decimals) { return I18n.formatNumber(value, decimals) } }', root, "FoamyTranslations")
-      backend.directory = root.catalogDirectory
-    } catch (error) {
-      backend = null
-      console.info("Foamy translations unavailable; using English:", error.message)
-    }
+  property Translations backend: Translations {
+    directory: root.catalogDirectory
   }
+  readonly property string language: backend.language
+  readonly property string formatLocale: I18n.formatLocale
+  readonly property bool rightToLeft: I18n.rightToLeft
+  // Always true since kit 0.9.0 (Omarchy 4.5 only); kept for plugins that
+  // still read it.
+  readonly property bool translationsAvailable: true
 
-  // 4.0 only: English catalog, for plural entries and English overrides.
-  readonly property var english: backend ? ({}) : parseCatalog(englishFile.text())
-  property FileView englishFile: FileView {
-    path: root.backend ? "" : String(root.catalogDirectory).replace(/^file:\/\//, "") + "/en.json"
-    printErrors: false
-    blockLoading: true
-  }
-
-  function parseCatalog(raw) {
-    try {
-      var parsed = JSON.parse(raw || "{}")
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : ({})
-    } catch (error) {
-      return ({})
-    }
-  }
-
-  function englishText(key, count) {
-    var value = english[key]
-    if (value && typeof value === "object")
-      value = count !== undefined && Math.abs(Number(count)) === 1 && typeof value.one === "string" ? value.one : value.other
-    return typeof value === "string" && value.length > 0 ? value : key
-  }
-
+  // Node tests reach the same substitution through FoamyI18nText.js.
   function substitute(text, values) {
-    return String(text).replace(/%([1-9][0-9]*)|\{(\w+)\}/g, function(token, index, name) {
-      if (values === undefined || values === null) return token
-      var value = name ? values[name] : Array.isArray(values) ? values[Number(index) - 1] : Number(index) === 1 ? values : undefined
-      return value === undefined ? token : typeof value === "number" ? root.number(value) : String(value)
-    })
+    return I18nText.substitute(text, values, root.number)
   }
 
   function t(key, values) {
-    return substitute(backend ? backend.t(key, key) : englishText(key), values)
+    return substitute(backend.t(key, key), values)
   }
 
   // Plural form of `key` for `count`. %1 is the count unless `values` says otherwise.
   function tn(key, count, values) {
-    var text = backend && typeof backend.tn === "function" ? backend.tn(key, count, englishText(key, count)) : englishText(key, count)
-    return substitute(text, values === undefined ? [count] : values)
+    return substitute(backend.tn(key, count, key), values === undefined ? [count] : values)
   }
 
   // A footer's freshness: just now, then minutes, hours and days. The plugin's
@@ -89,17 +54,20 @@ QtObject {
   // "" without a time.
   function updatedAgo(updatedMs, nowMs) {
     var updated = Number(updatedMs)
-    if (!isFinite(updated) || updated <= 0) return ""
+    if (!isFinite(updated) || updated <= 0)
+      return ""
     var minutes = Math.max(0, Math.floor((Number(nowMs === undefined ? Date.now() : nowMs) - updated) / 60000))
-    if (minutes === 0) return t("Updated just now")
-    if (minutes < 60) return tn("Updated %1 minutes ago", minutes)
+    if (minutes === 0)
+      return t("Updated just now")
+    if (minutes < 60)
+      return tn("Updated %1 minutes ago", minutes)
     var hours = Math.floor(minutes / 60)
-    if (hours < 24) return tn("Updated %1 hours ago", hours)
+    if (hours < 24)
+      return tn("Updated %1 hours ago", hours)
     return tn("Updated %1 days ago", Math.floor(hours / 24))
   }
 
   function number(value, decimals) {
-    if (backend) return backend.number(value, decimals)
-    return decimals === undefined ? String(value) : Number(value).toFixed(decimals)
+    return I18n.formatNumber(value, decimals)
   }
 }

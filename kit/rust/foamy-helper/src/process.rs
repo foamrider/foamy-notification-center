@@ -1,11 +1,12 @@
-// foamy-kit 0.9.0 0db730b49aa8ea779d896f40d055549a3090ec7c5d7915f1c48d101542d7eb46 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 98d34cf58f2c49607244bb200a6f94063edff42bab835770440619f510f56870 — do not edit; change foamy-kit and run sync
 //! This process: exiting on a panic, dying with the parent, a new session,
-//! resource limits and the umask. Child processes get the same through
-//! [`crate::child::Bounded`].
+//! resource limits, the umask and a deadline for the whole run. Child
+//! processes get the same through [`crate::child::Bounded`].
 
 use std::io;
 use std::panic::{self, PanicHookInfo};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, PoisonError};
+use std::time::{Duration, Instant};
 
 pub use rustix::process::Resource;
 use rustix::process::{
@@ -27,6 +28,9 @@ pub(crate) fn exit_on_panic_after(code: i32, after: impl Fn() + Send + Sync + 's
     let report = REPORT.get_or_init(panic::take_hook);
     panic::set_hook(Box::new(move |info| {
         report(info);
+        // No unwinding follows (the release profile aborts on panic), so
+        // the children's drops never run: end their process groups here.
+        crate::child::kill_live_groups();
         after();
         std::process::exit(code);
     }));
@@ -36,12 +40,54 @@ pub(crate) fn exit_on_panic_after(code: i32, after: impl Fn() + Send + Sync + 's
 /// aborting: the kit's release profile has `panic = "abort"`, which ends in
 /// `SIGABRT` and a core dump. The panic message still goes to standard
 /// error; standard output gets nothing, so a JSON-lines peer never sees a
-/// torn reply. [`crate::json::run`] and [`crate::json::serve`] install it
+/// torn reply. Before the exit it kills the process group of every
+/// [`crate::child::Bounded`] child still running, so nothing the helper
+/// started outlives it. [`crate::json::run`] and [`crate::json::serve`] install it
 /// themselves; **every helper that runs its own loop or protocol calls it
 /// first thing in `main`**, before parsing arguments (read them with
 /// `std::env::args_os()` afterwards: `std::env::args()` panics on non-UTF-8).
 pub fn exit_on_panic(code: i32) {
     exit_on_panic_after(code, || {});
+}
+
+/// The deadline [`set_run_budget`] set, if any.
+static RUN_DEADLINE: Mutex<Option<Instant>> = Mutex::new(None);
+
+/// Gives the rest of this run `budget`: every [`crate::child::Bounded`] child
+/// and [`crate::child::Pipeline`] started from now on ends by then, each
+/// with the shorter of its own timeout and the time left. A child that
+/// would start after the deadline is not started; it reports `timed_out`.
+/// Calling it again replaces the deadline. Without a call there is none
+/// (only each child's own timeout).
+///
+/// A helper whose caller wraps it in `timeout` (FoamyNative's
+/// `timeout --kill-after=1s 30s`) sets a budget below that, first thing in
+/// `main`, and maps `timed_out` to its timeout reply:
+///
+/// ```no_run
+/// use std::time::Duration;
+/// use foamy_helper::{Failure, json, process};
+/// fn main() -> std::process::ExitCode {
+///     process::set_run_budget(Duration::from_secs(25)); // the caller's 30 s
+///     json::run(|| -> Result<serde_json::Value, Failure> { Ok(serde_json::json!({"ok": true})) }, json::error_reply)
+/// }
+/// ```
+///
+/// `timeout` signals only the helper's own process group, and each child
+/// leads a group of its own, so a child (or what it started) that outlives
+/// the wrapper's kill keeps running; and a helper killed by the wrapper
+/// prints no reply. With the budget the helper ends every child group
+/// itself and still replies in time. Use [`run_deadline`] for the helper's
+/// own waits (a [`crate::net::DeadlineStream`], a lock).
+pub fn set_run_budget(budget: Duration) {
+    // A budget too large for `Instant` is no deadline.
+    let deadline = Instant::now().checked_add(budget);
+    *RUN_DEADLINE.lock().unwrap_or_else(PoisonError::into_inner) = deadline;
+}
+
+/// The deadline [`set_run_budget`] set, or `None`.
+pub fn run_deadline() -> Option<Instant> {
+    *RUN_DEADLINE.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// `PR_SET_PDEATHSIG(SIGKILL)`: the kernel kills this process when its
