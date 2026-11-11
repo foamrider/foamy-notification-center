@@ -75,7 +75,7 @@ ShellRoot {
     function snoozes(): string { return "{}" }
     function unsnooze(key: string): string { root.snoozedMinutes=0; return "ok" }
     function snoozeAll(minutes: string): string { root.snoozedMinutes=Number(minutes); return "ok" }
-    function dndState(): string { return root.dnd ? "on" : "off" }
+    function isDnd(): string { return root.dnd ? "on" : "off" }
     function toggleDnd(): string { root.dnd = !root.dnd; return root.dnd ? "on" : "off" }
   }
   FileView {
