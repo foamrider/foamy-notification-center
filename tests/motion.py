@@ -1,7 +1,6 @@
 """Exercise real Center list delegates with synthetic history and an isolated Qt surface."""
 
 import os
-import signal
 import subprocess
 import sys
 import tempfile
@@ -216,20 +215,18 @@ if not desktop:
         env.pop(key, None)
 hostenv.isolate(env, base, display=desktop)
 env.update(hostenv.make(base, app, env=env))
-proc = subprocess.Popen(
-    ["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"],
-    env=env,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True,
-    start_new_session=True,
-)
-try:
-    output = proc.communicate(timeout=60)[0]
-except subprocess.TimeoutExpired:
-    os.killpg(proc.pid, signal.SIGTERM)
-    output = proc.communicate(timeout=3)[0]
+# qs and dbus-run-session's daemon in one process group, stopped as a whole
+# when the block ends (with the scripts qs's Processes started).
+log = base / "qs.log"
+with (
+    log.open("w") as out,
+    hostenv.ProcessGroup(
+        ["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"], env=env, stdout=out, stderr=subprocess.STDOUT
+    ) as shell,
+):
+    status = shell.wait(60)
+output = log.read_text()
 print(output)
 print("Captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert proc.returncode == 0 and "CENTER_MOTION 6 passed 0 failed" in output
+assert status == 0 and "CENTER_MOTION 6 passed 0 failed" in output

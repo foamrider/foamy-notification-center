@@ -116,10 +116,16 @@ env = dict(
 env.pop("WAYLAND_DISPLAY", None)
 hostenv.isolate(env, base)
 env.update(hostenv.make(base, app, env=env))
-result = subprocess.run(
-    ["quickshell", "-p", str(app), "--no-color"], env=env, capture_output=True, text=True, timeout=60
-)
-output = result.stdout + result.stderr
+# Its own process group, stopped as a whole when the block ends.
+log = base / "qs.log"
+with (
+    log.open("w") as out,
+    hostenv.ProcessGroup(
+        ["quickshell", "-p", str(app), "--no-color"], env=env, stdout=out, stderr=subprocess.STDOUT
+    ) as shell,
+):
+    status = shell.wait(60)
+output = log.read_text()
 print(output)
 hostenv.check(env, output, *hostenv.calls(base))
-assert result.returncode == 0 and "SCROLLING 7 passed 0 failed" in output, output
+assert status == 0 and "SCROLLING 7 passed 0 failed" in output, output

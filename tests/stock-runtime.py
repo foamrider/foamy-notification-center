@@ -101,7 +101,8 @@ env.update(
 )
 env["PATH"] = str(bin) + ":" + env["PATH"]
 log = (base / "log").open("w")
-proc = subprocess.Popen(["qs", "-p", str(app), "--no-color"], env=env, stdout=log, stderr=log, start_new_session=True)
+# Its own process group: stop() also ends the scripts its Processes started.
+proc = hostenv.ProcessGroup(["qs", "-p", str(app), "--no-color"], env=env, stdout=log, stderr=log)
 
 
 def ipc(t, *args):
@@ -268,8 +269,7 @@ try:
         "PASS stock default-action fallback, failed focus retention and retry; stock: delivery, in-place replacement, dismissal history, read state, DND both ways, silenced history, clear and subsequent arrival; Foamy Notifications absent; a missing omarchy-shell: focus fallback and DND error; watcher restart backoff and recovery"
     )
 finally:
-    os.killpg(proc.pid, signal.SIGTERM)
-    proc.wait(timeout=3)
+    proc.stop()
     log.close()
     print("Evidence:", base)
     hostenv.check(env, (base / "log").read_text(), *hostenv.calls(base))

@@ -3,7 +3,6 @@
 import json
 import os
 from pathlib import Path
-import signal
 import subprocess
 import sys
 import tempfile
@@ -156,20 +155,21 @@ for key in ["DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "QT_QUICK_BACKEND"]:
 hostenv.isolate(env, base, display=True)
 env.update(hostenv.make(base, app, env=env))
 env["PATH"] = str(cli) + ":" + env["PATH"]
-process = subprocess.Popen(
-    ["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"],
-    env=env,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True,
-    start_new_session=True,
-)
-try:
-    output = process.communicate(timeout=60)[0]
-except subprocess.TimeoutExpired:
-    os.killpg(process.pid, signal.SIGTERM)
-    output = process.communicate(timeout=3)[0]
+# qs and dbus-run-session's daemon in one process group, stopped as a whole
+# when the block ends (with the scripts qs's Processes started).
+log = base / "qs.log"
+with (
+    log.open("w") as out,
+    hostenv.ProcessGroup(
+        ["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"],
+        env=env,
+        stdout=out,
+        stderr=subprocess.STDOUT,
+    ) as shell,
+):
+    status = shell.wait(60)
+output = log.read_text()
 print(output)
 print("Image captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert process.returncode == 0 and "IMAGES_UI 2 passed 0 failed" in output
+assert status == 0 and "IMAGES_UI 2 passed 0 failed" in output

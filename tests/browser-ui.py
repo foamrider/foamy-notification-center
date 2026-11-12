@@ -4,7 +4,6 @@ from contextlib import closing
 import json
 import os
 from pathlib import Path
-import signal
 import sqlite3
 import subprocess
 import sys
@@ -186,22 +185,24 @@ for key in ["DISPLAY", "WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE"]:
 hostenv.isolate(env, base)
 env.update(hostenv.make(base, app, env=env))
 env["PATH"] = str(cli) + ":" + env["PATH"]
-process = subprocess.Popen(
-    ["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"],
-    env=env,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True,
-    start_new_session=True,
-)
+# qs and dbus-run-session's daemon in one process group, stopped as a whole
+# when the block ends (with the scripts qs's Processes started).
+log = base / "qs.log"
 try:
-    output = process.communicate(timeout=60)[0]
-except subprocess.TimeoutExpired:
-    os.killpg(process.pid, signal.SIGTERM)
-    output = process.communicate(timeout=3)[0]
+    with (
+        log.open("w") as out,
+        hostenv.ProcessGroup(
+            ["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"],
+            env=env,
+            stdout=out,
+            stderr=subprocess.STDOUT,
+        ) as shell,
+    ):
+        status = shell.wait(60)
 finally:
     browser.close()
+output = log.read_text()
 print(output)
 print("Browser captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert process.returncode == 0 and "BROWSER_UI 3 passed 0 failed" in output
+assert status == 0 and "BROWSER_UI 3 passed 0 failed" in output

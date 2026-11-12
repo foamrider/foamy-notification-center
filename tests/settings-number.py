@@ -117,10 +117,16 @@ for key in ["WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE"]:
     env.pop(key, None)
 hostenv.isolate(env, base)
 env.update(hostenv.make(base, app, env=env))
-result = subprocess.run(
-    ["quickshell", "-p", str(app), "--no-color"], env=env, capture_output=True, text=True, timeout=60
-)
-output = result.stdout + result.stderr
+# Its own process group, stopped as a whole when the block ends.
+log = base / "qs.log"
+with (
+    log.open("w") as out,
+    hostenv.ProcessGroup(
+        ["quickshell", "-p", str(app), "--no-color"], env=env, stdout=out, stderr=subprocess.STDOUT
+    ) as shell,
+):
+    shell.wait(60)
+output = log.read_text()
 hostenv.check(env, output, *hostenv.calls(base))
 print(
     "\n".join(
