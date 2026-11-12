@@ -1,16 +1,24 @@
 """Exercise the real panel and settings helper against disposable configuration."""
+
 import json
 import os
 from pathlib import Path
-import signal
 import subprocess
+import sys
 import tempfile
 import time
 
 from favicon_test import png
-import hostenv
+
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
+sys.path.insert(0, str(KIT / "preview"))
+import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
+# Opens real surfaces on the live desktop and takes its keyboard focus: only
+# when asked for (tests/suite.sh runs it with FOAMY_TEST_DESKTOP=1).
+if os.environ.get("FOAMY_TEST_DESKTOP") != "1":
+    raise SystemExit("settings-ui: opens real surfaces on the live desktop; set FOAMY_TEST_DESKTOP=1 to run it")
 base = Path(tempfile.mkdtemp(prefix="foamy-center-settings-"))
 app = base / "app"
 app.mkdir()
@@ -20,24 +28,63 @@ for name in ["Commons", "Ui"]:
 home = base / "home"
 config = home / ".config/omarchy/shell.json"
 config.parent.mkdir(parents=True)
-original = {"version": 1, "other": "preserved", "bar": {"layout": {"right": [{"id": "foamy.notification-center", "language": "nb", "browserGrouping": "hostname"}]}}, "plugins": [{"id": "foamy.notifications", "browserGrouping": "hostname", "useBrowserFavicons": True}]}
+original = {
+    "version": 1,
+    "other": "preserved",
+    "bar": {
+        "layout": {"right": [{"id": "foamy.notification-center", "language": "nb", "browserGrouping": "hostname"}]}
+    },
+    "plugins": [{"id": "foamy.notifications", "browserGrouping": "hostname", "useBrowserFavicons": True}],
+}
 config.write_text(json.dumps(original))
 cli = base / "bin"
 cli.mkdir()
 (cli / "python3").symlink_to("/usr/bin/python3")
-(cli / "omarchy-shell").write_text("#!/bin/sh\nexec qs ipc -n -p " + str(app) + " call \"$@\"\n")
-(cli / "omarchy-shell").chmod(0o755)
+# Test double of the host's `omarchy bar set ID KEY VALUE [--json]` (omarchy-bar
+# cmd_set, same contract): the value as JSON, then the shell's setBarWidget
+# through omarchy-shell (hostenv's, which reaches only this test's shell), which
+# must answer "ok". Center saves take this CLI path (kit FoamyPrefs saveCommand:
+# the fixture bar has no updateEntryInline). Anything else fails loudly.
+OMARCHY = r"""#!/bin/bash
+printf '%s\n' "omarchy $*" >> "LOG"
+[[ ${1:-} == bar && ${2:-} == set && $# -ge 5 ]] || { echo "omarchy test double: unsupported: $*" >&2; exit 127; }
+id=$3 key=$4 value=$5
+shift 5
+if [[ ${1:-} == --json ]]; then
+  json=$(jq -cn --argjson value "$value" '$value') || { echo "omarchy-bar: invalid JSON value: $value" >&2; exit 1; }
+  shift
+else
+  json=$(jq -cn --arg value "$value" '$value')
+fi
+(( $# == 0 )) || { echo "omarchy test double: placement is not modelled: $*" >&2; exit 127; }
+result=$(omarchy-shell shell setBarWidget "$id" "$key" "$json" "{}") || exit 1
+[[ $result == ok ]] || { echo "omarchy-bar: $result" >&2; exit 1; }
+echo "Set $key on $id"
+""".replace("LOG", str(base / "omarchy-double.log"))
 image = home / "screenshot with spaces.png"
 image.write_bytes(png())
 (home / "editor-ready").write_text("")
 # The editor 4.5 names and the opener prefers; this stub (first on PATH) shadows an installed omasnap.
-(cli / "omasnap").write_text('#!/bin/bash\ngrep -q ready "$HOME/editor-ready" || exit 3\nprintf "%s" "$1" > "$HOME/editor-opened"\nsleep 1\n')
+(cli / "omasnap").write_text(
+    '#!/bin/bash\ngrep -q ready "$HOME/editor-ready" || exit 3\nprintf "%s" "$1" > "$HOME/editor-opened"\nsleep 1\n'
+)
 (cli / "omasnap").chmod(0o755)
 history = home / ".local/state/omarchy/notifications/history"
 history.mkdir(parents=True)
 stamp = int(time.time() * 1000)
-(history / f"{stamp}-1.json").write_text(json.dumps({"timestamp":stamp,"app":"omarchy-action","summary":"Screenshot saved to clipboard and file","body":"Edit with Super + Alt + , (or click this)","image":str(image),"execArgv":json.dumps(["omasnap",str(image)])}))
-(app / "shell.qml").write_text('''pragma ComponentBehavior: Bound
+(history / f"{stamp}-1.json").write_text(
+    json.dumps(
+        {
+            "timestamp": stamp,
+            "app": "omarchy-action",
+            "summary": "Screenshot saved to clipboard and file",
+            "body": "Edit with Super + Alt + , (or click this)",
+            "image": str(image),
+            "execArgv": json.dumps(["omasnap", str(image)]),
+        }
+    )
+)
+(app / "shell.qml").write_text("""pragma ComponentBehavior: Bound
 import QtQuick
 import QtTest
 import Quickshell
@@ -50,14 +97,8 @@ import "plugin/Preferences.js" as PluginPreferences
 import "plugin/kit" as Kit
 ShellRoot {
   id: root
-  QtObject {
-    id: translator
-    property string language: "en"
-    property string formatLocale: "en-US"
-    property bool rightToLeft: false
-    function t(key, fallback) { return fallback }
-    function number(value) { return String(value) }
-  }
+  // The shell's language file: Arabic turns FoamyI18n.rightToLeft on.
+  FileView { id: language; path: Quickshell.env("OMARCHY_LANGUAGE_FILE") }
   property var config: ({})
   property bool failSave: false
   property bool finished: false
@@ -75,7 +116,7 @@ ShellRoot {
     function snoozes(): string { return "{}" }
     function unsnooze(key: string): string { root.snoozedMinutes=0; return "ok" }
     function snoozeAll(minutes: string): string { root.snoozedMinutes=Number(minutes); return "ok" }
-    function dndState(): string { return root.dnd ? "on" : "off" }
+    function isDnd(): string { return root.dnd ? "on" : "off" }
     function toggleDnd(): string { root.dnd = !root.dnd; return root.dnd ? "on" : "off" }
   }
   FileView {
@@ -180,15 +221,49 @@ ShellRoot {
       function capture(item, name) {
         var done = false
         item.grabToImage(function(result) { verify(result.saveToFile(Qt.resolvedUrl(name + ".png").toString().replace("file://", ""))); done = true })
-        tryVerify(function() { return done })
+        tryVerify(function() { return done }, roundTrip, "captured " + name)
       }
-      function init() { panel.open(); tryCompare(panel, "opened", true); wait(200) }
+      // A hang guard for a step that waits on processes (an omarchy-shell
+      // call is a `qs ipc` start, a save takes several), not a speed limit:
+      // on a loaded machine one round trip took longer than the 5 s default.
+      readonly property int roundTrip: 20000
+      // keyClick() goes to the focus window: wait until `item` has the keys
+      // there, not only the focus inside its own window.
+      function focusOn(item) {
+        item.forceActiveFocus()
+        tryVerify(function() { return item.activeFocus && item.Window.active }, roundTrip, "keyboard focus on " + item)
+      }
+      // FileView.setText() writes asynchronously, and the watcher's reload
+      // of an earlier write can land after it: wait until the file is
+      // written and a fresh read returns `text`.
+      // No preference read or save in flight: openSettings() starts no read
+      // while one runs, so it would answer from before a configuration write.
+      function settle() {
+        tryVerify(function() { return !panel.popupSettingsLoading && panel.preferenceActive === null }, roundTrip, "the panel settled")
+      }
+      function writeFile(view, text) {
+        var saved = false
+        var onSaved = function() { saved = true }
+        view.saved.connect(onSaved)
+        view.setText(text)
+        tryVerify(function() { return saved }, roundTrip, "wrote " + view.path)
+        view.saved.disconnect(onSaved)
+        view.reload()
+        tryVerify(function() { return view.loaded && view.text() === text }, roundTrip, "read back " + view.path)
+      }
+      // QtTest sends keyClick() to QGuiApplication::focusWindow(). On a real
+      // Wayland session the popup (a layer surface) becomes that window only
+      // when the compositor's keyboard focus arrives, asynchronously after it
+      // maps; a key sent before then goes to another window and is lost.
+      function init() {
+        panel.open(); tryCompare(panel, "opened", true, roundTrip); wait(200)
+        tryVerify(function() { return panel.view !== null && panel.view.Window.active }, roundTrip, "The panel never got keyboard focus")
+      }
       function cleanup() { panel.close(); wait(200) }
       function test_00_direction() {
-        Kit.FoamyI18n.backend = translator;
         for (var direction = 0; direction < 2; direction++) {
-          translator.rightToLeft = !!direction;
-          translator.language = direction ? "ar" : "en";
+          language.setText(direction ? "ar\n" : "en\n");
+          tryCompare(Kit.FoamyI18n, "rightToLeft", !!direction, 10000);
           panel.openSettings(); wait(150);
           var pane = control("notificationSettingsPane");
           compare(pane.LayoutMirroring.enabled, !!direction);
@@ -196,6 +271,7 @@ ShellRoot {
           verify(direction ? backX > pane.width / 2 : backX < pane.width / 2);
           capture(pane, direction ? "rtl-settings" : "ltr-settings");
           panel.closeSettings(); wait(100);
+          tryVerify(function() { return panel.rows.length > 0 }, roundTrip, "the fixture's notification is listed");
           panel.moveCursor(direction ? -1 : 1, 0); compare(panel.cursorDismiss, true);
           panel.moveCursor(direction ? 1 : -1, 0); compare(panel.cursorDismiss, false);
           panel.startSearch(); wait(200);
@@ -205,28 +281,33 @@ ShellRoot {
           capture(search.parent.parent, direction ? "rtl-search" : "ltr-search");
           panel.endSearch(); wait(200);
         }
-        Kit.FoamyI18n.backend = null;
+        language.setText("en\n");
+        tryCompare(Kit.FoamyI18n, "rightToLeft", false, 10000);
       }
       function test_00_snooze_menu() {
         // The header's kit ⋯ menu: Snooze is a submenu (opens in place, Back row first).
         var header = panel.header, menu = header.menu
         mouseClick(control("foamyMenuButton"))
-        tryCompare(header, "menuOpen", true)
+        tryCompare(header, "menuOpen", true, roundTrip)
         var snooze = header.menuItems[1]
         compare(snooze.objectName, "notificationSnooze")
         compare(snooze.iconName, "alarm-clock")
-        tryCompare(snooze, "visible", true)
-        tryCompare(snooze, "enabled", true)
+        tryCompare(snooze, "visible", true, roundTrip)
+        tryCompare(snooze, "enabled", true, roundTrip)
         menu.activate(menu.entries.indexOf(snooze))
-        tryCompare(menu, "inSubmenu", true)
+        tryCompare(menu, "inSubmenu", true, roundTrip)
         compare(menu.entries.length, 5)
         for (var i = 0; i < menu.entries.length; i++) verify(menu.entries[i].iconName !== "", "icon for " + menu.entries[i].text)
         wait(150); capture(menu.panel, "snooze-menu")
         menu.activate(menu.entries.indexOf(snooze.items[0])); tryCompare(root,"snoozedMinutes",30)
         compare(header.menuOpen, false)
+        // The fixture changes on the IPC call; the service takes the next
+        // snooze only once that call's process has exited (one at a time).
+        tryCompare(store, "snoozeBusy", false, roundTrip)
         header.openMenu(true)
         menu.activate(menu.entries.indexOf(snooze))
         menu.activate(menu.entries.indexOf(snooze.items[3])); tryCompare(root,"snoozedMinutes",0)
+        tryCompare(store, "snoozeBusy", false, roundTrip)
         header.closeMenu()
       }
       function test_01_menu_and_settings_save() {
@@ -235,7 +316,7 @@ ShellRoot {
         // separator and Settings (last) are in its menu, each with an icon.
         var header = panel.header, menu = header.menu, more = control("foamyMenuButton")
         mouseClick(more)
-        tryCompare(header, "menuOpen", true)
+        tryCompare(header, "menuOpen", true, roundTrip)
         verify(header.overflowing && header.settingsInMenu)
         verify(control("notificationSearchButton").visible)
         verify(control("clearAllNotifications").visible)
@@ -251,19 +332,22 @@ ShellRoot {
         verify(Math.abs(end.x - edge.x) <= 1, "menu trailing edge " + edge.x + " vs button " + end.x)
         verify(edge.y >= end.y - 1, "menu below the button")
         wait(150); capture(box, "overflow-menu")
+        // Silence is disabled while a DND read runs (one follows every snooze
+        // and the startup refresh); activating it then would do nothing.
+        tryCompare(store, "dndBusy", false, roundTrip)
         menu.activate(0)
-        tryCompare(root, "dnd", true)
-        tryCompare(panel, "dnd", true)
+        tryCompare(root, "dnd", true, roundTrip)
+        tryCompare(panel, "dnd", true, roundTrip)
         compare(header.menuItems[0].iconName, "bell-ring")
         // Keyboard: the ⋯ button is the cursor stop above the first row.
-        panel.view.forceActiveFocus(); keyClick(Qt.Key_Up)
+        focusOn(panel.view); keyClick(Qt.Key_Up)
         verify(panel.cursorOnSettings && header.menuHasCursor)
         keyClick(Qt.Key_Return)
-        tryCompare(header, "menuOpen", true)
+        tryCompare(header, "menuOpen", true, roundTrip)
         compare(menu.currentIndex, 0)
         keyClick(Qt.Key_End); keyClick(Qt.Key_Return)
-        tryCompare(panel, "editingSettings", true)
-        tryCompare(panel, "popupSettingsLoading", false)
+        tryCompare(panel, "editingSettings", true, roundTrip)
+        tryCompare(panel, "popupSettingsLoading", false, roundTrip)
         verify(panel.popupSettingsAvailable, panel.settingsError)
         var pane = control("notificationSettingsPane")
         wait(250)
@@ -273,29 +357,29 @@ ShellRoot {
         capture(card, "settings-wide-dark")
         var silenceCritical = control("popups-dndSilenceCritical")
         compare(silenceCritical.checked, false)
-        silenceCritical.forceActiveFocus(); keyClick(Qt.Key_Space)
-        tryVerify(function() { return panel.preferenceActive === null && panel.popupSettings.dndSilenceCritical === true })
+        focusOn(silenceCritical); keyClick(Qt.Key_Space)
+        tryVerify(function() { return panel.preferenceActive === null && panel.popupSettings.dndSilenceCritical === true }, roundTrip)
         compare(root.config.plugins[0].dndSilenceCritical, true)
         compare(root.config.bar.layout.right[0].dndSilenceCritical, undefined)
         var compact = control("popups-compact")
         compact.clicked()
-        tryVerify(function() { return panel.preferenceActive === null && panel.popupSettings.compact === false })
+        tryVerify(function() { return panel.preferenceActive === null && panel.popupSettings.compact === false }, roundTrip)
         compare(panel.popupSettings.compact, false)
-        tryVerify(function() { return root.config.plugins[0].compact === false })
+        tryVerify(function() { return root.config.plugins[0].compact === false }, roundTrip)
         compare(root.config.bar.layout.right[0].compact, undefined)
         var removeWithX = control("popups-closeButtonRemovesHistory")
         compare(removeWithX.checked, false)
-        removeWithX.forceActiveFocus(); keyClick(Qt.Key_Space)
-        tryVerify(function() { return panel.preferenceActive === null && panel.popupSettings.closeButtonRemovesHistory === true })
+        focusOn(removeWithX); keyClick(Qt.Key_Space)
+        tryVerify(function() { return panel.preferenceActive === null && panel.popupSettings.closeButtonRemovesHistory === true }, roundTrip)
         compare(root.config.plugins[0].closeButtonRemovesHistory, true)
         compare(root.config.bar.layout.right[0].closeButtonRemovesHistory, undefined)
         panel.savePreference("center", "compact", true)
-        tryVerify(function() { return root.config.bar.layout.right[0].compact === true })
-        tryVerify(function() { return panel.preferenceActive === null })
+        tryVerify(function() { return root.config.bar.layout.right[0].compact === true }, roundTrip)
+        tryVerify(function() { return panel.preferenceActive === null }, roundTrip)
         compare(panel.compact, true)
         compare(root.config.plugins[0].compact, false)
         panel.savePreference("popups", "normalTimeoutSec", 15)
-        tryVerify(function() { return panel.popupSettings.normalTimeoutSec === 15 })
+        tryVerify(function() { return panel.popupSettings.normalTimeoutSec === 15 }, roundTrip)
         compare(root.config.other, "preserved")
         panel.settings = Object.assign({}, panel.settings, {panelWidth:320})
         wait(200); compare(pane.width, panel.panelWidth - 2)
@@ -304,66 +388,66 @@ ShellRoot {
         wait(200); capture(card, "settings-narrow-light")
         panel.settings = Qt.binding(function() { return root.config.bar.layout.right[0] })
         var back = pane.backTarget
-        back.forceActiveFocus(); keyClick(Qt.Key_Escape)
-        tryCompare(panel, "editingSettings", false)
-        tryVerify(function() { return panel.view.activeFocus })
+        focusOn(back); keyClick(Qt.Key_Escape)
+        tryCompare(panel, "editingSettings", false, roundTrip)
+        tryVerify(function() { return panel.view.activeFocus }, roundTrip)
         } catch (error) { console.log("SETTINGS_FAILURE menu/save", error.message, error.stack); throw error }
       }
       function test_02_invalid_and_failed_saves() {
         try {
         panel.openSettings()
-        tryCompare(panel, "popupSettingsLoading", false)
+        tryCompare(panel, "popupSettingsLoading", false, roundTrip)
         panel.savePreference("popups", "normalTimeoutSec", 0)
         verify(panel.settingsError !== "")
         compare(panel.preferenceActive, null)
         root.failSave = true
         panel.savePreference("center", "compact", false)
-        tryVerify(function() { return panel.preferenceActive === null })
+        tryVerify(function() { return panel.preferenceActive === null }, roundTrip)
         verify(panel.settingsError !== "")
         compare(panel.compact, true)
         var grouping = control("center-browserGrouping")
-        grouping.open(); tryCompare(grouping, "popupOpen", true); keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
-        tryCompare(grouping, "popupOpen", false)
-        tryVerify(function() { return panel.settingsError !== "" && panel.preferenceActive === null && !panel.popupSettingsLoading })
+        grouping.open(); tryCompare(grouping, "popupOpen", true, roundTrip); keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
+        tryCompare(grouping, "popupOpen", false, roundTrip)
+        tryVerify(function() { return panel.settingsError !== "" && panel.preferenceActive === null && !panel.popupSettingsLoading }, roundTrip)
         compare(grouping.value, "hostname")
         capture(control("notificationSettingsPane").parent.parent.parent.parent, "settings-save-error")
         root.failSave = false
-        tryVerify(function() { return !panel.popupSettingsLoading && panel.preferenceActive === null })
-        grouping.open(); tryCompare(grouping, "popupOpen", true); keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
-        tryCompare(grouping, "popupOpen", false)
-        tryCompare(panel, "browserGrouping", "none")
-        tryCompare(grouping, "value", "none")
-        grouping.open(); tryCompare(grouping, "popupOpen", true); keyClick(Qt.Key_Up); keyClick(Qt.Key_Return)
-        tryCompare(grouping, "popupOpen", false)
-        tryCompare(panel, "browserGrouping", "hostname")
+        tryVerify(function() { return !panel.popupSettingsLoading && panel.preferenceActive === null }, roundTrip)
+        grouping.open(); tryCompare(grouping, "popupOpen", true, roundTrip); keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
+        tryCompare(grouping, "popupOpen", false, roundTrip)
+        tryCompare(panel, "browserGrouping", "none", roundTrip)
+        tryCompare(grouping, "value", "none", roundTrip)
+        grouping.open(); tryCompare(grouping, "popupOpen", true, roundTrip); keyClick(Qt.Key_Up); keyClick(Qt.Key_Return)
+        tryCompare(grouping, "popupOpen", false, roundTrip)
+        tryCompare(panel, "browserGrouping", "hostname", roundTrip)
         panel.savePreference("center", "compact", false)
-        tryVerify(function() { return panel.preferenceActive === null })
+        tryVerify(function() { return panel.preferenceActive === null }, roundTrip)
         compare(panel.settingsError, "")
-        tryCompare(panel, "compact", false)
+        tryCompare(panel, "compact", false, roundTrip)
         // kit FoamyNumberField row: the editor is its `field`; the unit is separate.
         var row = control("popups-normalTimeoutSec"), duration = row.field
         verify(row.compact)
         compare(row.unit, "s")
-        tryVerify(function() { return !panel.popupSettingsLoading && row.enabled })
-        duration.focusInput(); keyClick(Qt.Key_A, Qt.ControlModifier)
+        tryVerify(function() { return !panel.popupSettingsLoading && row.enabled }, roundTrip)
+        duration.focusInput(); tryCompare(duration, "inputActiveFocus", true, roundTrip); keyClick(Qt.Key_A, Qt.ControlModifier)
         keyClick(Qt.Key_1); keyClick(Qt.Key_2); keyClick(Qt.Key_Return)
-        tryVerify(function() { return panel.popupSettings.normalTimeoutSec === 12 })
-        tryVerify(function() { return !panel.popupSettingsLoading && row.enabled })
-        duration.focusInput(); keyClick(Qt.Key_A, Qt.ControlModifier); keyClick(Qt.Key_9)
+        tryVerify(function() { return panel.popupSettings.normalTimeoutSec === 12 }, roundTrip)
+        tryVerify(function() { return !panel.popupSettingsLoading && row.enabled }, roundTrip)
+        duration.focusInput(); tryCompare(duration, "inputActiveFocus", true, roundTrip); keyClick(Qt.Key_A, Qt.ControlModifier); keyClick(Qt.Key_9)
         keyClick(Qt.Key_Escape)
         compare(duration.text, "12")
         panel.savePreference("popups", "normalTimeoutSec", 15)
-        tryVerify(function() { return duration.text === "15" })
+        tryVerify(function() { return duration.text === "15" }, roundTrip)
         } catch (error) { console.log("SETTINGS_FAILURE errors", error.message, error.stack); throw error }
       }
       function test_03_disabled_service_and_scroll_focus() {
         try {
+        settle()
         var next = JSON.parse(configFile.text())
         next.disabledPlugins = ["foamy.notifications"]
-        configFile.setText(JSON.stringify(next))
-        wait(150)
+        writeFile(configFile, JSON.stringify(next))
         panel.openSettings()
-        tryCompare(panel, "popupSettingsLoading", false)
+        tryCompare(panel, "popupSettingsLoading", false, roundTrip)
         verify(!panel.popupSettingsAvailable)
         var pane = control("notificationSettingsPane"), scroll = pane.flickable
         compare(findChild(pane, "popups-compact"), null)
@@ -372,7 +456,7 @@ ShellRoot {
         capture(pane.parent.parent.parent.parent, "settings-disabled")
         pane.height = 320
         control("center-maxItems").forceActiveFocus()
-        tryVerify(function() { return scroll.contentY > 0 })
+        tryVerify(function() { return scroll.contentY > 0 }, roundTrip)
         verify(control("center-maxItems").enabled)
         wait(200)
         capture(pane.parent.parent.parent.parent, "settings-disabled-scroll")
@@ -380,12 +464,13 @@ ShellRoot {
       }
       function test_04_uninstalled_service() {
         try {
+        settle()
         var next = JSON.parse(configFile.text())
         delete next.disabledPlugins
-        configFile.setText(JSON.stringify(next))
+        writeFile(configFile, JSON.stringify(next))
         registry.installedPlugins = ({})
         panel.openSettings()
-        tryCompare(panel, "popupSettingsLoading", false)
+        tryCompare(panel, "popupSettingsLoading", false, roundTrip)
         verify(panel.popupSettingsAvailable, "A stale configuration entry is retained in this fixture")
         verify(!panel.popupPluginInstalled)
         var pane = control("notificationSettingsPane")
@@ -394,10 +479,11 @@ ShellRoot {
         compare(control("popups-availability").text, "Plugin not installed")
         verify(control("center-maxItems").enabled)
         wait(200); capture(pane.parent.parent.parent.parent, "settings-uninstalled")
+        settle()
         delete next.plugins
-        configFile.setText(JSON.stringify(next))
+        writeFile(configFile, JSON.stringify(next))
         panel.openSettings()
-        tryCompare(panel, "popupSettingsLoading", false)
+        tryCompare(panel, "popupSettingsLoading", false, roundTrip)
         verify(!panel.popupSettingsAvailable)
         compare(panel.settingsError, "")
         compare(control("popups-availability").text, "Plugin not installed")
@@ -407,15 +493,17 @@ ShellRoot {
         try {
         panel.startSearch()
         var search = control("notificationSearch")
-        tryCompare(search, "inputActiveFocus", true)
+        tryCompare(search, "inputActiveFocus", true, roundTrip)
         keyClick(Qt.Key_A)
         compare(panel.filter, "a")
         keyClick(Qt.Key_Down)
-        tryCompare(search, "inputActiveFocus", false)
+        tryCompare(search, "inputActiveFocus", false, roundTrip)
         search.focusInput()
+        tryCompare(search, "inputActiveFocus", true, roundTrip)
         keyClick(Qt.Key_Return)
-        tryCompare(search, "inputActiveFocus", false)
+        tryCompare(search, "inputActiveFocus", false, roundTrip)
         search.focusInput()
+        tryCompare(search, "inputActiveFocus", true, roundTrip)
         search.pasteError = "Clipboard text is too large or contains invalid characters."
         wait(100)
         capture(search.parent.parent.parent, "search-paste-error")
@@ -424,12 +512,13 @@ ShellRoot {
         compare(search.pasteError, "")
         compare(panel.filter, "")
         panel.openSettings()
-        tryCompare(panel, "popupSettingsLoading", false)
+        tryCompare(panel, "popupSettingsLoading", false, roundTrip)
         // A refused paste shows on the number row's own error line, and typing clears it.
         var row = control("center-maxItems"), field = row.field
         field.pasteError = "Could not paste clipboard text. Copy plain text and try again."
-        tryVerify(function() { return row.implicitHeight > row.field.height + 4 })
+        tryVerify(function() { return row.implicitHeight > row.field.height + 4 }, roundTrip)
         field.focusInput()
+        tryCompare(field, "inputActiveFocus", true, roundTrip)
         keyClick(Qt.Key_A, Qt.ControlModifier)
         keyClick(Qt.Key_7)
         compare(field.pasteError, "")
@@ -442,20 +531,19 @@ ShellRoot {
         panel.editingSettings = false
         panel.searching = false
         panel.filter = ""
-        tryVerify(function() { return store.entries.length === 1 })
+        tryVerify(function() { return store.entries.length === 1 }, roundTrip)
         var row = store.entries[0]
         compare(row.fileAction, "edit-screenshot")
         wait(200)
         capture(control("notificationSearch").parent.parent.parent, "screenshot-history")
         panel.activate(row)
-        tryVerify(function() { return store.focusError.indexOf("Could not open the image") === 0 })
+        tryVerify(function() { return store.focusError.indexOf("Could not open the image") === 0 }, roundTrip)
         compare(store.entries.length, 1)
         compare(panel.opened, true)
         capture(control("notificationSearch").parent.parent.parent, "screenshot-open-error")
-        editorReady.setText("ready")
-        wait(100)
+        writeFile(editorReady, "ready")
         panel.activate(row)
-        tryCompare(panel, "opened", false)
+        tryCompare(panel, "opened", false, roundTrip)
         compare(store.entries.length, 0)
         } catch (error) { console.log("SETTINGS_FAILURE screenshot", error.message, error.stack); throw error }
       }
@@ -463,15 +551,50 @@ ShellRoot {
     }
   }
 }
-''')
+""")
+language = base / "language"
+language.write_text("en\n")
 # Avoid starting desktop portal daemons on the disposable test bus.
-env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QUICK_BACKEND="rhi", QT_QPA_PLATFORMTHEME="basic", QT_NO_XDG_DESKTOP_PORTAL="1", OMARCHY_PATH=str(hostenv.root()))
-process = subprocess.Popen(["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
-try:
-    output = process.communicate(timeout=30)[0]
-except subprocess.TimeoutExpired:
-    os.killpg(process.pid, signal.SIGTERM)
-    output = process.communicate(timeout=3)[0]
+env = dict(
+    os.environ,
+    HOME=str(home),
+    XDG_CONFIG_HOME=str(home / ".config"),
+    XDG_CACHE_HOME=str(home / ".cache"),
+    XDG_STATE_HOME=str(home / ".local/state"),
+    OMARCHY_LANGUAGE_FILE=str(language),
+    QT_QPA_PLATFORM="wayland",
+    QT_QUICK_BACKEND="rhi",
+    QT_QPA_PLATFORMTHEME="basic",
+    QT_NO_XDG_DESKTOP_PORTAL="1",
+)
+# A private OMARCHY_PATH (the host's shell/ and default/ only) and logging
+# stubs for every omarchy command: no host script runs, and omarchy-shell
+# reaches only this test's shell.
+# On the live compositor on purpose (real keyboard focus); the bus is
+# dbus-run-session's own.
+hostenv.isolate(env, base, display=True)
+env.update(hostenv.make(base, app, env=env, stubs={"omarchy": OMARCHY}))
+env["PATH"] = str(cli) + ":" + env["PATH"]
+# qs and dbus-run-session's daemon in one process group, stopped as a whole
+# when the block ends (with the scripts qs's Processes started).
+log = base / "qs.log"
+with (
+    log.open("w") as out,
+    hostenv.ProcessGroup(
+        ["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"], env=env, stdout=out, stderr=subprocess.STDOUT
+    ) as shell,
+):
+    # A hang guard, not a speed limit: the run takes about 13 s on an idle
+    # machine and over 70 s under heavy load; each step has its own bound.
+    status = shell.wait(240)
+output = log.read_text()
 print(output)
 print("Settings captures:", app)
-assert process.returncode == 0 and "SETTINGS_UI 9 passed 0 failed" in output
+assert status == 0 and "SETTINGS_UI 9 passed 0 failed" in output
+calls = hostenv.calls(base)
+hostenv.check(env, output, *calls)
+# The center's saves went through the omarchy double (the CLI save path),
+# never a host script.
+double = (base / "omarchy-double.log").read_text().splitlines() if (base / "omarchy-double.log").exists() else []
+saves = [line for line in double if line.startswith("omarchy bar set foamy.notification-center ")]
+assert len(saves) >= 3 and len(saves) == len(double), double

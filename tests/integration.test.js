@@ -119,7 +119,7 @@ test('a first page that fits the viewport (collapsed stacks) still loads the nex
  store.listProc.running=true;ui.pageIfAtEnd();store.listProc.running=false;ui.pageIfAtEnd();assert.equal(store.listLimit,1000,'never past maxItems')
  ui.opened=false;store.listLimit=500;ui.pageIfAtEnd();assert.equal(store.listLimit,500,'closed: no paging')
  // Wiring: every change that can leave the list at its end re-checks.
- for(const hook of ['function onHasMoreChanged() { Qt.callLater(root.pageIfAtEnd) }','function onListingChanged() { Qt.callLater(root.pageIfAtEnd) }','onAtYEndChanged: Qt.callLater(root.pageIfAtEnd)','onContentHeightChanged: Qt.callLater(root.pageIfAtEnd)']) assert.ok(panel.includes(hook),hook)
+ for(const hook of [/function onHasMoreChanged\(\) \{\s*Qt\.callLater\(root\.pageIfAtEnd\)\s*\}/,/function onListingChanged\(\) \{\s*Qt\.callLater\(root\.pageIfAtEnd\)\s*\}/,/onAtYEndChanged: Qt\.callLater\(root\.pageIfAtEnd\)/,/onContentHeightChanged: Qt\.callLater\(root\.pageIfAtEnd\)/]) assert.match(panel,hook)
  assert.match(service,/readonly property bool listing: listProc\.running/)
 })
 test('search folds Unicode case like the panel and matches the query literally',t=>{
@@ -263,6 +263,28 @@ test('Clear all uses the cutoff captured at the click, so later arrivals survive
  f.run('clear',String(now-4000));assert.equal(fs.readFileSync(path.join(f.store,'cleared_at'),'utf8').trim(),String(now-3000))
  const bad=helper.spawnSync(['clear','../x'],{env:f.env,encoding:'utf8'});assert.notEqual(bad.status,0)
 })
+test('a clear whose clear line cannot be written fails and leaves the archive as it was',t=>{
+ // Without a durable clear line nothing keeps cleared ts-id keys out of the
+ // next sync (I1), so the rows must stay and the caller must hear it failed.
+ const f=fixture(t);f.run('list')
+ const now=Date.now(),archive=path.join(f.store,'archive.jsonl')
+ fs.writeFileSync(archive,JSON.stringify({key:`${now-5000}-1`,timestamp:now-5000,summary:'kept'})+'\n')
+ const before=fs.readFileSync(archive,'utf8')
+ fs.mkdirSync(path.join(f.store,'cleared_at'))
+ const r=helper.spawnSync(['clear',String(now-1000)],{env:f.env,encoding:'utf8',timeout:5000})
+ assert.equal(r.status,1,r.stdout)
+ assert.deepEqual(JSON.parse(r.stdout),{ok:false,error:'could not clear notifications'})
+ assert.equal(fs.readFileSync(archive,'utf8'),before)
+})
+test('a seen stamp that cannot be written fails instead of answering ok',t=>{
+ // A stamp lost on disk makes the badge count already-seen rows as new after
+ // the next start, so the write's failure must reach the caller.
+ const f=fixture(t);f.run('seen','5')
+ fs.rmSync(path.join(f.store,'seen'));fs.mkdirSync(path.join(f.store,'seen'))
+ const r=helper.spawnSync(['seen','1730000000123'],{env:f.env,encoding:'utf8',timeout:5000})
+ assert.equal(r.status,1,r.stdout)
+ assert.deepEqual(JSON.parse(r.stdout),{ok:false,error:'could not save seen'})
+})
 test('a rewatch after a source directory appears keeps its pruned events',async t=>{
  const f=fixture(t),late=path.join(f.dir,'late','popups'),now=Date.now()
  const env={...f.env,NC_SOURCE:'foamy',NC_MAX_ITEMS:'2',NC_SRC_DIR:late,NC_SRC_HISTORY:path.join(f.dir,'late','history')}
@@ -324,8 +346,8 @@ test('a helper missing for this CPU is reported once, translated, and never rest
  ctx.load();assert.equal(ctx.listLoadCount,0,'no list read without a helper')
  // The watcher stops for good: its exit handler returns before scheduling a restart.
  const watch=source.slice(source.indexOf('    id: watchProc'),source.indexOf('\n  }',source.indexOf('    id: watchProc')))
- assert.match(watch,/onExited: function\(exitCode, exitStatus\) \{\n      launched = false\n      if \(root\.storeUnavailable\(exitCode\)\) return/)
- assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) \{ watchProc\.launched = true; watchProc\.running = true \}/)
+ assert.match(watch,/onExited: function ?\(exitCode, exitStatus\) \{\n\s*launched = false\n\s*if \(root\.storeUnavailable\(exitCode\)\)\s*return\n/)
+ assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) \{\s*watchProc\.launched = true;?\s*watchProc\.running = true\s*\}/)
  // Every store command runs the bundled binary for this CPU.
  const cmd=vm.createContext({FoamyNative,root:{pluginDir:'/plugin',helper:'foamy-notification-center-helper'}})
  cmd.root.storeCommand=vm.runInContext('('+take('storeCommand').trim().replace(/^function storeCommand/,'function')+')',cmd)

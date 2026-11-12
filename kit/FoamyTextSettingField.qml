@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 4ebaf1a8016ef697c172fe1342ea87bad6bc83f339a103e6d5396d96a8829881 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 df904e4eab84389a21f83863d38c046e5d2e830541ec604f55d63d4b1b4f38cb — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // A free-text settings field that never fights the setting it shows: the
@@ -6,10 +6,10 @@ import QtQuick
 //
 //   FoamyTextSettingField {
 //     width: parent.width
-//     label: FoamyI18n.t("Browser")
-//     value: prefs.value("youtubeBrowser")                    // bind it
+//     label: FoamyI18n.t("Display name")
+//     value: prefs.value("displayName")                       // bind it
 //     validate: function(text) { return text.length <= 64 || FoamyI18n.t("Too long") }
-//     onCommitted: function(v) { prefs.save("youtubeBrowser", v) }
+//     onCommitted: function(v) { prefs.save("displayName", v) }
 //   }
 //
 // Not editing: shows `value`, following external changes. Editing: keeps a
@@ -46,7 +46,8 @@ Item {
   implicitHeight: column.implicitHeight
 
   function show() {
-    field.text = value            // the internal editor, never `value`
+    // the internal editor, never `value`
+    field.text = value
     dirty = false
   }
 
@@ -57,7 +58,8 @@ Item {
   function saveFailed() {
     lastCommitted = ""
     hasCommitted = false
-    if (!dirty) show()
+    if (!dirty)
+      show()
   }
 
   function cancelEdit() {
@@ -66,18 +68,21 @@ Item {
   }
 
   function problem(text) {
-    if (typeof validate !== "function") return ""
+    if (typeof validate !== "function")
+      return ""
     var verdict = validate(text)
     return verdict === true ? "" : typeof verdict === "string" && verdict !== "" ? verdict : invalidText
   }
 
   function commitEdit(revertInvalid) {
-    if (!dirty) return true
+    if (!dirty)
+      return true
     var next = trim ? field.text.trim() : field.text
     var issue = problem(next)
     if (issue !== "") {
       errorText = issue
-      if (revertInvalid) show()
+      if (revertInvalid)
+        show()
       return revertInvalid === true
     }
     errorText = ""
@@ -92,13 +97,17 @@ Item {
   }
 
   function handleKey(key) {
-    if (key === Qt.Key_Escape) { cancelEdit(); return true }
+    if (key === Qt.Key_Escape) {
+      cancelEdit()
+      return true
+    }
     return false
   }
 
   onValueChanged: {
     hasCommitted = false
-    if (!dirty) show()
+    if (!dirty)
+      show()
   }
   Component.onCompleted: show()
 
@@ -127,10 +136,17 @@ Item {
       translate: FoamyI18n.t
       horizontalAlignment: Text.AlignLeft
       Accessible.name: root.label
-      onTextEdited: { root.dirty = true; root.errorText = "" }
+      onTextEdited: {
+        root.dirty = true
+        root.errorText = ""
+      }
       onAccepted: root.commitEdit(false)
-      onEditingFinished: if (!field.inputActiveFocus) root.commitEdit(true)
-      onKeyPressed: function(event) { if (root.handleKey(event.key)) event.accepted = true }
+      onEditingFinished: if (!field.inputActiveFocus)
+        root.commitEdit(true)
+      onKeyPressed: function (event) {
+        if (root.handleKey(event.key))
+          event.accepted = true
+      }
     }
 
     Text {

@@ -1,5 +1,5 @@
 .pragma library
-// foamy-kit 0.8.1 16b017e91ba960a867a1c5cc056f7f8d7bad07c07722714b32765d7c6d53920a — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 0e877660044748bd8926a24de47ee8f6f194e085fb20b794e0621b039eda1eb4 — do not edit; change foamy-kit and run sync
 // FoamyNative: launch a plugin's bundled native helper, bin/<arch>/<name>.
 //
 //   import "kit/FoamyNative.js" as FoamyNative
@@ -10,6 +10,12 @@
 //       if (FoamyNative.unavailable(exitCode)) { /* show FoamyI18n.t(FoamyNative.UNAVAILABLE_TEXT), don't retry */ }
 //     }
 //   }
+//
+// `timeout` signals only the helper's own process group; the children a
+// foamy-helper helper starts lead groups of their own. A helper run under
+// such a wrapper calls foamy_helper::process::set_run_budget with less (25 s
+// for the 30 s above) first thing in main: then it ends every child itself
+// and still prints its reply before the wrapper kills it.
 //
 // command() runs the helper through `bash -c 'exec -- …'`: bash picks the
 // directory from its builtin $HOSTTYPE (x86_64, aarch64) and replaces itself

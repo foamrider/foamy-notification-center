@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 8568f1884cc6624ccb4aca57dc01f0b0ddd7ed78383c4ad120f490bc88ee6543 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 9b63ed99802e02ac04fa8494778838a8d3e5b9f265db99660287e2894a202eca — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
@@ -34,7 +34,7 @@ Item {
   readonly property bool hot: enabled && (hasCursor || mouse.containsMouse)
   readonly property alias switchItem: track
 
-  signal clicked()
+  signal clicked
   signal hovered(bool isHovered)
 
   implicitWidth: FoamyStyle.popupWidth - FoamyStyle.padding * 2
@@ -50,8 +50,10 @@ Item {
   Accessible.description: description
   Accessible.checkable: true
   Accessible.checked: checked
-  Accessible.onPressAction: if (root.enabled) root.clicked()
-  Accessible.onToggleAction: if (root.enabled) root.clicked()
+  Accessible.onPressAction: if (root.enabled)
+    root.clicked()
+  Accessible.onToggleAction: if (root.enabled)
+    root.clicked()
 
   // Hover / cursor / focus: a fill reaching a little past the text, so the
   // label stays aligned with section titles and fields.
@@ -64,7 +66,11 @@ Item {
     color: root.hot || root.activeFocus ? FoamyPalette.hoverFill : "transparent"
     border.width: root.activeFocus ? 1 : 0
     border.color: root.accent
-    Behavior on color { ColorAnimation { duration: FoamyMotion.hover } }
+    Behavior on color {
+      ColorAnimation {
+        duration: FoamyMotion.hover
+      }
+    }
   }
 
   Column {
@@ -123,7 +129,8 @@ Item {
     anchors.fill: parent
     hoverEnabled: true
     cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-    onClicked: if (root.enabled) root.clicked()
+    onClicked: if (root.enabled)
+      root.clicked()
     onContainsMouseChanged: root.hovered(containsMouse)
   }
 }

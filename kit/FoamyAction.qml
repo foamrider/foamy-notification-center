@@ -1,6 +1,5 @@
-// foamy-kit 0.8.1 31637cf414fddfbc7c18c7d107b4c9a77801568fd78ebb8212791fb66de476a9 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 36b6a8f3b7ca613a7652eae6e5ada16595d8c9f846ee6b1505417bbb06ba3e7a — do not edit; change foamy-kit and run sync
 import QtQuick
-import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 
@@ -36,28 +35,34 @@ Rectangle {
   readonly property bool hovered: mouse.containsMouse
   readonly property bool active: enabled && actionEnabled
 
-  signal clicked()
+  signal clicked
 
   readonly property real size: settings ? FoamyStyle.settingsButtonSize : FoamyStyle.actionSize
   implicitWidth: label ? content.implicitWidth + FoamyStyle.gapLarge * 2 : size
   implicitHeight: size
   radius: FoamyStyle.radius
   opacity: enabled ? (actionEnabled ? 1 : 0.7) : FoamyStyle.disabledOpacity
-  color: active && (hasCursor || mouse.containsMouse || activeFocus)
-    ? (destructive ? Qt.alpha(Commons.Color.urgent, 0.14) : FoamyPalette.hoverFill)
-    : "transparent"
+  color: active && (hasCursor || mouse.containsMouse || activeFocus) ? (destructive ? Qt.alpha(Commons.Color.urgent, 0.14) : FoamyPalette.hoverFill) : "transparent"
   border.width: activeFocus && focusable ? 1 : 0
   border.color: Commons.Color.accent
   activeFocusOnTab: focusable && active
 
-  Behavior on color { ColorAnimation { duration: FoamyMotion.hover } }
+  Behavior on color {
+    ColorAnimation {
+      duration: FoamyMotion.hover
+    }
+  }
 
   Accessible.role: Accessible.Button
   Accessible.name: tooltipText || label
-  Accessible.onPressAction: if (root.active) root.clicked()
-  Keys.onReturnPressed: if (root.active) root.clicked()
-  Keys.onEnterPressed: if (root.active) root.clicked()
-  Keys.onSpacePressed: if (root.active) root.clicked()
+  Accessible.onPressAction: if (root.active)
+    root.clicked()
+  Keys.onReturnPressed: if (root.active)
+    root.clicked()
+  Keys.onEnterPressed: if (root.active)
+    root.clicked()
+  Keys.onSpacePressed: if (root.active)
+    root.clicked()
   Keys.forwardTo: keyTarget ? [keyTarget] : []
 
   Row {
@@ -98,7 +103,8 @@ Rectangle {
     anchors.fill: parent
     hoverEnabled: true
     cursorShape: root.active ? Qt.PointingHandCursor : Qt.ArrowCursor
-    onClicked: if (root.active) root.clicked()
+    onClicked: if (root.active)
+      root.clicked()
   }
 
   PanelToolTip {

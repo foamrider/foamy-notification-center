@@ -1,8 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
-import qs.Commons
-import qs.Commons as Commons
 import "Preferences.js" as Preferences
 import "kit"
 
@@ -35,10 +32,20 @@ Column {
   Repeater {
     // Two scopes with look-alike rows (favicons, compact, pictures): the
     // headings and descriptions say which one each block changes.
-    model: [{scope: "center", title: "Notification center", fields: Preferences.centerFields,
-             description: "This list: how it groups and shows notifications, and how long it keeps them."},
-            {scope: "popups", title: "Pop-up notifications", fields: Preferences.popupFields,
-             description: "Notifications as they appear on screen (the Foamy Notifications plugin)."}]
+    model: [
+      {
+        scope: "center",
+        title: "Notification center",
+        fields: Preferences.centerFields,
+        description: "This list: how it groups and shows notifications, and how long it keeps them."
+      },
+      {
+        scope: "popups",
+        title: "Pop-up notifications",
+        fields: Preferences.popupFields,
+        description: "Notifications as they appear on screen (the Foamy Notifications plugin)."
+      }
+    ]
     FoamySettingsSection {
       id: section
       required property var modelData
@@ -87,8 +94,15 @@ Column {
               compact: true
               label: FoamyI18n.t(field.modelData.label)
               value: String(root.current(field.scope, field.modelData.key))
-              options: field.modelData.options.map(function(option) { return { value: option, label: root.optionLabel(option) } })
-              onChanged: function(next) { root.save(field.scope, field.modelData.key, next) }
+              options: field.modelData.options.map(function (option) {
+                return {
+                  value: option,
+                  label: root.optionLabel(option)
+                }
+              })
+              onChanged: function (next) {
+                root.save(field.scope, field.modelData.key, next)
+              }
             }
           }
           Component {
@@ -108,8 +122,9 @@ Column {
               from: field.modelData.min
               to: field.modelData.max
               stepSize: field.modelData.step || 1
-              onCommitted: function(next) {
-                if (Preferences.valid(field.scope, field.modelData.key, next)) root.save(field.scope, field.modelData.key, next)
+              onCommitted: function (next) {
+                if (Preferences.valid(field.scope, field.modelData.key, next))
+                  root.save(field.scope, field.modelData.key, next)
               }
               // A failed save leaves `value` as it was: saveFailed() shows the
               // stored value again (keeping a newer draft) and lets the same
@@ -117,7 +132,8 @@ Column {
               Connections {
                 target: root
                 function onSaveFailed(scope, key) {
-                  if (scope === field.scope && key === field.modelData.key) numberEditor.saveFailed()
+                  if (scope === field.scope && key === field.modelData.key)
+                    numberEditor.saveFailed()
                 }
               }
             }

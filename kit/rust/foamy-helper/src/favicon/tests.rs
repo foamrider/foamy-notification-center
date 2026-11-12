@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 3b092b6e431e128eda90551c6e517778828ed7b80e3ffcfa9d7cb6a3add54ff6 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 679f2ef456edb218d8a465a3ff6638cede2d0ceb9b884e9dcba72e88d6133464 — do not edit; change foamy-kit and run sync
 //! The favicon lookup against real SQLite files. The databases are written
 //! (and browsers holding them simulated) with Python's `sqlite3` module, the
 //! same library the Python helper used; without `python3` these tests are
@@ -389,6 +389,70 @@ fn chromium_schema_prefers_32px_then_newest_and_reads_overflow_pages() {
     // Only the http:// mapping: it is used when https has none.
     let only_http = lookup("vivaldi", "site7.example", &s.config);
     assert!(only_http.data.is_empty() && !only_http.unavailable);
+}
+
+#[test]
+fn the_icon_most_pages_map_to_beats_one_newer_page() {
+    // Outlook in Vivaldi: hundreds of pages map to the Outlook icon, one
+    // hidden sign-out frame to the identity provider's newer 32 px logo.
+    if !python() {
+        return;
+    }
+    let s = setup("favicon-majority");
+    let path = s.config.join("vivaldi/Default/Favicons");
+    let pages: Vec<String> = (0..10)
+        .map(|i| format!("https://mail.example/mail/{i}"))
+        .collect();
+    let mut mappings: Vec<(&str, i64)> = pages.iter().map(|url| (url.as_str(), 1)).collect();
+    mappings.push(("https://mail.example/mail/logoutFrame.html?x=1", 2));
+    mappings.push(("https://other.example/", 2));
+    let site = png(32, 300);
+    database(
+        &path,
+        CHROMIUM_SCHEMA,
+        &mappings,
+        &[(1, site.clone(), 32, 100), (2, png(32, 200), 32, 900)],
+    );
+    let found = lookup("vivaldi", "mail.example", &s.config);
+    assert_eq!((found.data == site, found.unavailable), (true, false));
+}
+
+#[test]
+fn the_root_page_icon_beats_the_majority() {
+    if !python() {
+        return;
+    }
+    let s = setup("favicon-root");
+    let path = s.config.join("vivaldi/Default/Favicons");
+    let pages: Vec<String> = (0..10)
+        .map(|i| format!("https://app.example/item/{i}"))
+        .collect();
+    let mut mappings: Vec<(&str, i64)> = pages.iter().map(|url| (url.as_str(), 1)).collect();
+    // The root page exactly; a page that only starts like it is not it.
+    mappings.push(("https://app.example/", 3));
+    mappings.push(("https://app.example/?", 1));
+    let front = png(16, 300); // farther from 32 px and older: still first
+    database(
+        &path,
+        CHROMIUM_SCHEMA,
+        &mappings,
+        &[(1, png(32, 200), 32, 900), (3, front.clone(), 16, 100)],
+    );
+    let found = lookup("vivaldi", "app.example", &s.config);
+    assert_eq!((found.data == front, found.unavailable), (true, false));
+    // Without a root mapping the majority's icon wins again.
+    let s = setup("favicon-root-none");
+    let path = s.config.join("vivaldi/Default/Favicons");
+    mappings.retain(|(url, _)| *url != "https://app.example/");
+    let majority = png(32, 200);
+    database(
+        &path,
+        CHROMIUM_SCHEMA,
+        &mappings,
+        &[(1, majority.clone(), 32, 100), (3, png(32, 300), 32, 900)],
+    );
+    let found = lookup("vivaldi", "app.example", &s.config);
+    assert_eq!(found.data, majority);
 }
 
 #[test]

@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 908dce0d7308aaad5a88d125b6775a0c5f0f85905d851544f84a154e8ec66802 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 5ac3d10d8ee34c6a4fa810d12b0f5855faf70bda6b6a225aab3687bd2a16af52 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons as Commons
@@ -12,7 +12,7 @@ Item {
   property string text: ""
   property bool retryable: false
 
-  signal retry()
+  signal retry
 
   visible: text !== ""
   implicitHeight: visible ? Math.max(message.implicitHeight, retryable ? retryButton.implicitHeight : 0) : 0

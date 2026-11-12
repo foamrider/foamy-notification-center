@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 b717a528267202710c196f4a67600467b292db64f643a502ea1eebb92df75095 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 97a4a7966d219cd634cfb99398e155cc5aebf69e1d948911de44fa2fb8a3d936 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls
 import qs.Commons
@@ -82,11 +82,9 @@ Item {
   property real compactMaxFraction: 0.5
   // Label → chevron at its widest option (plain-text width; a labelDelegate
   // drawing something wider sets compactWidth).
-  readonly property real compactNaturalWidth: !compact ? 0 : Math.ceil(widestLabel()) + FoamyStyle.controlPaddingX
-    + Style.spacing.md + FoamyStyle.iconSize + Style.spacing.controlGap + FoamyStyle.borderWidth * 4
+  readonly property real compactNaturalWidth: !compact ? 0 : Math.ceil(widestLabel()) + FoamyStyle.controlPaddingX + Style.spacing.md + FoamyStyle.iconSize + Style.spacing.controlGap + FoamyStyle.borderWidth * 4
   property real compactWidth: compactNaturalWidth
-  readonly property real compactTriggerWidth: Math.max(FoamyStyle.controlHeight * 2,
-    Math.min(compactWidth, Math.floor(width * compactMaxFraction)))
+  readonly property real compactTriggerWidth: Math.max(FoamyStyle.controlHeight * 2, Math.min(compactWidth, Math.floor(width * compactMaxFraction)))
   readonly property alias triggerItem: trigger
 
   // Panel-cursor flag. When true, the trigger renders the shared
@@ -100,7 +98,9 @@ Item {
   // own keyCatcher so j/k inside the popup don't double-drive the panel
   // cursor.
   readonly property bool popupOpen: popup.opened
-  function open() { popup.open() }
+  function open() {
+    popup.open()
+  }
   // Pick an option as the list does: show it and emit changed(), without
   // touching `value`.
   function select(v) {
@@ -112,8 +112,12 @@ Item {
     }
     changed(v)
   }
-  function close() { popup.close() }
-  function toggle() { popup.opened ? popup.close() : popup.open() }
+  function close() {
+    popup.close()
+  }
+  function toggle() {
+    popup.opened ? popup.close() : popup.open()
+  }
 
   signal changed(string value)
   signal hovered(bool isHovered)
@@ -132,7 +136,8 @@ Item {
   }
   function currentLabel() {
     for (var i = 0; i < options.length; i++) {
-      if (optionValue(options[i]) === shownValue) return optionLabel(options[i])
+      if (optionValue(options[i]) === shownValue)
+        return optionLabel(options[i])
     }
     return shownValue
   }
@@ -162,8 +167,12 @@ Item {
       active: !!root.labelDelegate
       sourceComponent: root.labelDelegate
       onLoaded: {
-        item.text = Qt.binding(function() { return optionText.text })
-        item.color = Qt.binding(function() { return optionText.color })
+        item.text = Qt.binding(function () {
+          return optionText.text
+        })
+        item.color = Qt.binding(function () {
+          return optionText.color
+        })
       }
     }
   }
@@ -181,9 +190,7 @@ Item {
   }
 
   implicitWidth: compact ? FoamyStyle.popupWidth - FoamyStyle.padding * 2 : Style.spacing.dropdownWidth
-  implicitHeight: compact
-    ? Math.max(FoamyStyle.rowHeight + FoamyStyle.gapSmall, rowHeight, rowText.implicitHeight + FoamyStyle.gap * 2)
-    : (showLabel && label !== "" ? rowHeight + Style.spacing.huge : rowHeight)
+  implicitHeight: compact ? Math.max(FoamyStyle.rowHeight + FoamyStyle.gapSmall, rowHeight, rowText.implicitHeight + FoamyStyle.gap * 2) : (showLabel && label !== "" ? rowHeight + Style.spacing.huge : rowHeight)
 
   // Compact: the label and description on the start, in the toggle row style.
   Column {
@@ -262,13 +269,13 @@ Item {
         onHoveredChanged: root.hovered(hovered)
       }
 
-      Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
-            || event.key === Qt.Key_Space || event.key === Qt.Key_Down) {
+      Keys.onPressed: function (event) {
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space || event.key === Qt.Key_Down) {
           popup.opened ? popup.close() : popup.open()
           event.accepted = true
         } else if (event.key === Qt.Key_Escape && popup.opened) {
-          popup.close(); event.accepted = true
+          popup.close()
+          event.accepted = true
         }
       }
 
@@ -306,14 +313,12 @@ Item {
         id: popup
         // A compact trigger may be narrower than its options: the list grows
         // toward the label (left in LTR, right in RTL), up to the row.
-        readonly property real naturalWidth: !root.compact ? 0 : Math.ceil(root.widestLabel()) + FoamyStyle.controlPaddingX * 2
-          + leftPadding + rightPadding
+        readonly property real naturalWidth: !root.compact ? 0 : Math.ceil(root.widestLabel()) + FoamyStyle.controlPaddingX * 2 + leftPadding + rightPadding
         readonly property bool onRowEnd: trigger.x + trigger.width / 2 > root.width / 2
         x: root.compact && onRowEnd ? trigger.width - width : 0
         y: trigger.height + Style.spacing.xxs
         width: root.compact ? Math.max(trigger.width, Math.min(naturalWidth, root.width)) : trigger.width
-        implicitHeight: Math.min(root.options.length * root.popupRowHeight + Math.max(0, root.options.length - 1) * Style.spacing.labelGap + Style.spacing.xxs,
-                                 root.popupRowHeight * 8 + 7 * Style.spacing.labelGap + Style.spacing.xxs)
+        implicitHeight: Math.min(root.options.length * root.popupRowHeight + Math.max(0, root.options.length - 1) * Style.spacing.labelGap + Style.spacing.xxs, root.popupRowHeight * 8 + 7 * Style.spacing.labelGap + Style.spacing.xxs)
         padding: Style.spacing.hairline
         leftPadding: Border.left(root.popupBorderSpec) + Style.spacing.hairline
         rightPadding: Border.right(root.popupBorderSpec) + Style.spacing.hairline
@@ -340,16 +345,19 @@ Item {
           LayoutMirroring.childrenInherit: true
 
           Keys.priority: Keys.BeforeItem
-          Keys.onPressed: function(event) {
-            if (event.key === Qt.Key_Escape) { popup.close(); event.accepted = true }
-            else if (event.key === Qt.Key_Down || event.text === "j") {
+          Keys.onPressed: function (event) {
+            if (event.key === Qt.Key_Escape) {
+              popup.close()
+              event.accepted = true
+            } else if (event.key === Qt.Key_Down || event.text === "j") {
               optionList.currentIndex = Math.min(root.options.length - 1, optionList.currentIndex + 1)
               event.accepted = true
             } else if (event.key === Qt.Key_Up || event.text === "k") {
               optionList.currentIndex = Math.max(0, optionList.currentIndex - 1)
               event.accepted = true
             } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-              optionList.selectCurrent(); event.accepted = true
+              optionList.selectCurrent()
+              event.accepted = true
             }
           }
           implicitHeight: contentHeight
@@ -360,12 +368,14 @@ Item {
 
           function indexOfValue(v) {
             for (var i = 0; i < root.options.length; i++)
-              if (root.optionValue(root.options[i]) === v) return i
+              if (root.optionValue(root.options[i]) === v)
+                return i
             return -1
           }
 
           function selectCurrent() {
-            if (currentIndex < 0 || currentIndex >= root.options.length) return
+            if (currentIndex < 0 || currentIndex >= root.options.length)
+              return
             var v = root.optionValue(root.options[currentIndex])
             root.select(v)
             popup.close()
@@ -377,9 +387,7 @@ Item {
             width: optionList.width
             height: root.popupRowHeight
             radius: FoamyStyle.innerRadius(root.cornerRadius, popup.leftPadding)
-            color: index === optionList.currentIndex
-              ? Style.hoverFillFor(root.foreground, root.accent)
-              : "transparent"
+            color: index === optionList.currentIndex ? Style.hoverFillFor(root.foreground, root.accent) : "transparent"
 
             OptionText {
               anchors.left: parent.left

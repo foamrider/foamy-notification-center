@@ -1,0 +1,27 @@
+# foamy-kit 0.9.0 30062b8bc91b2af48aa4124370f8b9552b2077ad032173dbf5690de4526c7c0d — do not edit; change foamy-kit and run sync
+# Ruff configuration for foamy-kit and every Foamy plugin (synced; edit it in
+# foamy-kit). tests/validate.sh runs `ruff check` and `ruff format --check`
+# with the version mise.toml pins. A repository adds rules or ignores in its
+# own .ruff.toml, which must start with `extend = "ruff.toml"`; findings that
+# existed when a check was adopted go in tests/lint/ruff-baseline.txt.
+target-version = "py311"  # the kit's floor: tomllib, Python 3.11
+line-length = 120
+indent-width = 4
+
+[lint]
+select = ["E", "F", "W", "B", "C901"]
+# The formatter owns line length. What it can't wrap is a string (embedded
+# QML, JSON or shell in tests), which a manual wrap would only obscure.
+ignore = ["E501"]
+
+[lint.mccabe]
+# Field-by-field validation and argument dispatch reach 10 to 15 branches
+# and read best flat. Above 15, the measured functions (2026-11) are long
+# multi-phase routines that deserve splitting, so they are baselined, not
+# hidden by a higher threshold.
+max-complexity = 15
+
+[lint.per-file-ignores]
+# Test scripts put the foamy-kit harness (FOAMY_KIT) or the repository root on
+# sys.path before importing from it.
+"tests/**/*.py" = ["E402"]

@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 b5f018d5c973f1115da2ae6c35c7eb8700e6cc24d97cb7b917a04ca05560d45c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 ebfadf5a33e10c001e6c9d83e0c02ea3f79003807fc4b0ecc655d7427bac54a2 — do not edit; change foamy-kit and run sync
 //! `flock(2)` locks on lock files, including the per-plugin runtime
 //! directory `$XDG_RUNTIME_DIR/<plugin>`.
 //!
@@ -51,9 +51,9 @@ fn open_lock_file(path: &Path) -> io::Result<File> {
 
 impl FileLock {
     /// Takes the lock without waiting: `Ok(None)` when another process (or
-    /// another open of the same file) holds it. The lock file is created
-    /// with mode 0600; a symlink, a non-regular file or someone else's file
-    /// is refused.
+    /// another open of the same file) holds it. A missing lock file is
+    /// created with mode 0600 (an existing one keeps its mode); a symlink, a
+    /// non-regular file or someone else's file is refused.
     pub fn try_exclusive(path: &Path) -> io::Result<Option<FileLock>> {
         let file = open_lock_file(path)?;
         match rfs::flock(&file, FlockOperation::NonBlockingLockExclusive) {
@@ -84,18 +84,22 @@ impl FileLock {
     }
 
     /// Waits at most `timeout` for the lock (polling every 10 ms):
-    /// `Ok(None)` when it is still held by then.
+    /// `Ok(None)` when it is still held by then. `Duration::MAX` waits as
+    /// long as it takes.
     pub fn exclusive_within(path: &Path, timeout: Duration) -> io::Result<Option<FileLock>> {
-        let deadline = Instant::now() + timeout;
+        // None: too far away for an `Instant`, never reached.
+        let deadline = Instant::now().checked_add(timeout);
         loop {
             if let Some(lock) = FileLock::try_exclusive(path)? {
                 return Ok(Some(lock));
             }
-            let now = Instant::now();
-            if now >= deadline {
+            let left = deadline.map_or(Duration::MAX, |deadline| {
+                deadline.saturating_duration_since(Instant::now())
+            });
+            if left.is_zero() {
                 return Ok(None);
             }
-            thread::sleep((deadline - now).min(Duration::from_millis(10)));
+            thread::sleep(left.min(Duration::from_millis(10)));
         }
     }
 
@@ -188,6 +192,13 @@ mod tests {
         assert!(
             waited >= Duration::from_millis(60) && waited < Duration::from_secs(2),
             "{waited:?}"
+        );
+        // No limit: it used to overflow `Instant` and panic.
+        let free = dir.0.join("free.lock");
+        assert!(
+            FileLock::exclusive_within(&free, Duration::MAX)
+                .unwrap()
+                .is_some()
         );
     }
 

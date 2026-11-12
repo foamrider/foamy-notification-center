@@ -10,6 +10,6 @@ address=$(jq -er --arg pattern "$2" '
       (.[] | select(matches(.class))),
       (.[] | select(.initialClass == "org.omarchy.agent" and matches(.initialTitle)))
     ).address // ""
-  end' <<< "$clients")
+  end' <<<"$clients")
 [[ -n $address ]] || exit 3
 exec "$1/bin/omarchy-hyprland-focus-app" "$2"

@@ -1,0 +1,94 @@
+# qmllint findings accepted when the check was adopted. tests/validate.sh fails on any
+# finding not listed here. Regenerate with `tests/validate.sh --update-baseline qmllint`
+# only to drop fixed entries or after reviewing every added one; never to pass a check.
+Panel.qml: id-shadows-member: Id for object FoamyHeroBand shadows property "header". Rename one or the other. | readonly property real chromeHeight: header.height + (searchRow.visible ? searchRow.height + content.spacing : 0) + (errorLine.visible ? errorLine.implicitHeigh
+Panel.qml: id-shadows-member: Id for object FoamySettingsPage shadows property "settingsPane". Rename one or the other. | implicitHeight: root.editingSettings ? settingsPane.implicitHeight : content.implicitHeight + Style.space(10)
+Panel.qml: id-shadows-member: Id for object SafeTextField shadows property "search". Rename one or the other. | blocked: search.inputActiveFocus || root.editingSettings || header.menuOpen
+Panel.qml: id-shadows-member: Note: Id defined here | id: header
+Panel.qml: id-shadows-member: Note: Id defined here | id: search
+Panel.qml: id-shadows-member: Note: Id defined here | id: settingsPane
+Panel.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+Panel.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+Panel.qml: missing-property: Member "caption" not found on type "QObject" | font.pixelSize: Math.max(8, FoamyStyle.font.caption - Style.space(3))
+Panel.qml: missing-property: Member "chromeHeight" not found on type "QQuickItem" | readonly property real listAvailableHeight: Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - (view ? view.chromeHeight : Style.s
+Panel.qml: missing-property: Member "contentHeight" not found on type "QObject" | visible: (root.rows.length > 0 || (item && item.contentHeight > 0))
+Panel.qml: missing-property: Member "contentHeight" not found on type "QObject" | visible: root.rows.length === 0 && (!listLoader.item || listLoader.item.contentHeight <= 0)
+Panel.qml: missing-property: Member "header" not found on type "QQuickItem" | readonly property var header: view ? view.header : null
+Panel.qml: missing-property: Member "list" not found on type "QQuickItem" | readonly property var list: view ? view.list : null
+Panel.qml: missing-property: Member "pluginRegistry" not found on type "QObject" | var registry = bar && "pluginRegistry" in bar ? bar.pluginRegistry : null
+Panel.qml: missing-property: Member "search" not found on type "QQuickItem" | readonly property var search: view ? view.search : null
+Panel.qml: missing-property: Member "settingsPane" not found on type "QQuickItem" | readonly property var settingsPane: view ? view.settingsPane : null
+Panel.qml: missing-property: Member "text" not found on type "QObject" | readonly property color foreground: Commons.Color.popups.text
+Panel.qml: missing-property: Member "urgent" not found on type "QObject" | readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
+Panel.qml: renamed-type: "BarIconButton" is explicitly renamed to "Ui.BarIconButton" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Ui.BarIconButton" instead. | BarIconButton {
+Panel.qml: renamed-type: "PanelKeyCatcher" is explicitly renamed to "Ui.PanelKeyCatcher" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Ui.PanelKeyCatcher" instead. | PanelKeyCatcher {
+Panel.qml: renamed-type: "SettingsPane" is explicitly renamed to "Plugin.SettingsPane" via a qmldir entry or QT_QML_SOURCE_TYPENAME CMake property, use "Plugin.SettingsPane" instead. | SettingsPane {
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < batch.length; i++)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < entries.length; i++) {
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < keys.length; i++) {
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < keys.length; i++) {
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < root.activeRemovalKeys.length; i++)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < source.length; i++) {
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var j = 0; j < root.activeRemovalKeys.length; j++)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var p = 0; p < pending.length; p++)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var command = Model.fileCommand(focusEntry)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var data = JSON.parse(text)
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var done = ({})
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var helper = decodeURIComponent(Qt.resolvedUrl("bin/open-notification-image").toString().replace(/^file:\/\//, ""))
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var key = String(keys[i] || "")
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var key = String(keys[i] || "")
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var result = String(output || "").trim()
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var state = Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state";
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var updated = entries.slice()
+Service.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var value = JSON.parse(snoozeProbeOutput.text)
+ServiceRegistry.qml: import: Type ServiceRegistry not declared as singleton in qmldir but using pragma Singleton
+SettingsPane.qml: id-shadows-member: Id for object Loader shadows property "field". Rename one or the other. | objectName: field.scope + "-" + field.modelData.key
+SettingsPane.qml: id-shadows-member: Note: Id defined here | id: field
+SettingsPane.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+components/BrowserIcons.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < Math.min(rows.length, 128) && queue.length < 128; i++) {
+components/BrowserIcons.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var cached = icons[key]
+components/BrowserIcons.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var parsed = JSON.parse(output)
+components/BrowserIcons.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var row = rows[i], key = BrowserIdentity.key(row)
+components/BrowserIcons.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var row = rows[i], key = BrowserIdentity.key(row)
+components/NotificationList.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < rows.length; i++)
+components/NotificationList.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var j = rowModel.count - 1; j >= 0; j--)
+components/NotificationList.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var k = target; k < rowModel.count; k++) {
+components/NotificationList.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var target = 0; target < rows.length; target++) {
+components/NotificationList.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var id = rows[target].id, found = -1
+components/NotificationList.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var id = rows[target].id, found = -1
+components/NotificationRow.qml: missing-property: Member "background" not found on type "QObject" | color: Commons.Color.popups.background
+components/NotificationRow.qml: missing-property: Member "background" not found on type "QObject" | color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, 0.04))
+components/NotificationRow.qml: missing-property: Member "background" not found on type "QObject" | color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, actionButton.hovered ? 0.10 : 0.055))
+components/NotificationRow.qml: missing-property: Member "background" not found on type "QObject" | fill: root.critical ? Qt.tint(Commons.Color.popups.background, Util.alpha(Commons.Color.urgent, 0.09)) : Commons.Color.popups.background
+components/NotificationRow.qml: missing-property: Member "background" not found on type "QObject" | fill: root.critical ? Qt.tint(Commons.Color.popups.background, Util.alpha(Commons.Color.urgent, 0.09)) : Commons.Color.popups.background
+components/NotificationRow.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+components/NotificationRow.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+components/NotificationRow.qml: missing-property: Member "title" not found on type "QObject" | font.pixelSize: FoamyStyle.font.title
+components/NotificationRow.qml: missing-property: Member "title" not found on type "QObject" | font.pixelSize: FoamyStyle.font.title
+components/NotificationRow.qml: unqualified: Unqualified access | Layout.columnSpan: index === root.actions.length - 1 && index % 2 === 0 ? footer.columns : 1
+components/NotificationRow.qml: unqualified: Unqualified access | Layout.columnSpan: index === root.actions.length - 1 && index % 2 === 0 ? footer.columns : 1
+components/NotificationRow.qml: unqualified: Unqualified access | color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, actionButton.hovered ? 0.10 : 0.055))
+components/NotificationRow.qml: unqualified: Unqualified access | color: Util.alpha(root.foreground, 0.12)
+components/NotificationRow.qml: unqualified: Unqualified access | color: Util.alpha(root.foreground, 0.12)
+components/NotificationRow.qml: unqualified: Unqualified access | color: root.foreground
+components/NotificationRow.qml: unqualified: Unqualified access | enabled: root.actionsEnabled
+components/NotificationRow.qml: unqualified: Unqualified access | font.family: root.fontFamily
+components/NotificationRow.qml: unqualified: Unqualified access | maskSource: previewMask
+components/NotificationRow.qml: unqualified: Unqualified access | root.actionRequested(index)
+components/NotificationRow.qml: unqualified: Unqualified access | root.pointerUsed()
+components/NotificationRow.qml: unqualified: Unqualified access | text: root.hasCursor && index < 9 ? FoamyI18n.number(index + 1) + " " + modelData : modelData
+components/NotificationStackHeader.qml: missing-property: Member "background" not found on type "QObject" | fill: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, 0.055))
+components/NotificationStackHeader.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
+components/NotificationStackHeader.qml: missing-property: Member "body" not found on type "QObject" | font.pixelSize: FoamyStyle.font.body
+components/NotificationStackHeader.qml: missing-property: Member "bodySmall" not found on type "QObject" | font.pixelSize: FoamyStyle.font.bodySmall
+components/StackFrame.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i <= 24; i++) {
+components/StackFrame.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var j = 0; j <= 24; j++) {
+components/StackFrame.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var angle = Math.PI / 2 + i * Math.PI / 48
+components/StackFrame.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var inner = bottom + root.leading * Math.cos(angle)
+components/StackFrame.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var topAngle = -Math.PI + j * Math.PI / 48
+components/StackFrame.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var topInner = top + root.leading * Math.cos(topAngle)
+components/StackFrame.qml: missing-property: Member "background" not found on type "QObject" | property color fill: Commons.Color.popups.background
+preview/Before.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < kids.length; i++) {
+preview/Before.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var hit = find(kids[i], name)
+preview/Preview.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < kids.length; i++) {
+preview/Preview.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var hit = find(kids[i], name)

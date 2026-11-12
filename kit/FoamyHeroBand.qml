@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 f89145274930cdd9fe3c71970c4c4afa0d6167f4cfc163e69736373aebe4a8ea — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 456934303a8476a09fda54deacbc3e1034d5f84bb87c718394f5e6eb2819eb33 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -64,7 +64,7 @@ Item {
   property bool settingsHasCursor: false
   property alias trailing: header.trailing
   property alias settingsButton: header.settingsButton
-  signal settingsClicked()
+  signal settingsClicked
   signal settingsHovered(bool hovered)
 
   // --- overflow menu (FoamyHeader) -------------------------------------------------
@@ -78,9 +78,15 @@ Item {
   readonly property alias settingsInMenu: header.settingsInMenu
   readonly property alias shownTrailing: header.shownTrailing
   signal menuHovered(bool hovered)
-  function openMenu(keyboard) { header.openMenu(keyboard) }
-  function closeMenu() { header.closeMenu() }
-  function toggleMenu(keyboard) { header.toggleMenu(keyboard) }
+  function openMenu(keyboard) {
+    header.openMenu(keyboard)
+  }
+  function closeMenu() {
+    header.closeMenu()
+  }
+  function toggleMenu(keyboard) {
+    header.toggleMenu(keyboard)
+  }
 
   // --- centred variant -------------------------------------------------------------
   // Hero first and centred, title/meta centred under it, no icon; buttons in
@@ -92,7 +98,7 @@ Item {
   property string compactTitle: FoamyI18n.t("Settings")
   property bool saving: false
   property alias backButton: settingsHeader.backButton
-  signal back()
+  signal back
 
   // --- hero slot -------------------------------------------------------------------
   default property alias hero: heroSlot.data
@@ -101,10 +107,14 @@ Item {
   // While the band itself is hidden (popup closed, settings open) nothing
   // reads as shown, so it answers whether there are hero items at all.
   readonly property bool hasHero: {
-    if (compact) return false
+    if (compact)
+      return false
     var items = heroSlot.children
-    if (!heroSlot.visible) return items.length > 0
-    for (var i = 0; i < items.length; i++) if (items[i].visible) return true
+    if (!heroSlot.visible)
+      return items.length > 0
+    for (var i = 0; i < items.length; i++)
+      if (items[i].visible)
+        return true
     return false
   }
 
@@ -120,8 +130,11 @@ Item {
   property bool roundBottom: endsCard
   readonly property bool endsCard: {
     var card = band._card
-    if (!card) return false
-    band.height; band.y; card.height
+    if (!card)
+      return false
+    band.height
+    band.y
+    card.height
     var bottom = band.mapToItem(card, 0, band.height).y
     return Math.abs(bottom - (card.height - card.contentBottomInset)) <= 1
   }
@@ -138,7 +151,10 @@ Item {
   Component.onCompleted: {
     // The popup card: the nearest ancestor that is a BorderSurface.
     for (var item = parent; item; item = item.parent)
-      if ("borderSpec" in item && "contentBottomInset" in item) { _card = item; break }
+      if ("borderSpec" in item && "contentBottomInset" in item) {
+        _card = item
+        break
+      }
   }
 
   implicitWidth: FoamyStyle.popupWidth
@@ -175,18 +191,27 @@ Item {
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
     onImageChanged: {
-      if (loaded !== "" && loaded !== image) unloadImage(loaded)
+      if (loaded !== "" && loaded !== image)
+        unloadImage(loaded)
       loaded = image
-      if (image !== "") loadImage(image)
+      if (image !== "")
+        loadImage(image)
       requestPaint()
     }
-    Component.onDestruction: if (loaded !== "") unloadImage(loaded)
+    Component.onDestruction: if (loaded !== "")
+      unloadImage(loaded)
     onImageLoaded: requestPaint()
     Connections {
       target: band
-      function onMirroredChanged() { surface.requestPaint() }
-      function onScrimChanged() { surface.requestPaint() }
-      function onBackgroundChanged() { surface.requestPaint() }
+      function onMirroredChanged() {
+        surface.requestPaint()
+      }
+      function onScrimChanged() {
+        surface.requestPaint()
+      }
+      function onBackgroundChanged() {
+        surface.requestPaint()
+      }
     }
 
     function roundedTop(ctx) {
@@ -208,18 +233,28 @@ Item {
     onPaint: {
       var ctx = getContext("2d")
       ctx.reset()
-      if (width <= 0 || height <= 0) return
+      if (width <= 0 || height <= 0)
+        return
       roundedTop(ctx)
       ctx.clip()
       var picture = image !== "" && isImageLoaded(image)
       if (picture) {
         // Cover-fit the picture into the band.
-        var natural = { w: width, h: height }
+        var natural = {
+          w: width,
+          h: height
+        }
         try {
           var data = ctx.createImageData(image)
-          natural = { w: data.width, h: data.height }
+          natural = {
+            w: data.width,
+            h: data.height
+          }
         } catch (error) {
-          natural = { w: width, h: height }
+          natural = {
+            w: width,
+            h: height
+          }
         }
         var scale = Math.max(width / Math.max(1, natural.w), height / Math.max(1, natural.h))
         var w = natural.w * scale, h = natural.h * scale
@@ -321,8 +356,7 @@ Item {
 
   // Centred content keeps the same distance from both sides, clear of the
   // corner buttons, so it stays centred on the band.
-  readonly property real centeredInset: FoamyStyle.padding
-    + (header.buttonsWidth > 0 ? header.buttonsWidth + FoamyStyle.gap : 0)
+  readonly property real centeredInset: FoamyStyle.padding + (header.buttonsWidth > 0 ? header.buttonsWidth + FoamyStyle.gap : 0)
 
   FoamyHeader {
     id: header
@@ -341,8 +375,12 @@ Item {
     showSettings: band.showSettings
     settingsHasCursor: band.settingsHasCursor
     onSettingsClicked: band.settingsClicked()
-    onSettingsHovered: function(hovered) { band.settingsHovered(hovered) }
-    onMenuHovered: function(hovered) { band.menuHovered(hovered) }
+    onSettingsHovered: function (hovered) {
+      band.settingsHovered(hovered)
+    }
+    onMenuHovered: function (hovered) {
+      band.menuHovered(hovered)
+    }
   }
 
   Rectangle {

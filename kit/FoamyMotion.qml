@@ -1,12 +1,12 @@
 pragma Singleton
-// foamy-kit 0.8.1 79218200ee2dbe5d1bdfd6ef41768bce029e136f8640f8f5f0833a97d8371d5a — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 ac985fdddb1be105d4ca5590c31fb7972e55cf5b05a792ef618a80afda25980f — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 
-// Every foamy duration goes through here. On 4.5, Style.duration(ms) returns
-// 0 while animations are off (`omarchy toggle animations`, reduced motion,
-// CPU rendering) and Style.reduceMotion says so; 4.0 has neither, so motion
-// is always on there. Looping animations must also check reduceMotion:
+// Every foamy duration goes through here. Style.duration(ms) returns 0
+// while animations are off (`omarchy toggle animations`, reduced motion, CPU
+// rendering) and Style.reduceMotion says so. Looping animations must also
+// check reduceMotion:
 //
 //   NumberAnimation { duration: FoamyMotion.hover }
 //   RotationAnimation on rotation {
@@ -15,11 +15,10 @@ import qs.Commons
 //   }
 QtObject {
   readonly property bool reduceMotion: Style.reduceMotion === true
-  readonly property var easeOut: Style.easeOut !== undefined ? Style.easeOut : [0.23, 1.0, 0.32, 1.0, 1.0, 1.0]
+  readonly property var easeOut: Style.easeOut
 
   function duration(ms) {
-    if (typeof Style.duration === "function") return Style.duration(ms)
-    return reduceMotion ? 0 : ms
+    return Style.duration(ms)
   }
 
   // Named durations (ms), matched to the 4.5 motion guide. Nothing over 300.
@@ -38,5 +37,7 @@ QtObject {
   readonly property int pulse: 1200
 
   // True when a looping animation may run for an item that is `shown`.
-  function loopAllowed(shown) { return !!shown && !reduceMotion }
+  function loopAllowed(shown) {
+    return !!shown && !reduceMotion
+  }
 }

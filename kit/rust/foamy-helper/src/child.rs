@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 c63dc35ac197c621d9f2541be5c00fbafe38fb4f5c133ee57ffe19e3c7421f41 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 b572966db8ecb2f77c2abdd130281b643cd4c81b8878e2cab6f300eb4cd87270 — do not edit; change foamy-kit and run sync
 //! Bounded child processes: a deadline, a cap on captured output, a kill on
 //! either, and control over the environment, standard input, the process
 //! group or session, resource limits, CPU and I/O priority and death with
@@ -19,16 +19,20 @@
 //! ```
 //!
 //! The same system tools the old helpers ran are run with the same argv;
-//! this module only bounds them.
+//! this module only bounds them. A helper that its caller wraps in
+//! `timeout` also gives the whole run a budget
+//! ([`crate::process::set_run_budget`]): every child then ends within it,
+//! whatever the children's own timeouts add up to.
 
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, ErrorKind, Read, Write};
 use std::ops::ControlFlow;
-use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd};
+use std::os::fd::{AsFd, AsRawFd, OwnedFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -36,14 +40,15 @@ use rustix::event::{PollFd, PollFlags, Timespec, poll};
 use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
 use rustix::io::Errno;
 use rustix::pipe::{SpliceFlags, fcntl_setpipe_size, splice};
-use rustix::process::{Pid, Signal, getpid, kill_process_group};
+use rustix::process::{Pid, Signal, WaitId, WaitIdOptions, getpid, kill_process_group, waitid};
 
 use crate::process::{Priority, Resource};
 
 /// What a bounded child left behind.
 #[derive(Debug)]
 pub struct Output {
-    /// How it ended (after a kill: by `SIGKILL`).
+    /// How it ended (after a kill: by `SIGKILL`; also when it was never
+    /// started because the run budget had run out).
     pub status: ExitStatus,
     /// Captured standard output, at most `max_output` bytes.
     pub stdout: Vec<u8>,
@@ -98,6 +103,17 @@ enum Input {
     Fd(OwnedFd),
 }
 
+/// An fd the child gets under `number`: the builder's own duplicate, so
+/// the caller's fd may be closed (and its number reused) before the run.
+#[derive(Debug)]
+struct Inherited {
+    number: RawFd,
+    fd: Arc<OwnedFd>,
+    /// Seek it to its start just before exec (a seccomp filter that
+    /// bubblewrap reads from the shared offset).
+    rewind: bool,
+}
+
 /// A command with bounds; build it, then [`run`](Bounded::run) it.
 ///
 /// Defaults: standard input `/dev/null`, 10 s deadline, 1 MiB per output
@@ -113,7 +129,9 @@ pub struct Bounded {
     group: Group,
     limits: Vec<(Resource, u64)>,
     priority: Priority,
-    inherit: Vec<RawFd>,
+    inherit: Vec<Inherited>,
+    /// Why the builder can't spawn (an fd could not be duplicated).
+    broken: Option<io::Error>,
     hooks: Hooks,
 }
 
@@ -130,6 +148,7 @@ impl Bounded {
             limits: Vec::new(),
             priority: Priority::default(),
             inherit: Vec::new(),
+            broken: None,
             hooks: Hooks(Vec::new()),
         }
     }
@@ -186,7 +205,9 @@ impl Bounded {
         self
     }
 
-    /// Deadline for the whole run, from spawn to exit.
+    /// Deadline for the whole run, from spawn to exit; earlier when the
+    /// process's run budget ([`crate::process::set_run_budget`]) ends first.
+    /// `Duration::MAX` is no deadline of its own.
     pub fn timeout(mut self, timeout: Duration) -> Bounded {
         self.timeout = timeout;
         self
@@ -254,15 +275,43 @@ impl Bounded {
         self
     }
 
-    /// Lets the child inherit `fd` under the same number (clears its
-    /// close-on-exec flag in the child only), like Python's `pass_fds`. The
-    /// fd must stay open until [`run`](Self::run).
+    /// Lets the child inherit `fd` under its number (3 or higher), like
+    /// Python's `pass_fds`, sharing the open file (and its offset). The
+    /// builder keeps a duplicate, so the child gets this file under that
+    /// number even if the caller closes `fd` before [`run`](Self::run)
+    /// (whatever reuses the number here is not passed on). A duplicate that
+    /// can't be made (`EMFILE`) fails the run.
     pub fn inherit_fd(self, fd: impl AsFd) -> Bounded {
-        self.inherit_raw_fd(fd.as_fd().as_raw_fd())
+        let fd = fd.as_fd();
+        match fd.try_clone_to_owned() {
+            Ok(owned) => self.inherit_shared(fd.as_raw_fd(), Arc::new(owned), false),
+            Err(error) => self.fail_spawn(error),
+        }
     }
 
-    pub(crate) fn inherit_raw_fd(mut self, fd: RawFd) -> Bounded {
-        self.inherit.push(fd);
+    /// [`inherit_fd`](Self::inherit_fd) with a duplicate made already;
+    /// `rewind`: seek it to its start in the child, just before exec.
+    pub(crate) fn inherit_shared(
+        mut self,
+        number: RawFd,
+        fd: Arc<OwnedFd>,
+        rewind: bool,
+    ) -> Bounded {
+        // Two files under one number can't both reach the child (the
+        // number of a temporary fd is reused once it is dropped).
+        if self.inherit.iter().any(|held| held.number == number) {
+            return self.fail_spawn(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("two inherited fds want number {number}"),
+            ));
+        }
+        self.inherit.push(Inherited { number, fd, rewind });
+        self
+    }
+
+    /// Makes [`run`](Self::run) fail with `error` before anything starts.
+    pub(crate) fn fail_spawn(mut self, error: io::Error) -> Bounded {
+        self.broken.get_or_insert(error);
         self
     }
 
@@ -285,11 +334,16 @@ impl Bounded {
 
     /// Runs the child to completion within the bounds. `Err` only when it
     /// could not be started or waited for; a timeout or an overflow is an
-    /// [`Output`] with `timed_out` or `overflowed` set.
+    /// [`Output`] with `timed_out` or `overflowed` set. After the run
+    /// budget's end the child is not started: `timed_out`, no output.
     pub fn run(self) -> io::Result<Output> {
         let started = Instant::now();
+        if run_over(started) {
+            return Ok(Output::not_started());
+        }
+        let deadline = deadline_for(started, self.timeout);
         let child = self.start(Stdin::Own)?;
-        let mut run = Run::new(started + child.timeout, None);
+        let mut run = Run::new(deadline, None);
         run.add(child)?;
         Ok(run.finish()?.outputs.remove(0))
     }
@@ -298,7 +352,6 @@ impl Bounded {
     fn start(self, stdin: Stdin) -> io::Result<Started> {
         let Bounded {
             mut command,
-            timeout,
             max_output,
             stdin: input,
             die_with_parent,
@@ -306,8 +359,29 @@ impl Bounded {
             limits,
             priority,
             inherit,
+            broken,
             hooks,
+            ..
         } = self;
+        if let Some(error) = broken {
+            return Err(error);
+        }
+        // In the child each fd is put under its number with dup2. First
+        // move every duplicate above all those numbers, so placing one
+        // never overwrites another still to be placed. 0-2 are the child's
+        // standard streams.
+        let floor = inherit.iter().map(|fd| fd.number).max().unwrap_or(0) + 1;
+        let mut placed = Vec::with_capacity(inherit.len());
+        for Inherited { number, fd, rewind } in &inherit {
+            if *number < 3 {
+                return Err(io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "fds 0-2 are the child's standard streams",
+                ));
+            }
+            let copy = rustix::io::fcntl_dupfd_cloexec(&**fd, floor)?;
+            placed.push((*number, copy, *rewind));
+        }
         let feed = match (stdin, input) {
             (Stdin::Pipe, _) => {
                 command.stdin(Stdio::piped());
@@ -334,18 +408,29 @@ impl Bounded {
         let parent = die_with_parent.then(getpid);
         // SAFETY: the closure runs in the forked child before exec. It only
         // makes system calls through rustix (setsid, prctl, getppid,
-        // getrlimit, setrlimit, getpriority, setpriority, fcntl) and libc's
-        // syscall (ioprio_set), and builds io::Errors from raw OS codes, so
-        // it neither allocates nor takes locks; `limits` and `inherit` are
-        // moved in and only read. The hooks are the crate's own (sandbox),
-        // which hold to the same rule.
+        // getrlimit, setrlimit, getpriority, setpriority, lseek) and libc
+        // (syscall for ioprio_set, dup2), and builds io::Errors from raw OS
+        // codes, so it neither allocates nor takes locks; `limits` and
+        // `placed` are moved in and only read. The hooks are the crate's
+        // own (sandbox), which hold to the same rule.
         unsafe {
             command.pre_exec(move || {
                 crate::process::child_setup(session, parent, &limits, priority)?;
-                for &fd in &inherit {
-                    // SAFETY: only fcntl on the number; a closed fd is EBADF.
-                    let fd = BorrowedFd::borrow_raw(fd);
-                    rustix::io::fcntl_setfd(fd, rustix::io::FdFlags::empty())?;
+                for (number, fd, rewind) in &placed {
+                    // SAFETY: dup2 takes two integers; `fd` is open (owned
+                    // by the closure) and `number` is replaced in the child
+                    // only. The copy at `number` has no close-on-exec flag.
+                    if dup2(fd.as_raw_fd(), *number) < 0 {
+                        return Err(io::Error::last_os_error());
+                    }
+                    // The offset is shared with every copy: an earlier run
+                    // left it at the end. A pipe has none to reset.
+                    if *rewind {
+                        match rustix::fs::seek(fd, rustix::fs::SeekFrom::Start(0)) {
+                            Ok(_) | Err(Errno::SPIPE) => {}
+                            Err(error) => return Err(error.into()),
+                        }
+                    }
                 }
                 for hook in &hooks.0 {
                     hook()?;
@@ -353,13 +438,17 @@ impl Bounded {
                 Ok(())
             });
         }
+        // Registered under the lock, so the panic hook either sees the
+        // child or runs before it exists.
+        let mut live = LIVE.lock().unwrap_or_else(PoisonError::into_inner);
         let mut child = command.spawn()?;
+        live.push(child.id());
+        drop(live);
         Ok(Started {
             stdin: child.stdin.take(),
             stdout: child.stdout.take().map(OwnedFd::from),
             stderr: child.stderr.take().map(OwnedFd::from),
             feed,
-            timeout,
             stage: Stage {
                 child,
                 status: None,
@@ -379,9 +468,10 @@ impl Bounded {
 /// [`Bounded::pipe_into`]; each stage keeps its own environment, limits,
 /// priority, sandbox and output cap.
 ///
-/// - **Deadline:** the shorter of the two stages' timeouts, from the start.
-///   When it passes, both are killed (each still running reports
-///   `timed_out`).
+/// - **Deadline:** the shorter of the two stages' timeouts, from the start,
+///   or the run budget's end ([`crate::process::set_run_budget`]) when that
+///   is earlier. When it passes, both are killed (each still running
+///   reports `timed_out`); after the budget's end neither starts.
 /// - **Output:** the first stage's standard error and the second stage's
 ///   standard output and error are captured, each up to its stage's
 ///   `max_output`; more kills both. The piped bytes are not capped:
@@ -394,7 +484,8 @@ impl Bounded {
 ///   gets `EPIPE` (or `SIGPIPE`) on its next write.
 /// - **Cancel and errors:** both stages are killed, process groups
 ///   included, and always waited for, so nothing is left running or as a
-///   zombie.
+///   zombie. A panic under the kit's panic hook
+///   ([`crate::process::exit_on_panic`]) kills both groups before the exit.
 ///
 /// ```no_run
 /// use std::ops::ControlFlow;
@@ -489,11 +580,19 @@ impl Pipeline {
             ));
         }
         let started = Instant::now();
+        if run_over(started) {
+            return Ok(PipelineOutput {
+                first: Output::not_started(),
+                second: Output::not_started(),
+                piped: 0,
+                cancelled: false,
+            });
+        }
+        let deadline = deadline_for(started, first.timeout.min(second.timeout));
         let mut first = first.start(Stdin::Own)?;
         // If the second can't start, dropping `first` kills and reaps it
         // (Stage's Drop).
         let mut second = second.start(Stdin::Pipe)?;
-        let deadline = started + first.timeout.min(second.timeout);
         let (Some(from), Some(to)) = (first.stdout.take(), second.stdin.take()) else {
             return Err(io::Error::other("pipeline stages without pipes"));
         };
@@ -530,6 +629,33 @@ enum Stdin {
     Pipe,
 }
 
+unsafe extern "C" {
+    /// The C library's `dup2(2)` (std links it; async-signal-safe). rustix's
+    /// wants an `OwnedFd` for the target, which in the child may be closed.
+    fn dup2(old: std::ffi::c_int, new: std::ffi::c_int) -> std::ffi::c_int;
+}
+
+/// The children started here and not yet reaped. Each leads its own process
+/// group, so its pid is also the group to kill. A pid leaves the list in the
+/// same critical section that reaps it: until then the kernel can't give
+/// the number to another process.
+static LIVE: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+
+/// Kills the process group of every child started here and not yet reaped.
+/// For the kit's panic hook ([`crate::process::exit_on_panic`]), which
+/// exits without unwinding (the release profile aborts on panic), so no
+/// [`Stage`] drop would kill them, and `PR_SET_PDEATHSIG` reaches only the
+/// child itself, not what it started.
+pub(crate) fn kill_live_groups() {
+    let live = LIVE.lock().unwrap_or_else(PoisonError::into_inner);
+    for &pid in live.iter() {
+        if let Some(pid) = i32::try_from(pid).ok().and_then(Pid::from_raw) {
+            let _ = kill_process_group(pid, Signal::KILL);
+            let _ = rustix::process::kill_process(pid, Signal::KILL);
+        }
+    }
+}
+
 /// A spawned child with the ends of its pipes.
 struct Started {
     stage: Stage,
@@ -537,7 +663,39 @@ struct Started {
     stdout: Option<OwnedFd>,
     stderr: Option<OwnedFd>,
     feed: Option<Vec<u8>>,
-    timeout: Duration,
+}
+
+/// A deadline as good as none: what `Duration::MAX` (which would overflow
+/// an `Instant`) means.
+const NO_DEADLINE: Duration = Duration::from_secs(100 * 365 * 86400);
+
+/// When a run started at `started` with `timeout` must end: its own
+/// deadline or the process's run deadline, whichever comes first.
+fn deadline_for(started: Instant, timeout: Duration) -> Instant {
+    let own = started
+        .checked_add(timeout)
+        .unwrap_or_else(|| started + NO_DEADLINE);
+    crate::process::run_deadline().map_or(own, |run| own.min(run))
+}
+
+/// The process's run deadline has passed: start nothing more.
+fn run_over(now: Instant) -> bool {
+    crate::process::run_deadline().is_some_and(|run| run <= now)
+}
+
+impl Output {
+    /// A child not started because the run deadline had passed: timed out,
+    /// reported like one killed at its deadline.
+    fn not_started() -> Output {
+        use std::os::unix::process::ExitStatusExt;
+        Output {
+            status: ExitStatus::from_raw(Signal::KILL.as_raw()),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            timed_out: true,
+            overflowed: false,
+        }
+    }
 }
 
 /// A running (or reaped) child and what it wrote.
@@ -560,25 +718,46 @@ impl Stage {
         }
     }
 
+    /// The exit status if the child has exited (reaping it), else `None`.
+    fn try_reap(&mut self) -> io::Result<Option<ExitStatus>> {
+        if self.status.is_none() {
+            let mut live = LIVE.lock().unwrap_or_else(PoisonError::into_inner);
+            self.status = self.child.try_wait()?;
+            if self.status.is_some() {
+                let pid = self.child.id();
+                live.retain(|&live| live != pid);
+            }
+        }
+        Ok(self.status)
+    }
+
     fn reap(&mut self) -> io::Result<ExitStatus> {
-        match self.status {
-            Some(status) => Ok(status),
-            None => {
-                let status = self.child.wait()?;
-                self.status = Some(status);
-                Ok(status)
+        loop {
+            if let Some(status) = self.try_reap()? {
+                return Ok(status);
+            }
+            // Wait for the exit without reaping (the pid stays this child's
+            // and in `LIVE`), then reap in `try_reap`.
+            let pid = Pid::from_child(&self.child);
+            match waitid(
+                WaitId::Pid(pid),
+                WaitIdOptions::EXITED | WaitIdOptions::NOWAIT,
+            ) {
+                Ok(_) | Err(Errno::INTR) => {}
+                Err(error) => return Err(error.into()),
             }
         }
     }
 }
 
 impl Drop for Stage {
-    /// An error or a panic on the way: kill and reap, never leave a running
-    /// child or a zombie behind.
+    /// An error, or a panic that unwinds, on the way: kill and reap, never
+    /// leave a running child or a zombie behind. (A panic under the kit's
+    /// hook exits without unwinding; the hook kills the groups itself.)
     fn drop(&mut self) {
         if self.status.is_none() {
             kill(&mut self.child);
-            let _ = self.child.wait();
+            let _ = self.reap();
         }
     }
 }
@@ -804,9 +983,7 @@ impl<'p> Run<'p> {
         }
         loop {
             for stage in &mut self.stages {
-                if stage.status.is_none() {
-                    stage.status = stage.child.try_wait()?;
-                }
+                stage.try_reap()?;
             }
             if self.stages.iter().all(|stage| stage.status.is_some()) {
                 return Ok(End::Done);
@@ -1061,6 +1238,25 @@ mod tests {
     }
 
     #[test]
+    fn two_inherited_fds_for_one_number_fail_the_run() {
+        // A temporary's number is free again once it is dropped, so a
+        // second temporary can come under the same number; the child could
+        // only get one of them under it.
+        let dir = crate::fs::tests::TempDir::new("inherit-two");
+        let (a, b) = (dir.0.join("a"), dir.0.join("b"));
+        std::fs::write(&a, b"a").unwrap();
+        std::fs::write(&b, b"b").unwrap();
+        let first: OwnedFd = std::fs::File::open(&a).unwrap().into();
+        let second: OwnedFd = std::fs::File::open(&b).unwrap().into();
+        let error = sh("true")
+            .inherit_shared(100, Arc::new(first), false)
+            .inherit_shared(100, Arc::new(second), false)
+            .run()
+            .unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidInput, "{error}");
+    }
+
+    #[test]
     fn inherited_fds_reach_the_child_under_their_number() {
         let (read, mut write) = io::pipe().unwrap();
         write.write_all(b"through fd").unwrap();
@@ -1073,6 +1269,19 @@ mod tests {
             !closed.success(),
             "without inherit_fd the fd stays close-on-exec"
         );
+        // The builder keeps its own duplicate: the caller may close the fd
+        // (and something else may take its number) before the run.
+        let (read, mut write) = io::pipe().unwrap();
+        write.write_all(b"the pipe").unwrap();
+        drop(write);
+        let script = format!("cat <&{}", read.as_raw_fd());
+        let command = sh(&script).inherit_fd(read);
+        let (_reused, _keep) = io::pipe().unwrap();
+        let output = command.run().unwrap();
+        assert_eq!(output.stdout, b"the pipe", "{output:?}");
+        // 0-2 are the child's own standard streams.
+        let error = sh("true").inherit_fd(io::stdin()).run().unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
     }
 
     #[test]
@@ -1183,6 +1392,144 @@ mod tests {
                 Ok(_) => thread::sleep(Duration::from_millis(10)),
             }
         }
+    }
+
+    /// Runs this test binary again with only `test` (in this module) and
+    /// `FOAMY_CHILD_TEST` set to `arg`: for what changes the whole process
+    /// (the run budget, the panic hook), which other tests share.
+    fn rerun(test: &str, arg: &Path) -> Output {
+        Bounded::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                &format!("child::tests::{test}"),
+                "--nocapture",
+                "--test-threads=1",
+                "-q",
+            ])
+            .env("FOAMY_CHILD_TEST", arg)
+            .timeout(Duration::from_secs(60))
+            .run()
+            .unwrap()
+    }
+
+    /// [`run_budget_ends_every_child_within_it`]'s child: three children of
+    /// 20 s each under a 1 s budget, then one more after it ended. Prints
+    /// what happened; run normally it does nothing.
+    #[test]
+    fn run_budget_child() {
+        let Some(dir) = std::env::var_os("FOAMY_CHILD_TEST") else {
+            return;
+        };
+        let dir = Path::new(&dir);
+        let start = Instant::now();
+        crate::process::set_run_budget(Duration::from_secs(1));
+        for i in 0..3 {
+            let output = sh("sleep 30 & echo $! > \"$0\"; wait")
+                .arg(dir.join(format!("grandchild{i}")))
+                .timeout(Duration::from_secs(20))
+                .run()
+                .unwrap();
+            println!("child {i} timed_out={}", output.timed_out);
+        }
+        let pipeline = sh("echo x")
+            .pipe_into(sh("touch \"$0\"; cat").arg(dir.join("late")))
+            .run()
+            .unwrap();
+        let late = sh("touch \"$0\"").arg(dir.join("late")).run().unwrap();
+        println!(
+            "late timed_out={} {} {} {:?}",
+            late.timed_out,
+            pipeline.first.timed_out,
+            pipeline.second.timed_out,
+            late.status.signal()
+        );
+        println!("elapsed_ms={}", start.elapsed().as_millis());
+    }
+
+    #[test]
+    fn run_budget_ends_every_child_within_it() {
+        // A helper the caller wraps in `timeout 30s` whose children's own
+        // deadlines add up to more must still end them all and reply in
+        // time (foamy-power K1).
+        let dir = crate::fs::tests::TempDir::new("budget");
+        let output = rerun("run_budget_child", &dir.0);
+        assert!(output.success(), "{output:?}");
+        let text = output.stdout_lossy();
+        assert!(text.contains("child 0 timed_out=true"), "{text}");
+        assert!(text.contains("child 2 timed_out=true"), "{text}");
+        assert!(
+            text.contains(&format!(
+                "late timed_out=true true true Some({})",
+                Signal::KILL.as_raw()
+            )),
+            "{text}"
+        );
+        let elapsed: u64 = text
+            .lines()
+            .find_map(|line| line.strip_prefix("elapsed_ms="))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!(elapsed < 3000, "within the 1 s budget: {elapsed} ms");
+        assert!(!dir.0.join("late").exists(), "nothing starts after it");
+        for i in 0..3 {
+            let path = dir.0.join(format!("grandchild{i}"));
+            if path.exists() {
+                assert!(not_running(&pids(&path)[0]), "grandchild {i}");
+            }
+        }
+    }
+
+    /// [`a_panic_kills_the_children_groups`]'s child: the kit's panic
+    /// hook, a child with a grandchild running on another thread (a
+    /// pipeline stage, say), then a panic. Run normally it does nothing.
+    #[test]
+    fn panic_child() {
+        let Some(dir) = std::env::var_os("FOAMY_CHILD_TEST") else {
+            return;
+        };
+        let dir = Path::new(&dir).to_path_buf();
+        crate::process::exit_on_panic(101);
+        let pids = dir.join("pids");
+        let script =
+            "echo $$ > \"$0.tmp\"; sleep 30 & echo $! >> \"$0.tmp\"; mv \"$0.tmp\" \"$0\"; wait";
+        let target = pids.clone();
+        thread::spawn(move || {
+            sh(script)
+                .arg(&target)
+                .timeout(Duration::from_secs(60))
+                .run()
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !pids.exists() && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        panic!("a helper bug while a child runs");
+    }
+
+    #[test]
+    fn a_panic_kills_the_children_groups() {
+        // The hook exits without unwinding, so no drop kills the child,
+        // and PR_SET_PDEATHSIG reaches only the child, not its children.
+        let dir = crate::fs::tests::TempDir::new("panic");
+        let output = rerun("panic_child", &dir.0);
+        assert_eq!(output.status.code(), Some(101), "{output:?}");
+        let pids = pids(&dir.0.join("pids"));
+        assert_eq!(pids.len(), 2, "{pids:?}");
+        assert!(not_running(&pids[0]), "the child");
+        assert!(not_running(&pids[1]), "the grandchild");
+    }
+
+    #[test]
+    fn no_timeout_does_not_overflow() {
+        let output = sh("exit 0").timeout(Duration::MAX).run().unwrap();
+        assert!(output.success(), "{output:?}");
+        let output = sh("printf x")
+            .timeout(Duration::MAX)
+            .pipe_into(Bounded::new("cat").timeout(Duration::MAX))
+            .run()
+            .unwrap();
+        assert!(output.success() && output.second.stdout == b"x");
     }
 
     #[test]

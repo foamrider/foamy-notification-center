@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import qs.Commons
 import qs.Commons as Commons
-import qs.Ui
 // Not "Translations": 4.5 qs.Commons has a Translations type, and the clash breaks loading.
 import "../Translations.js" as CenterText
 import "../kit"
@@ -19,23 +18,29 @@ Item {
   property double readMark: 0
   property color foreground: Commons.Color.foreground
   property string fontFamily: FoamyStyle.fontFamily
-  signal toggleRequested()
-  signal removeRequested()
-  signal pointerUsed()
+  signal toggleRequested
+  signal removeRequested
+  signal pointerUsed
 
   implicitHeight: Math.max(Style.space(root.compact ? 32 : 44), labels.implicitHeight + Style.space(root.compact ? 8 : 20))
   readonly property bool expandable: group.entries.length > 1
   readonly property string storeImages: "file://" + (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/omarchy-notification-center/images/"
   readonly property string iconSource: {
     var value = String(group.appIcon || "")
-    if (!value) return ""
+    if (!value)
+      return ""
     // Only the archive's own normalized images or a theme icon name; never a
     // provider URL or an arbitrary path from a (tampered) archive.
-    if (value.indexOf(root.storeImages) === 0 && value.indexOf("/..") < 0) return value
+    if (value.indexOf(root.storeImages) === 0 && value.indexOf("/..") < 0)
+      return value
     return /^[A-Za-z0-9_.-]+$/.test(value) ? Quickshell.iconPath(value, true) : ""
   }
 
-  HoverHandler { id: hover; onHoveredChanged: if (hovered) root.pointerUsed() }
+  HoverHandler {
+    id: hover
+    onHoveredChanged: if (hovered)
+      root.pointerUsed()
+  }
   StackFrame {
     anchors.fill: parent
     first: true
@@ -55,7 +60,11 @@ Item {
     anchors.fill: parent
     anchors.rightMargin: dismiss.width + Style.space(8)
     cursorShape: root.expandable ? Qt.PointingHandCursor : Qt.ArrowCursor
-    onClicked: { root.pointerUsed(); if (root.expandable) root.toggleRequested() }
+    onClicked: {
+      root.pointerUsed()
+      if (root.expandable)
+        root.toggleRequested()
+    }
   }
   Item {
     id: avatar
@@ -142,6 +151,9 @@ Item {
     hasCursor: root.dismissHasCursor
     opacity: hover.hovered || root.hasCursor ? 1 : 0
     tooltipText: FoamyI18n.t(root.group.entries.length === 1 ? "Dismiss 1 notification" : "Dismiss %1 notifications", root.group.entries.length)
-    onClicked: { root.pointerUsed(); root.removeRequested() }
+    onClicked: {
+      root.pointerUsed()
+      root.removeRequested()
+    }
   }
 }

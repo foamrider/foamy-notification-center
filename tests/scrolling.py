@@ -4,23 +4,28 @@ One wheel notch scrolls `wheelStep` px however the mouse splits it (a
 high-resolution wheel sends 8 x 15 instead of 1 x 120), notches add up,
 touchpad pixels map 1:1, and a list that fits does not move.
 """
+
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
-import hostenv
+
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
+sys.path.insert(0, str(KIT / "preview"))
+import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
-base = Path(tempfile.mkdtemp(prefix='foamy-center-scroll-'))
-app = base / 'app'
+base = Path(tempfile.mkdtemp(prefix="foamy-center-scroll-"))
+app = base / "app"
 app.mkdir()
-for name in ['Commons', 'Ui']:
+for name in ["Commons", "Ui"]:
     # hostenv.root(): the installed 4.5 shell unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick another.
-    (app / name).symlink_to(hostenv.root() / 'shell' / name)
-(app / 'plugin').symlink_to(source)
-runtime = base / 'runtime'
+    (app / name).symlink_to(hostenv.root() / "shell" / name)
+(app / "plugin").symlink_to(source)
+runtime = base / "runtime"
 runtime.mkdir(mode=0o700)
-(app / 'shell.qml').write_text('''import QtQuick
+(app / "shell.qml").write_text("""import QtQuick
 import QtQuick.Controls
 import QtTest
 import Quickshell
@@ -94,13 +99,33 @@ ShellRoot {
   }
  }
 }
-''')
+""")
 # A private home and config: on 4.5 the shell language is $XDG_CONFIG_HOME/omarchy/language.
-home = base / 'home'
+home = base / "home"
 home.mkdir()
-env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / '.config'), XDG_STATE_HOME=str(home / '.local/state'), XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM='offscreen', QT_QPA_PLATFORMTHEME='generic', QT_QUICK_BACKEND='software')
-env.pop('WAYLAND_DISPLAY', None)
-result = subprocess.run(['quickshell', '-p', str(app), '--no-color'], env=env, capture_output=True, text=True, timeout=30)
-output = result.stdout + result.stderr
+env = dict(
+    os.environ,
+    HOME=str(home),
+    XDG_CONFIG_HOME=str(home / ".config"),
+    XDG_STATE_HOME=str(home / ".local/state"),
+    XDG_RUNTIME_DIR=str(runtime),
+    QT_QPA_PLATFORM="offscreen",
+    QT_QPA_PLATFORMTHEME="generic",
+    QT_QUICK_BACKEND="software",
+)
+env.pop("WAYLAND_DISPLAY", None)
+hostenv.isolate(env, base)
+env.update(hostenv.make(base, app, env=env))
+# Its own process group, stopped as a whole when the block ends.
+log = base / "qs.log"
+with (
+    log.open("w") as out,
+    hostenv.ProcessGroup(
+        ["quickshell", "-p", str(app), "--no-color"], env=env, stdout=out, stderr=subprocess.STDOUT
+    ) as shell,
+):
+    status = shell.wait(60)
+output = log.read_text()
 print(output)
-assert result.returncode == 0 and 'SCROLLING 7 passed 0 failed' in output, output
+hostenv.check(env, output, *hostenv.calls(base))
+assert status == 0 and "SCROLLING 7 passed 0 failed" in output, output

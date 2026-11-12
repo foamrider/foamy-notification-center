@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 142ab84d9c2b5e899e60da9b94881e08196e4722af86835cf8388d6d95dffe88 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 47198aad9597eec308c7e61b9cb3633907ff431511ea8e475dd50d1d93c3dce7 — do not edit; change foamy-kit and run sync
 use super::*;
 use std::time::Duration;
 
@@ -155,6 +155,79 @@ fn memfd_holds_the_program_for_bubblewrap() {
     );
 }
 
+/// A stand-in for bubblewrap that copies the fd its `--seccomp` option
+/// names (`$2`) to standard output, as bubblewrap reads it.
+fn fake_bwrap(dir: &Path) -> Bwrap {
+    use std::os::unix::fs::PermissionsExt;
+    let program = dir.join("bwrap");
+    std::fs::write(&program, "#!/bin/sh\nexec cat <&\"$2\"\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    Bwrap::new(program)
+}
+
+#[test]
+fn bwrap_keeps_its_own_copy_of_the_fds_it_names() {
+    // The memfd is a temporary: closed when `seccomp` returns. Before,
+    // only its number was kept, and the next fd opened (here a file) took
+    // it and went to bubblewrap instead.
+    let dir = crate::fs::tests::TempDir::new("bwrap-fds");
+    let other = dir.0.join("other");
+    std::fs::write(&other, b"some other file").unwrap();
+    let filter = BpfFilter::decoder().unwrap();
+    let sandbox = fake_bwrap(&dir.0).seccomp(filter.memfd().unwrap());
+    let _reused = File::open(&other).unwrap();
+    let output = sandbox.bounded(["--", "true"]).run().unwrap();
+    assert!(output.success(), "{output:?}");
+    assert_eq!(output.stdout, filter.to_bytes());
+}
+
+#[test]
+fn bwrap_names_each_temporary_fd_by_its_own_duplicate() {
+    // Two temporaries opened one after the other get the same number (the
+    // first is closed when its call returns). Naming the caller's number
+    // gave both options that number, and the second file replaced the first
+    // under it, so both binds showed the second file.
+    use std::os::unix::fs::PermissionsExt;
+    let dir = crate::fs::tests::TempDir::new("bwrap-two-fds");
+    let (a, b) = (dir.0.join("a"), dir.0.join("b"));
+    std::fs::write(&a, b"first ").unwrap();
+    std::fs::write(&b, b"second").unwrap();
+    let program = dir.0.join("bwrap");
+    std::fs::write(&program, "#!/bin/sh\ncat <&\"$2\" && exec cat <&\"$5\"\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let sandbox = Bwrap::new(program)
+        .ro_bind_fd(File::open(&a).unwrap(), "/a")
+        .ro_bind_fd(File::open(&b).unwrap(), "/b");
+    let args = sandbox.args();
+    assert_ne!(args[1], args[4], "each option names its own fd: {args:?}");
+    let output = sandbox.bounded(["--", "true"]).run().unwrap();
+    assert!(output.success(), "{output:?}");
+    assert_eq!(output.stdout, b"first second");
+}
+
+#[test]
+fn a_seccomp_memfd_serves_more_than_one_run() {
+    // bubblewrap reads the filter from the shared offset: after one run it
+    // was at the end, and the next run (`works()` and then the real one,
+    // say) read nothing ("Invalid seccomp data").
+    let dir = crate::fs::tests::TempDir::new("bwrap-rewind");
+    let filter = BpfFilter::threaded_decoder().unwrap();
+    let memfd = filter.memfd().unwrap();
+    let sandbox = fake_bwrap(&dir.0).seccomp(&memfd);
+    for run in 0..2 {
+        let output = sandbox.bounded(["--", "true"]).run().unwrap();
+        assert!(output.success(), "{output:?}");
+        assert_eq!(output.stdout, filter.to_bytes(), "run {run}");
+    }
+    // Another builder with the same memfd too.
+    let output = fake_bwrap(&dir.0)
+        .seccomp(&memfd)
+        .bounded(["--", "true"])
+        .run()
+        .unwrap();
+    assert_eq!(output.stdout, filter.to_bytes());
+}
+
 #[test]
 fn seccomp_in_the_child_denies_processes_and_namespaces() {
     let filter = BpfFilter::decoder().unwrap();
@@ -276,10 +349,23 @@ fn elf_interpreters_and_path_lookup() {
     assert_eq!(which(text.to_str().unwrap()), None, "not executable");
 }
 
+/// The number of the builder's `index`th retained fd, checked to be a copy
+/// of `original` (same file, a different number).
+fn retained(sandbox: &Bwrap, index: usize, original: &impl AsFd) -> String {
+    let (number, copy, _) = &sandbox.fds[index];
+    assert_eq!(*number, copy.as_raw_fd());
+    let (a, b) = (
+        rustix::fs::fstat(original).unwrap(),
+        rustix::fs::fstat(&**copy).unwrap(),
+    );
+    assert_eq!((a.st_dev, a.st_ino), (b.st_dev, b.st_ino));
+    assert_ne!(*number, original.as_fd().as_raw_fd());
+    number.to_string()
+}
+
 #[test]
 fn bwrap_argv_covers_artwork_and_github_status() {
     let filter = BpfFilter::decoder().unwrap().memfd().unwrap();
-    let fd = filter.as_raw_fd().to_string();
     let decoder = Bwrap::new("/usr/bin/bwrap")
         .unshare_all()
         .die_with_parent()
@@ -303,6 +389,8 @@ fn bwrap_argv_covers_artwork_and_github_status() {
         .setenv("OMP_NUM_THREADS", "1")
         .remount_ro("/")
         .seccomp(&filter);
+    // Options name the builder's own duplicate of each fd (the same file).
+    let fd = retained(&decoder, 0, &filter);
     let argv = decoder.argv(["/usr/bin/magick", "PNG:/input", "RGB:-"]);
     let expected: Vec<&str> = vec![
         "/usr/bin/bwrap",
@@ -373,10 +461,7 @@ fn bwrap_argv_covers_artwork_and_github_status() {
         .ro_bind_fd(&worktree, "/repo")
         .bind_fd(&common, "/repo/.git")
         .end_of_options();
-    let (w, c) = (
-        worktree.as_raw_fd().to_string(),
-        common.as_raw_fd().to_string(),
-    );
+    let (w, c) = (retained(&pin, 0, &worktree), retained(&pin, 1, &common));
     let expected: Vec<&str> = vec![
         "/usr/bin/bwrap",
         "--ro-bind",
@@ -445,7 +530,14 @@ fn bwrap_runs_with_the_seccomp_filter_and_inherited_fds() {
     };
     let ok = run("exec /usr/bin/true");
     assert!(ok.success(), "{ok:?}");
+    // The same filter memfd again: bubblewrap must read all of it (it
+    // used to find the offset at the end and refuse to start), and the
+    // shell then fails to fork under it.
     let spawn = run("/usr/bin/true && echo spawned; exit 0");
+    assert!(
+        String::from_utf8_lossy(&spawn.stderr).contains("fork: Operation not permitted"),
+        "{spawn:?}"
+    );
     assert!(
         spawn.stdout.is_empty(),
         "the decoder can't start processes: {spawn:?}"

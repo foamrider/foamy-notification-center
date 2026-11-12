@@ -1,5 +1,4 @@
 import QtQuick
-import "../kit"
 import ".." as Plugin
 
 // foamy-kit preview harness states (mock data only: no processes, no files).
@@ -11,14 +10,22 @@ Item {
   property var previewStates: ["default", "menu", "snooze", "empty-menu", "settings"]
   property string previewState: "default"
   property int settleMs: 900
-  property Item popupRef: null
-  readonly property Item popup: popupRef
+  property var popupRef: null
+  // What the harness captures: the Panel's FoamyPopup. A var, as the kit's
+  // preview contract says (qmllint types FoamyPopup as a PanelWindow).
+  readonly property var popup: popupRef
 
   function find(item, name) {
-    if (!item) return null
-    if (item.objectName === name) return item
+    if (!item)
+      return null
+    if (item.objectName === name)
+      return item
     var kids = item.data || item.children || []
-    for (var i = 0; i < kids.length; i++) { var hit = find(kids[i], name); if (hit) return hit }
+    for (var i = 0; i < kids.length; i++) {
+      var hit = find(kids[i], name)
+      if (hit)
+        return hit
+    }
     return null
   }
 
@@ -26,20 +33,61 @@ Item {
   // measures ages against it, so renders read "1m ago" on any date.
   readonly property double now: 1793350800000
   readonly property var sample: [
-    { key: "1793350740000-11", app: "Signal", appIcon: "signal-desktop", summary: "Ada Lovelace", body: "Are we still on for the review at 3? &amp; bring the notes", timestamp: now - 60000, urgency: 1 },
-    { key: "1793350500000-10", app: "Signal", appIcon: "signal-desktop", summary: "Ada Lovelace", body: "Pushed the fix to the branch.", timestamp: now - 300000, urgency: 1 },
-    { key: "1793349000000-9", app: "Omarchy", appIcon: "", glyph: "\u{f0450}", summary: "Update available", body: "Omarchy 4.5 is ready to install", timestamp: now - 1800000, urgency: 1 },
-    { key: "1793345000000-8", app: "Calendar", appIcon: "org.gnome.Calendar", summary: "Team sync", body: "Starts in 10 minutes · Room 2", timestamp: now - 5800000, urgency: 2 },
-    { key: "1793340000000-7", app: "Files", appIcon: "org.gnome.Nautilus", summary: "Transfer complete", body: "All 128 files were copied.", timestamp: now - 10800000, urgency: 1 }
+    {
+      key: "1793350740000-11",
+      app: "Signal",
+      appIcon: "signal-desktop",
+      summary: "Ada Lovelace",
+      body: "Are we still on for the review at 3? &amp; bring the notes",
+      timestamp: now - 60000,
+      urgency: 1
+    },
+    {
+      key: "1793350500000-10",
+      app: "Signal",
+      appIcon: "signal-desktop",
+      summary: "Ada Lovelace",
+      body: "Pushed the fix to the branch.",
+      timestamp: now - 300000,
+      urgency: 1
+    },
+    {
+      key: "1793349000000-9",
+      app: "Omarchy",
+      appIcon: "",
+      glyph: "\u{f0450}",
+      summary: "Update available",
+      body: "Omarchy 4.5 is ready to install",
+      timestamp: now - 1800000,
+      urgency: 1
+    },
+    {
+      key: "1793345000000-8",
+      app: "Calendar",
+      appIcon: "org.gnome.Calendar",
+      summary: "Team sync",
+      body: "Starts in 10 minutes · Room 2",
+      timestamp: now - 5800000,
+      urgency: 2
+    },
+    {
+      key: "1793340000000-7",
+      app: "Files",
+      appIcon: "org.gnome.Nautilus",
+      summary: "Transfer complete",
+      body: "All 128 files were copied.",
+      timestamp: now - 10800000,
+      urgency: 1
+    }
   ]
 
   QtObject {
     id: store
     signal entryAdded(var entry)
-    signal entriesReset()
-    signal browserIconsUpdated()
-    signal peerPreferencesChanged()
-    signal focusCompleted()
+    signal entriesReset
+    signal browserIconsUpdated
+    signal peerPreferencesChanged
+    signal focusCompleted
     property var entries: preview.previewState === "empty-menu" ? [] : preview.sample
     property int unread: preview.previewState === "empty-menu" ? 0 : 2
     property bool unreadCapped: false
@@ -60,24 +108,44 @@ Item {
     property int keepDays: 30
     property int maxItems: 1000
     property bool showPreview: true
-    function faviconSource(row) { return "" }
-    function warmBrowserIcons(rows) {}
-    function markSeen() {}
-    function load() {}
-    function loadMore() {}
-    function remove(key) {}
-    function removeMany(keys) {}
-    function clearAll() {}
-    function toggleDnd() {}
-    function snoozeAll(minutes) {}
-    function focusNotification(row, useDefault) {}
+    // Live actions (Foamy's buttons for a notification it still holds): none here.
+    readonly property bool listing: false
+    property var liveActions: ({})
+    property bool pressingAction: false
+    function refreshLiveActions() {
+    }
+    function pressAction(row, index) {
+    }
+    function faviconSource(row) {
+      return ""
+    }
+    function warmBrowserIcons(rows) {
+    }
+    function markSeen() {
+    }
+    function load() {
+    }
+    function loadMore() {
+    }
+    function remove(key) {
+    }
+    function removeMany(keys) {
+    }
+    function clearAll() {
+    }
+    function toggleDnd() {
+    }
+    function snoozeAll(minutes) {
+    }
+    function focusNotification(row, useDefault) {
+    }
   }
 
   Component.onCompleted: Plugin.ServiceRegistry.instance = store
 
   Plugin.Panel {
     id: panel
-    // Live inside the simulated bar's anchor (the bar strip window on 4.0), so
+    // Live inside the simulated bar's anchor, so
     // the popup measures the bar the way the real one does.
     parent: preview.anchorItem
     width: preview.anchorItem.width
@@ -85,10 +153,18 @@ Item {
     bar: preview.bar
     manageIpc: false
     fixedNow: preview.now
-    settings: ({ panelWidth: 420, badge: "Dot", compact: false, showBody: true, showPreview: true })
+    settings: ({
+        panelWidth: 420,
+        badge: "Dot",
+        compact: false,
+        showBody: true,
+        showPreview: true
+      })
     Component.onCompleted: {
       preview.popupRef = panel.popupPanel
-      Qt.callLater(function() { panel.open() })
+      Qt.callLater(function () {
+        panel.open()
+      })
     }
   }
 
@@ -98,22 +174,38 @@ Item {
     interval: 50
     repeat: true
     running: preview.previewState === "settings" && !panel.popupSettingsAvailable && !panel.popupSettingsLoading
-    onTriggered: panel.applyPopupPreferences(JSON.stringify({ settings: {
-      offerSnoozeWhenSharing: true, dndSilenceCritical: false, groupDuplicates: true, useBrowserFavicons: true,
-      compact: true, showImages: true, closeButtonRemovesHistory: false, normalTimeoutSec: 8 } }))
+    onTriggered: panel.applyPopupPreferences(JSON.stringify({
+      settings: {
+        offerSnoozeWhenSharing: true,
+        dndSilenceCritical: false,
+        groupDuplicates: true,
+        useBrowserFavicons: true,
+        compact: true,
+        showImages: true,
+        closeButtonRemovesHistory: false,
+        normalTimeoutSec: 8
+      }
+    }))
   }
 
-  onPreviewStateChanged: Qt.callLater(function() {
-    if (previewState === "settings") panel.openSettings()
-    else if (panel.editingSettings) panel.closeSettings()
+  onPreviewStateChanged: Qt.callLater(function () {
+    if (previewState === "settings")
+      panel.openSettings()
+    else if (panel.editingSettings)
+      panel.closeSettings()
     // The header's ⋯ menu (kit FoamyMenu), opened as from the keyboard; "snooze"
     // shows its submenu. "empty-menu": a short card grows to fit the menu.
     store.entriesReset()
     var header = panel.header
-    if (!header || !header.menu) return
+    if (!header || !header.menu)
+      return
     if (previewState === "menu" || previewState === "snooze" || previewState === "empty-menu") {
       header.openMenu(true)
-      if (previewState === "snooze") { header.menu.move(1); header.menu.activate() }
-    } else header.closeMenu()
+      if (previewState === "snooze") {
+        header.menu.move(1)
+        header.menu.activate()
+      }
+    } else
+      header.closeMenu()
   })
 }

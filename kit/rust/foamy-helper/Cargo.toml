@@ -1,11 +1,11 @@
-# foamy-kit 0.8.1 a9b3009e14bc6ada2e83c131678566268d4fd987891925fd75739a61912a36f7 — do not edit; change foamy-kit and run sync
+# foamy-kit 0.9.0 3d657fb3ee8f6f57c5d15c125ffe6dee501b81e2b41cac673c7cc08c1e542ed4 — do not edit; change foamy-kit and run sync
 # Shared library of the foamy plugin helpers; see src/lib.rs. Vendored into
 # plugins as kit/rust/foamy-helper and used by path. The version only changes
 # with the public API (a plugin then runs `cargo update -p foamy-helper`), so
 # a kit release that leaves this crate alone needs no new plugin Cargo.lock.
 [package]
 name = "foamy-helper"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT"
 publish = false

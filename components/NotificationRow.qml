@@ -4,7 +4,6 @@ import QtQuick.Effects
 import QtQuick.Layouts
 import qs.Commons
 import qs.Commons as Commons
-import qs.Ui
 // Not "Translations": 4.5 qs.Commons has a Translations type, and the clash breaks loading.
 import "../Translations.js" as CenterText
 import "../kit"
@@ -30,10 +29,10 @@ Item {
   // Labels of the buttons Foamy Notifications can still press (untrusted text).
   property var actions: []
   property bool actionsEnabled: true
-  signal clicked()
+  signal clicked
   signal actionRequested(int index)
-  signal removeRequested()
-  signal pointerUsed()
+  signal removeRequested
+  signal pointerUsed
 
   readonly property bool critical: Number(entry.urgency) === 2
   readonly property real verticalPadding: Style.space(compact ? 8 : 12)
@@ -73,7 +72,11 @@ Item {
     id: card
     width: parent.width
     height: root.cardHeight
-    HoverHandler { id: hover; onHoveredChanged: if (hovered) root.pointerUsed() }
+    HoverHandler {
+      id: hover
+      onHoveredChanged: if (hovered)
+        root.pointerUsed()
+    }
     StackFrame {
       anchors.fill: parent
       last: root.last
@@ -102,10 +105,12 @@ Item {
       anchors.fill: parent
       cursorShape: Qt.PointingHandCursor
       acceptedButtons: Qt.LeftButton | Qt.RightButton
-      onClicked: function(mouse) {
+      onClicked: function (mouse) {
         root.pointerUsed()
-        if (mouse.button === Qt.RightButton) root.removeRequested()
-        else root.clicked()
+        if (mouse.button === Qt.RightButton)
+          root.removeRequested()
+        else
+          root.clicked()
       }
     }
     Column {
@@ -168,7 +173,6 @@ Item {
           maskSpreadAtMin: 1.0
         }
       }
-
     }
     // The popup's footer: two buttons a row, an odd last one filling its row.
     GridLayout {
@@ -202,11 +206,25 @@ Item {
           hoverEnabled: true
           implicitHeight: Math.max(Style.space(32), actionLabel.implicitHeight + Style.space(12))
           Accessible.name: modelData
-          onClicked: { root.pointerUsed(); root.actionRequested(index) }
+          onClicked: {
+            root.pointerUsed()
+            root.actionRequested(index)
+          }
           background: Rectangle {
             color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, actionButton.hovered ? 0.10 : 0.055))
-            Rectangle { anchors.top: parent.top; width: parent.width; height: 1; color: Util.alpha(root.foreground, 0.12) }
-            Rectangle { visible: actionButton.index % 2 === 1; anchors.left: parent.left; width: 1; height: parent.height; color: Util.alpha(root.foreground, 0.12) }
+            Rectangle {
+              anchors.top: parent.top
+              width: parent.width
+              height: 1
+              color: Util.alpha(root.foreground, 0.12)
+            }
+            Rectangle {
+              visible: actionButton.index % 2 === 1
+              anchors.left: parent.left
+              width: 1
+              height: parent.height
+              color: Util.alpha(root.foreground, 0.12)
+            }
           }
           contentItem: Text {
             id: actionLabel
@@ -246,7 +264,10 @@ Item {
       tooltipText: FoamyI18n.t("Dismiss notification")
       foreground: root.foreground
       hasCursor: root.dismissHasCursor
-      onClicked: { root.pointerUsed(); root.removeRequested() }
+      onClicked: {
+        root.pointerUsed()
+        root.removeRequested()
+      }
     }
   }
 }

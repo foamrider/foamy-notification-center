@@ -674,9 +674,12 @@ impl Store {
         Ok(())
     }
 
-    /// Clear deletes every archived row up to the cutoff and its images; the
-    /// clear line stays (and only rises).
-    pub fn clear_all(&mut self, cut: Option<&str>) -> Step {
+    /// Clear, first step: raise the clear line to the cutoff (default now,
+    /// never later; it only rises) and return the cutoff. Until the line is
+    /// written nothing keeps the cleared ts-id keys out of the next sync, so
+    /// a failed write is the clear's failure and [`Store::drop_cleared`]
+    /// must not run.
+    pub fn raise_clear_line(&mut self, cut: Option<&str>) -> Step<i128> {
         let now = now_ms();
         let stamp = cut
             .filter(|c| c.len() <= 16 && text::all_digits(c))
@@ -684,8 +687,14 @@ impl Store {
             .filter(|&s| s <= now)
             .unwrap_or(now);
         if self.cleared_line() <= stamp {
-            let _ = write_atomic(&self.cleared_at, format!("{stamp}\n").as_bytes());
+            write_atomic(&self.cleared_at, format!("{stamp}\n").as_bytes())?;
         }
+        Ok(stamp)
+    }
+
+    /// Clear, second step: delete every archived row up to `stamp` and its
+    /// images. Readers already hide them behind the clear line.
+    pub fn drop_cleared(&mut self, stamp: i128) -> Step {
         if !nonempty(&self.archive) {
             return Ok(());
         }

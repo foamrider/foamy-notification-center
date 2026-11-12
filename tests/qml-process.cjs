@@ -22,7 +22,7 @@ function handler(source, id, name) {
   if (at < 0) return ""
   const out = [lines[at].slice(head.length)]
   for (let i = at + 1; i < lines.length; i++) {
-    if (/^      /.test(lines[i])) { out.push(lines[i]); continue }
+    if (lines[i].startsWith("      ")) { out.push(lines[i]); continue }
     if (lines[i] === "    }") out.push(lines[i])
     break
   }

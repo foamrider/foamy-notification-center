@@ -1,0 +1,81 @@
+# foamy-kit 0.9.0 5079c3e4ecd2ca5399dff48f64327729d8e84916a4c73fbcb9e0491b16014990 — do not edit; change foamy-kit and run sync
+# Runs this repository's validation command, `tests/validate.sh --ci`, on a
+# GitHub-hosted runner: kit-check, the foamy-kit design lint, Oxlint, Ruff
+# (lint and format), Vulture, ShellCheck, shfmt and the repository's own
+# tests in their --ci form, with the tools mise.toml pins. Synced from
+# foamy-kit; edit it there.
+#
+# The design lint (check.sh) and the kit's test helpers (preview/hostenv.py)
+# are not synced into plugins. A plugin's job checks foamy-kit out over
+# public https at the commit its foamy-kit.lock `source` line names (the
+# commit its kit files were synced from) and exports FOAMY_KIT. The job fails
+# when that commit is not a full commit id or is not on github.com yet: push
+# foamy-kit, or re-run its sync.sh here. foamy-kit itself is its own kit.
+#
+# What --ci leaves out, as SKIP lines in the job log: the checks that need the
+# Omarchy host (omarchy-plugin-validate, Qt 6 qmllint and qmlformat, the
+# Quickshell runtime tests) and the native helper tests, which
+# verify-native.yml runs.
+name: Checks
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: tests/validate.sh --ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the commit under review
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out foamy-kit at the commit foamy-kit.lock names
+        timeout-minutes: 5
+        env:
+          FOAMY_KIT_URL: https://github.com/foamrider/foamy-kit
+        run: |
+          if [[ -f kit/components.json && ! -f manifest.json ]]; then
+            echo "foamy-kit itself: validate.sh uses this checkout as the kit"
+            exit 0
+          fi
+          if [[ ! -f foamy-kit.lock ]]; then
+            echo "foamy-kit.lock is missing: run foamy-kit's sync.sh on this repository" >&2
+            exit 1
+          fi
+          commit=$(awk '$1 == "source" && NF == 2 { print $2; exit }' foamy-kit.lock)
+          # Only a full id can be fetched on its own. "+dirty" or "unknown"
+          # means the kit files came from uncommitted kit changes; an
+          # abbreviated id comes from an older sync.sh.
+          if [[ ! $commit =~ ^[0-9a-f]{40}$ ]]; then
+            echo "foamy-kit.lock: source is not a full foamy-kit commit id; commit foamy-kit, then re-run its sync.sh here" >&2
+            exit 1
+          fi
+          # Outside the workspace, so the checks don't read the kit as this repository's files.
+          kit="$RUNNER_TEMP/foamy-kit"
+          git init -q "$kit"
+          if ! git -C "$kit" fetch -q --depth 1 --no-tags "$FOAMY_KIT_URL" "$commit"; then
+            echo "could not fetch foamy-kit commit $commit from $FOAMY_KIT_URL: push foamy-kit first (or the network failed), then re-run this job" >&2
+            exit 1
+          fi
+          git -C "$kit" -c advice.detachedHead=false checkout -q --detach FETCH_HEAD
+          echo "foamy-kit $commit is at $kit"
+          echo "FOAMY_KIT=$kit" >>"$GITHUB_ENV"
+
+      - name: Install the tools mise.toml pins
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          version: 2026.11.5
+
+      - name: Validate
+        run: bash tests/validate.sh --ci

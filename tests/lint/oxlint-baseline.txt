@@ -1,0 +1,4 @@
+# oxlint findings accepted when the check was adopted. tests/validate.sh fails on any
+# finding not listed here. Regenerate with `tests/validate.sh --update-baseline oxlint`
+# only to drop fixed entries or after reviewing every added one; never to pass a check.
+tests/actions.test.js: eslint(no-unused-vars): Parameter 'fileAction' is declared but never used. | fs.writeFileSync(f.archive,rows.map(({fileAction,...row})=>JSON.stringify(row)).join("\n")+"\n")

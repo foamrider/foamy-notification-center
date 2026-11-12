@@ -1,8 +1,7 @@
 pragma Singleton
-// foamy-kit 0.8.1 9d5c3cc3a8a9a2f4d7bf5a3758e20852635bf88c321b84f17d1d2e09d24e5748 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 36705bb09e7cb869424322c34673be591d091c90f95dd68d13c27b00445990e2 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
-import qs.Commons as Commons
 
 // Foamy design tokens: the one place the foamy look is defined, so every
 // foamy plugin matches every other one. Values follow DESIGN.md. Sizes go
@@ -22,9 +21,13 @@ QtObject {
   readonly property real radiusSmall: Style.cornerRadius
   readonly property bool rounded: radius > 0
   // A pill only when the theme rounds corners at all.
-  function pillRadius(height) { return rounded ? height / 2 : 0 }
+  function pillRadius(height) {
+    return rounded ? height / 2 : 0
+  }
   // Radius for a surface inset by `inset` inside one with radius `outer`.
-  function innerRadius(outer, inset) { return Math.max(0, outer - inset) }
+  function innerRadius(outer, inset) {
+    return Math.max(0, outer - inset)
+  }
 
   // --- surfaces --------------------------------------------------------------
   readonly property int borderWidth: 1

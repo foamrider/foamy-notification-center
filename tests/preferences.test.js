@@ -2,7 +2,6 @@ const I18n = require('./i18n.cjs');
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const P = require('../Preferences.js')
-const T = require('../Translations.js')
 
 test('settings validate integers and booleans without coercion and keep scopes separate', () => {
   for (const [scope,key,value] of [['center','keepDays',30],['center','browserGrouping','hostname'],['popups','normalTimeoutSec',120],['popups','compact',false]]) assert.equal(P.valid(scope,key,value),true)
@@ -63,5 +62,5 @@ test('a failed save is reported to the settings fields so the same number can be
   ctx.preferenceActive = { scope: 'center', key: 'maxItems' }; ctx.finishPreference(true)
   assert.deepEqual(failed, ['center:keepDays'])
   // The panel's settings page forwards it to SettingsPane.saveFailed (runtime: tests/settings-number.py).
-  assert.match(panel, /function onPreferenceFailed\(scope, key\) \{ settingsFields\.saveFailed\(scope, key\) \}/)
+  assert.match(panel, /function onPreferenceFailed\(scope, key\) \{\s*settingsFields\.saveFailed\(scope, key\)\s*\}/)
 })

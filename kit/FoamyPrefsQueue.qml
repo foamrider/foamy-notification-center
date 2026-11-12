@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 a7f61051a5f703d35cc890a4304bd761fb53f4e8cd0895357bdda7121310b7b9 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 7a2d60361f0ea0176830ab8c3911a4ed157c0b9b6171b70bb1ae283611c0d7e9 — do not edit; change foamy-kit and run sync
 import QtQuick
 import Quickshell.Io
 import "FoamyPrefs.js" as Prefs
@@ -29,12 +29,26 @@ import "FoamyPrefs.js" as Prefs
 //   saveTimeoutMs the whole group is SIGKILLed, and so is what's left of it
 //   when the save is stopped by a signal or the queue is destroyed. The next
 //   save starts only after that, so a timed-out save can't write late.
+// - `settings` is read as a plain JSON copy (`storedSettings`): a list that
+//   arrives as a QML sequence wrapper (settings passed through createObject)
+//   is not an Array and would read as an invalid stored array.
 // - Each save merges over `effectiveSettings` (settings + values saved but
 //   not yet reflected back), so two quick saves never undo each other.
 // - A pending value is dropped once `settings` shows it, or after
 //   reflectTimeoutMs if the host never does (then the host's value wins).
+// - An array whose stored value is invalid (user data the schema rejects)
+//   is never replaced by save(key, value): it fails at once with
+//   FoamyPrefs.STORED_INVALID, nothing is written and it isn't retryable.
+//   storedProblems.<key> says so, for the panel to show and to block
+//   editing (storedProblem(key) returns the same, for code that isn't a
+//   binding); save(key, value, true) replaces it on purpose.
+//
+//     FoamySettingsError { text: FoamyI18n.t(prefs.storedProblems.accounts ? "Fix the account list in shell.json first." : "") }
+//     FoamyButton { enabled: !prefs.storedProblems.accounts; onClicked: prefs.save("accounts", next) }
+//
 // - error is an English message for FoamyI18n.t(): "That value isn't
-//   allowed.", "Couldn't save the setting." or the field's validate() text.
+//   allowed.", "Couldn't save the setting.", "The saved list in shell.json
+//   isn't valid, so it wasn't replaced." or the field's validate() text.
 QtObject {
   id: queue
 
@@ -43,20 +57,25 @@ QtObject {
   property var fields: []
   property var settings: ({})
   property int reflectTimeoutMs: 10000
-  // A CLI save normally takes well under a second (4.0's `qs ipc call` a few).
+  // A CLI save normally takes well under a second; this is a hang guard.
   property int saveTimeoutMs: 20000
   readonly property int stderrLimit: 4096
 
+  // Everything below reads this copy, never `settings` itself (see above).
+  readonly property var storedSettings: Prefs.plain(settings)
   property var pending: ({})
-  readonly property var effectiveSettings: Prefs.overlay(settings, pending)
+  readonly property var effectiveSettings: Prefs.overlay(storedSettings, pending)
   readonly property bool saving: inFlight
   property bool inFlight: false
   readonly property bool busy: saving || waiting.length > 0
   property string error: ""
   property var lastFailed: null
   readonly property bool canRetry: lastFailed !== null && !busy
+  // { key: message } for each stored value the schema rejects (it reads as
+  // the default); an array among them is kept until a forced save.
+  readonly property var storedProblems: Prefs.storedProblems(fields, effectiveSettings)
 
-  // Waiting saves: [{ key, value }], newest value per key.
+  // Waiting saves: [{ key, value, force }], newest value per key.
   property var waiting: []
   property var current: null
   property var pendingSince: ({})
@@ -70,11 +89,21 @@ QtObject {
   signal saved(string key, var value)
   signal failed(string key, var value, string error)
 
-  function value(key) { return Prefs.value(fields, effectiveSettings, key) }
-  function values() { return Prefs.values(fields, effectiveSettings) }
+  function value(key) {
+    return Prefs.value(fields, effectiveSettings, key)
+  }
+  function values() {
+    return Prefs.values(fields, effectiveSettings)
+  }
+  // "" or why the stored value of `key` is invalid (see storedProblems).
+  function storedProblem(key) {
+    return Prefs.storedProblem(fields, effectiveSettings, key)
+  }
 
-  function save(key, value) {
+  function save(key, value, force) {
     var issue = Prefs.problem(fields, key, value)
+    if (!issue && force !== true && Prefs.keepsStored(fields, storedSettings, key, pending))
+      issue = Prefs.STORED_INVALID
     if (issue) {
       error = issue
       failed(key, value, issue)
@@ -84,18 +113,25 @@ QtObject {
     lastFailed = null
     // proc.running / reaping: a stopped save whose processes aren't gone yet.
     if (inFlight || waiting.length > 0 || proc.running || reaping) {
-      var next = waiting.filter(function(item) { return item.key !== key })
-      next.push({ key: key, value: value })
+      var next = waiting.filter(function (item) {
+        return item.key !== key
+      })
+      next.push({
+        key: key,
+        value: value,
+        force: force === true
+      })
       waiting = next
       return true
     }
-    return run(key, value)
+    return run(key, value, force === true)
   }
 
   function retry() {
-    if (!lastFailed) return false
+    if (!lastFailed)
+      return false
     var failedSave = lastFailed
-    return save(failedSave.key, failedSave.value)
+    return save(failedSave.key, failedSave.value, failedSave.force === true)
   }
 
   function setPending(key, value) {
@@ -109,17 +145,23 @@ QtObject {
   }
 
   function dropPending(key) {
-    if (!(key in pending)) return
+    if (!(key in pending))
+      return
     var next = Prefs.overlay({}, pending)
     delete next[key]
     pending = next
   }
 
-  function run(key, value) {
-    var result = Prefs.save(bar, moduleName, fields, settings, key, value, pending)
+  function run(key, value, force) {
+    var result = Prefs.save(bar, moduleName, fields, storedSettings, key, value, pending, force)
     if (!result.ok) {
       error = result.error
-      lastFailed = { key: key, value: value }
+      // A kept invalid array isn't retryable: the same save would refuse again.
+      lastFailed = result.storedInvalid ? null : {
+        key: key,
+        value: value,
+        force: force
+      }
       failed(key, value, result.error)
       Qt.callLater(advance)
       return false
@@ -135,13 +177,19 @@ QtObject {
     // 4.5 reflects an inline save synchronously: `settings` already changed
     // inside Prefs.save(), before this value became pending, so settle now or
     // it would mask later outside changes and be written back by the next save.
-    pending = Prefs.settle(settings, pending)
+    pending = Prefs.settle(storedSettings, pending)
     if (result.inline) {
       saved(key, value)
       Qt.callLater(advance)
       return true
     }
-    current = { key: key, value: value, hadPrevious: hadPrevious, previous: previous }
+    current = {
+      key: key,
+      value: value,
+      force: force,
+      hadPrevious: hadPrevious,
+      previous: previous
+    }
     inFlight = true
     stderrHead = ""
     groupKill = []
@@ -156,7 +204,8 @@ QtObject {
   // Later calls for the same attempt (running -> false after exited(), the
   // exit of a command killed at the deadline) find nothing in flight.
   function finish(ok, detail) {
-    if (!inFlight) return
+    if (!inFlight)
+      return
     deadline.stop()
     var done = current
     current = null
@@ -191,24 +240,27 @@ QtObject {
   function killGroup() {
     var command = groupKill
     groupKill = []
-    if (command.length === 0) return
+    if (command.length === 0)
+      return
     reaping = true
     reaper.command = command
     reaper.running = true
   }
 
   function keepStderr(data) {
-    if (stderrHead.length < stderrLimit) stderrHead += String(data).slice(0, stderrLimit - stderrHead.length)
+    if (stderrHead.length < stderrLimit)
+      stderrHead += String(data).slice(0, stderrLimit - stderrHead.length)
   }
 
   function advance() {
-    if (inFlight || proc.running || reaping || waiting.length === 0) return
+    if (inFlight || proc.running || reaping || waiting.length === 0)
+      return
     var next = waiting[0]
     waiting = waiting.slice(1)
-    run(next.key, next.value)
+    run(next.key, next.value, next.force)
   }
 
-  onSettingsChanged: pending = Prefs.settle(settings, pending)
+  onStoredSettingsChanged: pending = Prefs.settle(storedSettings, pending)
 
   property Timer expiry: Timer {
     interval: 1000
@@ -217,7 +269,8 @@ QtObject {
     onTriggered: {
       var now = Date.now()
       for (var key in queue.pending)
-        if (!queue.inFlight && now - (queue.pendingSince[key] || 0) > queue.reflectTimeoutMs) queue.dropPending(key)
+        if (!queue.inFlight && now - (queue.pendingSince[key] || 0) > queue.reflectTimeoutMs)
+          queue.dropPending(key)
     }
   }
 
@@ -228,7 +281,8 @@ QtObject {
     interval: Math.max(1, queue.saveTimeoutMs) + 2000
     onTriggered: {
       queue.killGroup()
-      if (queue.proc.running) queue.proc.signal(9)
+      if (queue.proc.running)
+        queue.proc.signal(9)
       queue.finish(false, "no exit after " + queue.saveTimeoutMs + " ms")
     }
   }
@@ -250,7 +304,8 @@ QtObject {
 
   property Process reaper: Process {
     onRunningChanged: {
-      if (running) return
+      if (running)
+        return
       queue.reaping = false
       Qt.callLater(queue.advance)
     }
@@ -260,21 +315,24 @@ QtObject {
     // Chunks as they arrive (no split), so only stderrLimit is ever kept.
     stderr: SplitParser {
       splitMarker: ""
-      onRead: function(data) { queue.keepStderr(data) }
+      onRead: function (data) {
+        queue.keepStderr(data)
+      }
     }
     onStarted: queue.groupKill = Prefs.killGroupCommand(processId)
-    onExited: function(code, status) {
+    onExited: function (code, status) {
       // timeout --signal=KILL kills its own group, itself included: signal 9.
       var timedOut = status !== 0 && code === 9 && Date.now() - queue.startedAt >= queue.saveTimeoutMs
       // Stopped by a signal: children that ignored it may still run.
-      if (status !== 0) queue.killGroup()
-      queue.finish(code === 0 && status === 0,
-                   timedOut ? "no exit after " + queue.saveTimeoutMs + " ms" : status === 0 ? "exit " + code : "stopped by signal " + code)
+      if (status !== 0)
+        queue.killGroup()
+      queue.finish(code === 0 && status === 0, timedOut ? "no exit after " + queue.saveTimeoutMs + " ms" : status === 0 ? "exit " + code : "stopped by signal " + code)
     }
     // After exited() this finds nothing in flight. Without exited() before it
     // (missing or non-executable command) the save never started.
     onRunningChanged: {
-      if (running) return
+      if (running)
+        return
       queue.finish(false, "the command couldn't start")
       Qt.callLater(queue.advance)
     }

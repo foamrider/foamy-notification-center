@@ -1,0 +1,29 @@
+// foamy-kit 0.9.0 23adc6c9c393c6f29eab5dcbabc13a27a38abdee1cf78c07efb69879dc28f6f7 — do not edit; change foamy-kit and run sync
+// Oxlint configuration for foamy-kit and every Foamy plugin (synced; edit it in
+// foamy-kit). tests/validate.sh lints every JavaScript file with it, QML-loaded
+// ones included (their `.pragma`/`.import` lines are read as comments). A
+// repository extends it in tests/lint/oxlintrc.json:
+// { "extends": ["../../.oxlintrc.json"], ... }
+{
+  "plugins": ["eslint", "oxc", "unicorn"],
+  "categories": {
+    // Oxlint's default set: code that is wrong or useless. The other
+    // categories mostly ask for syntax QML's JavaScript engine lacks
+    // (toSorted, ...) or restyle working code.
+    "correctness": "error"
+  },
+  "env": { "builtin": true, "es2022": true },
+  "rules": {
+    // QML imports a .js file's top-level declarations: their callers are in
+    // QML, which Oxlint can't see. Local variables and parameters are checked.
+    // An unused `catch (error)` binding stays: optional catch binding is not
+    // the house style for QML's engine.
+    "no-unused-vars": ["error", { "vars": "local", "args": "after-used", "caughtErrors": "none" }],
+    // Stripping control characters from external text is required (REVIEW.md
+    // section 4); this rule flags exactly those patterns.
+    "no-control-regex": "off"
+  },
+  "overrides": [
+    { "files": ["**/*.cjs", "**/*.mjs", "tests/**"], "env": { "node": true } }
+  ]
+}

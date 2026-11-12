@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 b5b1307cddd811fb80b56a3b5ff8834271999b7b6f6fbdd0e3bc33be2a3194a2 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 2bc5d90a32e9d35f884e33793c3875e76eb957a8a4e332f37405cd34ca853546 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -14,7 +14,7 @@ Item {
   property real topPadding: FoamyStyle.padding
   property real bottomPadding: FoamyStyle.padding
 
-  signal back()
+  signal back
 
   implicitHeight: Math.max(FoamyStyle.settingsButtonSize, titleText.implicitHeight) + topPadding + bottomPadding
 

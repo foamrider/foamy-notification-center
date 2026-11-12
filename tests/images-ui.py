@@ -1,14 +1,22 @@
 """Exercise archive normalization through the real service and visible image controls."""
+
 import json
 import os
 from pathlib import Path
-import signal
 import subprocess
+import sys
 import tempfile
 import time
-import hostenv
+
+KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
+sys.path.insert(0, str(KIT / "preview"))
+import hostenv  # noqa: E402  (foamy-kit"s preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
+# Opens real surfaces on the live desktop and takes its keyboard focus: only
+# when asked for (tests/suite.sh runs it with FOAMY_TEST_DESKTOP=1).
+if os.environ.get("FOAMY_TEST_DESKTOP") != "1":
+    raise SystemExit("images-ui: opens real surfaces on the live desktop; set FOAMY_TEST_DESKTOP=1 to run it")
 base = Path(tempfile.mkdtemp(prefix="foamy-center-images-"))
 app = base / "app"
 app.mkdir()
@@ -26,17 +34,41 @@ cli.mkdir()
 (cli / "omarchy-shell").chmod(0o755)
 icon = app / "icon.jpg"
 picture = app / "picture.png"
-subprocess.run(["magick", "-size", "64x64", "xc:#8aadf4", "-fill", "#24273a", "-draw", "circle 32,32 32,12", "-interlace", "Plane", str(icon)], check=True)
+subprocess.run(
+    [
+        "magick",
+        "-size",
+        "64x64",
+        "xc:#8aadf4",
+        "-fill",
+        "#24273a",
+        "-draw",
+        "circle 32,32 32,12",
+        "-interlace",
+        "Plane",
+        str(icon),
+    ],
+    check=True,
+)
 subprocess.run(["magick", "-size", "1440x900", "gradient:#8aadf4-#a6da95", str(picture)], check=True)
 bomb = bytearray(icon.read_bytes())
 frame = bomb.index(b"\xff\xc2")
-bomb[frame + 5:frame + 9] = (60000).to_bytes(2, "big") * 2
+bomb[frame + 5 : frame + 9] = (60000).to_bytes(2, "big") * 2
 (app / "rejected.jpg").write_bytes(bomb)
 stamp = int(time.time() * 1000)
-entry = {"timestamp": stamp, "app": "Image test", "appIcon": str(icon), "image": str(picture), "summary": "Picture retained", "body": "A progressive JPEG icon and a full picture preview.", "execArgv": ["viewer", str(picture)]}
+entry = {
+    "timestamp": stamp,
+    "app": "Image test",
+    "appIcon": str(icon),
+    "image": str(picture),
+    "summary": "Picture retained",
+    "body": "A progressive JPEG icon and a full picture preview.",
+    "execArgv": ["viewer", str(picture)],
+}
 notification = notifications / f"{stamp}-1.json"
 notification.write_text(json.dumps(entry))
-(app / "shell.qml").write_text('''import QtQuick
+(app / "shell.qml").write_text(
+    """import QtQuick
 import QtTest
 import Quickshell
 import Quickshell.Io
@@ -103,17 +135,45 @@ ShellRoot {
     }
   }
 }
-'''.replace("INPUT_PATH", json.dumps(str(notification))).replace("SOURCE_ENTRY", json.dumps(entry)))
-env = dict(os.environ, HOME=str(base / "home"), XDG_CONFIG_HOME=str(base / "home/.config"), XDG_CACHE_HOME=str(base / "cache"), XDG_STATE_HOME=str(base / "state"), XDG_RUNTIME_DIR=str(runtime), NC_SRC_DIR=str(notifications), NC_SRC_HISTORY=str(notifications / "history"), NC_STORE=str(base / "state/omarchy-notification-center"), PATH=str(cli) + ":" + os.environ["PATH"], QT_QPA_PLATFORM="wayland", QT_QPA_PLATFORMTHEME="basic", QT_STYLE_OVERRIDE="Fusion")
+""".replace("INPUT_PATH", json.dumps(str(notification))).replace("SOURCE_ENTRY", json.dumps(entry))
+)
+env = dict(
+    os.environ,
+    HOME=str(base / "home"),
+    XDG_CONFIG_HOME=str(base / "home/.config"),
+    XDG_CACHE_HOME=str(base / "cache"),
+    XDG_STATE_HOME=str(base / "state"),
+    XDG_RUNTIME_DIR=str(runtime),
+    NC_SRC_DIR=str(notifications),
+    NC_SRC_HISTORY=str(notifications / "history"),
+    NC_STORE=str(base / "state/omarchy-notification-center"),
+    PATH=str(cli) + ":" + os.environ["PATH"],
+    QT_QPA_PLATFORM="wayland",
+    QT_QPA_PLATFORMTHEME="basic",
+    QT_STYLE_OVERRIDE="Fusion",
+)
 env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / os.environ["WAYLAND_DISPLAY"])
 for key in ["DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "QT_QUICK_BACKEND"]:
     env.pop(key, None)
-process = subprocess.Popen(["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
-try:
-    output = process.communicate(timeout=25)[0]
-except subprocess.TimeoutExpired:
-    os.killpg(process.pid, signal.SIGTERM)
-    output = process.communicate(timeout=3)[0]
+# On the live compositor on purpose; the bus is dbus-run-session's own.
+hostenv.isolate(env, base, display=True)
+env.update(hostenv.make(base, app, env=env))
+env["PATH"] = str(cli) + ":" + env["PATH"]
+# qs and dbus-run-session's daemon in one process group, stopped as a whole
+# when the block ends (with the scripts qs's Processes started).
+log = base / "qs.log"
+with (
+    log.open("w") as out,
+    hostenv.ProcessGroup(
+        ["dbus-run-session", "--", "quickshell", "-p", str(app), "--no-color"],
+        env=env,
+        stdout=out,
+        stderr=subprocess.STDOUT,
+    ) as shell,
+):
+    status = shell.wait(60)
+output = log.read_text()
 print(output)
 print("Image captures:", app)
-assert process.returncode == 0 and "IMAGES_UI 2 passed 0 failed" in output
+hostenv.check(env, output, *hostenv.calls(base))
+assert status == 0 and "IMAGES_UI 2 passed 0 failed" in output

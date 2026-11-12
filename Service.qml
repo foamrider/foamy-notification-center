@@ -41,15 +41,24 @@ Item {
   // it ends, so one request never jumps two pages.
   readonly property bool listing: listProc.running
   function loadMore() {
-    if (!hasMore || listLimit >= maxItems || listProc.running) return
+    if (!hasMore || listLimit >= maxItems || listProc.running)
+      return
     listLimit = Math.min(maxItems, listLimit + pageSize)
     load()
   }
 
-  BrowserIcons { id: browserIcons; helper: root.helper; onUpdated: root.browserIconsUpdated() }
-  signal browserIconsUpdated()
-  function faviconSource(row) { return row ? browserIcons.source(row) : "" }
-  function warmBrowserIcons(rows) { browserIcons.warm(rows) }
+  BrowserIcons {
+    id: browserIcons
+    helper: root.helper
+    onUpdated: root.browserIconsUpdated()
+  }
+  signal browserIconsUpdated
+  function faviconSource(row) {
+    return row ? browserIcons.source(row) : ""
+  }
+  function warmBrowserIcons(rows) {
+    browserIcons.warm(rows)
+  }
 
   property var entries: []
   // Keep removals authoritative while watcher events and older reads drain.
@@ -82,8 +91,10 @@ Item {
   // No helper binary for this CPU: say so once and start nothing again.
   property bool helperUnavailable: false
   function storeUnavailable(exitCode) {
-    if (!FoamyNative.unavailable(exitCode)) return false
-    if (!root.helperUnavailable) console.warn("Notification history: " + FoamyNative.UNAVAILABLE_TEXT)
+    if (!FoamyNative.unavailable(exitCode))
+      return false
+    if (!root.helperUnavailable)
+      console.warn("Notification history: " + FoamyNative.UNAVAILABLE_TEXT)
     root.helperUnavailable = true
     root.loadError = FoamyNative.UNAVAILABLE_TEXT
     return true
@@ -93,37 +104,55 @@ Item {
   //
   // Contract v2 with foamy.notifications (README "Foamy Notifications contract"):
   // its file locations come from `storeInfo` over IPC; they are read-only here.
-  // Without Foamy the source is stock Omarchy (4.0 files or 4.5 arrays).
+  // Without Foamy the source is stock Omarchy's live/history arrays.
   property string sourceKind: ""
   property var sourceInfo: ({})
-  FoamyPeerIpc { id: peer }
+  FoamyPeerIpc {
+    id: peer
+  }
   readonly property bool foamySource: sourceKind === "foamy" || sourceKind === "legacy"
 
   function resolveSource() {
-    peer.call("foamy.notifications", "storeInfo", [], function(ok, output) {
+    peer.call("foamy.notifications", "storeInfo", [], function (ok, output) {
       var info = null
-      try { info = ok ? JSON.parse(output) : null } catch (e) { info = null }
+      try {
+        info = ok ? JSON.parse(output) : null
+      } catch (e) {
+        info = null
+      }
       if (info && info.layout === "foamy-files" && Number(info.version) >= 2) {
-        if (!info.ready) { sourceRetry.restart(); return }
+        if (!info.ready) {
+          sourceRetry.restart()
+          return
+        }
         root.useSource("foamy", info)
         return
       }
-      // An older Foamy answers ping but has no storeInfo: its 4.0-layout files.
-      peer.call("foamy.notifications", "ping", [], function(pinged, answer) {
+      // An older Foamy answers ping but has no storeInfo: its per-file layout.
+      peer.call("foamy.notifications", "ping", [], function (pinged, answer) {
         root.useSource(pinged && String(answer).trim() === "ok" ? "legacy" : "stock", {})
       })
     })
   }
-  Timer { id: sourceRetry; interval: 2000; onTriggered: root.resolveSource() }
+  Timer {
+    id: sourceRetry
+    interval: 2000
+    onTriggered: root.resolveSource()
+  }
 
   function useSource(kind, info) {
     var same = kind === sourceKind && JSON.stringify(info) === JSON.stringify(sourceInfo)
     sourceKind = kind
     sourceInfo = info
-    if (same && watchProc.running) return
+    if (same && watchProc.running)
+      return
     sourceRestartPending = true
-    if (watchProc.running) watchProc.running = false
-    else { restartWatch.interval = 50; restartWatch.restart() }
+    if (watchProc.running)
+      watchProc.running = false
+    else {
+      restartWatch.interval = 50
+      restartWatch.restart()
+    }
   }
 
   // The watcher reads every archive setting (keepDays, maxItems, previews) and
@@ -147,8 +176,8 @@ Item {
       env.NC_HANDLED = String(root.sourceInfo.handled || "")
       env.NC_STATE_FILE = String(root.sourceInfo.state || "")
     } else if (root.sourceKind === "legacy") {
-      // Foamy before contract v2 kept the 4.0 layout under XDG_STATE_HOME.
-      var state = Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state"
+      // Foamy before contract v2 kept one file per notification under XDG_STATE_HOME.
+      var state = Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state";
       env.NC_SRC_DIR = state + "/omarchy/notifications"
       env.NC_STATE_FILE = state + "/omarchy/notifications.json"
     }
@@ -163,26 +192,38 @@ Item {
   property bool liveActionsLoading: false
   property bool liveActionsAgain: false
   function refreshLiveActions() {
-    if (sourceKind !== "foamy") { liveActions = ({}); return }
-    if (liveActionsLoading) { liveActionsAgain = true; return }
+    if (sourceKind !== "foamy") {
+      liveActions = ({})
+      return
+    }
+    if (liveActionsLoading) {
+      liveActionsAgain = true
+      return
+    }
     liveActionsLoading = true
-    peer.call("foamy.notifications", "centerActions", [], function(ok, output) {
+    peer.call("foamy.notifications", "centerActions", [], function (ok, output) {
       root.liveActionsLoading = false
       root.liveActions = ok ? Model.parseLiveActions(output) : ({})
-      if (root.liveActionsAgain) { root.liveActionsAgain = false; root.refreshLiveActions() }
+      if (root.liveActionsAgain) {
+        root.liveActionsAgain = false
+        root.refreshLiveActions()
+      }
     })
   }
   property bool pressingAction: false
   function pressAction(row, index) {
-    if (pressingAction || focusProc.running || !row || !/^[0-9]+-[0-9]+$/.test(String(row.key))
-        || !(index >= 0 && index < (liveActions[row.key] || []).length)) return
+    if (pressingAction || focusProc.running || !row || !/^[0-9]+-[0-9]+$/.test(String(row.key)) || !(index >= 0 && index < (liveActions[row.key] || []).length))
+      return
     focusError = ""
     pressingAction = true
-    peer.call("foamy.notifications", "invokeCenterAction", [String(row.key), String(index)], function(ok, output) {
+    peer.call("foamy.notifications", "invokeCenterAction", [String(row.key), String(index)], function (ok, output) {
       root.pressingAction = false
       var result = ok ? String(output || "").trim() : ""
       // Foamy persists handling, runs the action and tells us `handled`.
-      if (result === "invoked") { root.focusCompleted(); return }
+      if (result === "invoked") {
+        root.focusCompleted()
+        return
+      }
       root.focusError = result === "busy" ? "This notification is already being opened. Try again." : "This action is no longer available."
       root.refreshLiveActions()
     })
@@ -192,14 +233,18 @@ Item {
   property var focusEntry: null
   property bool invokingDefault: false
   property bool openingFile: false
-  signal focusCompleted()
+  signal focusCompleted
 
   function focusNotification(row, useDefault) {
-    if (focusProc.running || !row || !/^([0-9]+-[0-9]+|stock-[A-Za-z0-9_-]{1,120})$/.test(String(row.key))) return
+    if (focusProc.running || !row || !/^([0-9]+-[0-9]+|stock-[A-Za-z0-9_-]{1,120})$/.test(String(row.key)))
+      return
     focusError = ""
     focusEntry = row
     openingFile = false
-    if (useDefault === false) { focusSendingApp(); return }
+    if (useDefault === false) {
+      focusSendingApp()
+      return
+    }
     invokingDefault = true
     // Probe the running daemon, not an installed plugin that may be disabled.
     focusProc.command = ["omarchy-shell", "foamy.notifications", "invokeDefault", String(row.key)]
@@ -241,7 +286,8 @@ Item {
           focusProc.command = ["bash", helper, command[0] === "omasnap" ? "edit-screenshot" : "view-image", command[1]]
           focusProc.launched = true
           focusProc.running = true
-        } else focusSendingApp()
+        } else
+          focusSendingApp()
         return
       }
       // The daemon owns durable handling of its callback and acknowledges removal.
@@ -249,13 +295,14 @@ Item {
       focusEntry = null
       return
     }
-    if (succeeded) { root.remove(focusEntry.key); root.focusCompleted() }
-    else if (!openingFile && exitCode === 3 && exitStatus === 0) {
+    if (succeeded) {
+      root.remove(focusEntry.key)
+      root.focusCompleted()
+    } else if (!openingFile && exitCode === 3 && exitStatus === 0) {
       // Background senders often have no window; retain history without an error.
       focusError = ""
     } else {
-      focusError = openingFile ? "Could not open the image. Check that the file and its app are available, then try again."
-                              : "Could not focus the sending app. Open the app and try again."
+      focusError = openingFile ? "Could not open the image. Check that the file and its app are available, then try again." : "Could not focus the sending app. Open the app and try again."
       console.warn(openingFile ? "Notification image opening failed:" : "Notification focus failed:", exitCode, exitStatus)
     }
     focusEntry = null
@@ -268,14 +315,22 @@ Item {
   Process {
     id: focusProc
     property bool launched: false
-    stdout: StdioCollector { id: focusOutput }
+    stdout: StdioCollector {
+      id: focusOutput
+    }
     stderr: StdioCollector {}
-    onExited: function(exitCode, exitStatus) { launched = false; root.finishFocus(exitCode, exitStatus, focusOutput.text) }
-    onRunningChanged: if (!running && launched) { launched = false; root.finishFocus(127, 0, "") }
+    onExited: function (exitCode, exitStatus) {
+      launched = false
+      root.finishFocus(exitCode, exitStatus, focusOutput.text)
+    }
+    onRunningChanged: if (!running && launched) {
+      launched = false
+      root.finishFocus(127, 0, "")
+    }
   }
 
   signal entryAdded(var entry)
-  signal entriesReset()
+  signal entriesReset
 
   // The one-shot store commands run without a whole-command deadline: a list
   // may first migrate a whole archive of images (store.rs normalize_archive),
@@ -294,8 +349,12 @@ Item {
   }
 
   function load() {
-    if (root.helperUnavailable) return
-    if (listProc.running) { loadPending = true; return }
+    if (root.helperUnavailable)
+      return
+    if (listProc.running) {
+      loadPending = true
+      return
+    }
     loadPending = false
     listRevision = archiveRevision
     listLoadCount++
@@ -305,7 +364,8 @@ Item {
   }
 
   function readSeen() {
-    if (seenProc.running || root.helperUnavailable) return
+    if (seenProc.running || root.helperUnavailable)
+      return
     seenProc.command = root.storeCommand(["seen"])
     seenProc.running = true
   }
@@ -316,8 +376,12 @@ Item {
   function markSeen() {
     var stamp = Date.now()
     root.lastSeen = stamp
-    if (root.helperUnavailable) return
-    if (markProc.running) { seenPending = String(stamp); return }
+    if (root.helperUnavailable)
+      return
+    if (markProc.running) {
+      seenPending = String(stamp)
+      return
+    }
     markProc.command = root.storeCommand(["seen", String(stamp)])
     markProc.running = true
   }
@@ -326,19 +390,22 @@ Item {
     removeMany([key])
   }
 
-  signal peerPreferencesChanged()
+  signal peerPreferencesChanged
   property var quietRemovalKeys: ({})
 
   function removeMany(keys, handledByPeer) {
     var queued = pendingRemovalKeys.slice()
     for (var i = 0; i < keys.length; i++) {
       var key = String(keys[i] || "")
-      if (!key || removedKeys[key]) continue
+      if (!key || removedKeys[key])
+        continue
       removedKeys[key] = true
-      if (handledByPeer) quietRemovalKeys[key] = true
+      if (handledByPeer)
+        quietRemovalKeys[key] = true
       queued.push(key)
     }
-    if (queued.length === pendingRemovalKeys.length) return
+    if (queued.length === pendingRemovalKeys.length)
+      return
     // Capture exact keys before watcher updates; later arrivals from the same app survive.
     pendingRemovalKeys = queued
     entries = visibleEntries(entries)
@@ -348,7 +415,8 @@ Item {
   }
 
   function startRemoval() {
-    if (removeProc.running || pendingRemovalKeys.length === 0 || root.helperUnavailable) return
+    if (removeProc.running || pendingRemovalKeys.length === 0 || root.helperUnavailable)
+      return
     activeRemovalKeys = pendingRemovalKeys
     pendingRemovalKeys = []
     removalError = ""
@@ -360,8 +428,10 @@ Item {
     id: removeProc
     // The resolved source (tombstone source tag) and limits, like every store process.
     environment: root.storeEnvironment
-    stderr: StdioCollector { id: removeErrors }
-    onExited: function(exitCode, exitStatus) {
+    stderr: StdioCollector {
+      id: removeErrors
+    }
+    onExited: function (exitCode, exitStatus) {
       if (exitCode !== 0 || exitStatus !== 0) {
         // Release failed tombstones so a reload can restore entries for a retry.
         for (var i = 0; i < root.activeRemovalKeys.length; i++)
@@ -369,8 +439,12 @@ Item {
         root.removalError = root.storeUnavailable(exitCode) ? FoamyNative.UNAVAILABLE_TEXT : "Could not dismiss notifications. Try again."
         console.warn("Notification dismissal failed:", removeErrors.text)
         root.load()
-      } else root.releaseNotificationActions(root.activeRemovalKeys.filter(function(key) { return !root.quietRemovalKeys[key] }))
-      for (var j = 0; j < root.activeRemovalKeys.length; j++) delete root.quietRemovalKeys[root.activeRemovalKeys[j]]
+      } else
+        root.releaseNotificationActions(root.activeRemovalKeys.filter(function (key) {
+          return !root.quietRemovalKeys[key]
+        }))
+      for (var j = 0; j < root.activeRemovalKeys.length; j++)
+        delete root.quietRemovalKeys[root.activeRemovalKeys[j]]
       root.activeRemovalKeys = []
       root.startRemoval()
     }
@@ -378,7 +452,7 @@ Item {
 
   // Foamy releases callbacks and drops its own copies; we never delete its files.
   // Keys go to Foamy 100 at a time, one call in flight (FoamyPeerIpc runs at
-  // most 8 CLI calls on 4.0). Pending keys are kept, deduplicated and compacted
+  // most 8 CLI calls at once). Pending keys are kept, deduplicated and compacted
   // into full batches; the in-flight batch is removed only when Foamy answers
   // "ok", and a failed one is retried. These keys are already gone from the
   // archive, so no later prune would ask again. The bound (50,000 keys) is far
@@ -387,13 +461,19 @@ Item {
   property var releaseInFlight: []
   readonly property int releaseLimit: 50000
   function releaseNotificationActions(keys) {
-    if (!foamySource) return
+    if (!foamySource)
+      return
     var pending = releasePending.slice(), seen = ({})
-    for (var p = 0; p < pending.length; p++) seen[pending[p]] = true
+    for (var p = 0; p < pending.length; p++)
+      seen[pending[p]] = true
     for (var i = 0; i < keys.length; i++) {
       var key = String(keys[i] || "")
-      if (!/^[0-9]+-[0-9]+$/.test(key) || seen[key]) continue
-      if (pending.length >= releaseLimit) { console.warn("Notification release queue is full; Foamy keeps", keys.length - i, "copies until its own history trim"); break }
+      if (!/^[0-9]+-[0-9]+$/.test(key) || seen[key])
+        continue
+      if (pending.length >= releaseLimit) {
+        console.warn("Notification release queue is full; Foamy keeps", keys.length - i, "copies until its own history trim")
+        break
+      }
       seen[key] = true
       pending.push(key)
     }
@@ -401,24 +481,37 @@ Item {
     pumpReleases()
   }
   function pumpReleases() {
-    if (releaseInFlight.length || !releasePending.length || releaseRetry.running) return
+    if (releaseInFlight.length || !releasePending.length || releaseRetry.running)
+      return
     var batch = releasePending.slice(0, 100)
     releaseInFlight = batch
-    peer.call("foamy.notifications", "releaseHistory", [batch.join(",")], function(ok, output) {
+    peer.call("foamy.notifications", "releaseHistory", [batch.join(",")], function (ok, output) {
       if (ok && String(output).trim() === "ok") {
         var done = ({})
-        for (var i = 0; i < batch.length; i++) done[batch[i]] = true
-        root.releasePending = root.releasePending.filter(function(key) { return !done[key] })
+        for (var i = 0; i < batch.length; i++)
+          done[batch[i]] = true
+        root.releasePending = root.releasePending.filter(function (key) {
+          return !done[key]
+        })
         root.releaseInFlight = []
         root.pumpReleases()
       } else {
         root.releaseInFlight = []
-        if (root.foamySource) releaseRetry.restart()
-        else root.releasePending = []
+        if (root.foamySource)
+          releaseRetry.restart()
+        else
+          root.releasePending = []
       }
     })
   }
-  Timer { id: releaseRetry; interval: 5000; onTriggered: { root.pumpReleases(); root.pumpReleaseBefore() } }
+  Timer {
+    id: releaseRetry
+    interval: 5000
+    onTriggered: {
+      root.pumpReleases()
+      root.pumpReleaseBefore()
+    }
+  }
 
   // Clear all's cutoff for Foamy, retried like key batches: Foamy answers
   // "busy" when its persistence queue refused the drop. Only the newest cutoff matters.
@@ -429,18 +522,22 @@ Item {
     pumpReleaseBefore()
   }
   function pumpReleaseBefore() {
-    if (!releaseBeforeCut || releaseBeforeBusy || releaseRetry.running) return
+    if (!releaseBeforeCut || releaseBeforeBusy || releaseRetry.running)
+      return
     var cut = releaseBeforeCut
     releaseBeforeBusy = true
-    peer.call("foamy.notifications", "releaseHistoryBefore", [String(cut)], function(ok, output) {
+    peer.call("foamy.notifications", "releaseHistoryBefore", [String(cut)], function (ok, output) {
       root.releaseBeforeBusy = false
       if (ok && String(output).trim() === "ok") {
         // A newer Clear all may have arrived while this call was in flight: send it now.
-        if (root.releaseBeforeCut === cut) root.releaseBeforeCut = 0
-        else root.pumpReleaseBefore()
-      }
-      else if (root.foamySource) releaseRetry.restart()
-      else root.releaseBeforeCut = 0
+        if (root.releaseBeforeCut === cut)
+          root.releaseBeforeCut = 0
+        else
+          root.pumpReleaseBefore()
+      } else if (root.foamySource)
+        releaseRetry.restart()
+      else
+        root.releaseBeforeCut = 0
     })
   }
 
@@ -454,9 +551,10 @@ Item {
   readonly property bool snoozeBusy: snoozeProc.running
   property string snoozeError: ""
 
-  // Capability, not version: stock 4.5-rc2 and 4.0 have no `snoozes`, so the menu is hidden there.
+  // Capability, not version: stock 4.5-rc2 has no `snoozes`, so the menu is hidden there.
   function snoozeAll(minutes) {
-    if (!snoozeAvailable || snoozeProc.running) return
+    if (!snoozeAvailable || snoozeProc.running)
+      return
     snoozeError = ""
     snoozeProc.minutes = minutes
     // Clear the old global timer before setting a new one.
@@ -465,7 +563,8 @@ Item {
     snoozeProc.running = true
   }
   function refreshSnooze() {
-    if (snoozeProbe.running) return
+    if (snoozeProbe.running)
+      return
     snoozeProbe.launched = true
     snoozeProbe.running = true
   }
@@ -474,31 +573,39 @@ Item {
     id: snoozeProbe
     property bool launched: false
     command: ["omarchy-shell", "notifications", "snoozes"]
-    stdout: StdioCollector { id: snoozeProbeOutput }
+    stdout: StdioCollector {
+      id: snoozeProbeOutput
+    }
     stderr: StdioCollector {}
-    onRunningChanged: if (!running && launched) { launched = false; root.snoozeAvailable = false }
-    onExited: function(code, status) {
+    onRunningChanged: if (!running && launched) {
       launched = false
       root.snoozeAvailable = false
-      if (code !== 0 || status !== 0) return
+    }
+    onExited: function (code, status) {
+      launched = false
+      root.snoozeAvailable = false
+      if (code !== 0 || status !== 0)
+        return
       try {
         var value = JSON.parse(snoozeProbeOutput.text)
         root.snoozeAvailable = value !== null && typeof value === "object"
-      } catch (e) { /* Stock 4.0 has no timed snooze; its DND control remains available. */ }
+      } catch (e) { /* No timed snooze (stock 4.5-rc2); its DND control remains available. */ }
     }
   }
   Process {
     id: snoozeProc
     property int minutes: 0
     property bool launched: false
-    stdout: StdioCollector { id: snoozeOutput }
+    stdout: StdioCollector {
+      id: snoozeOutput
+    }
     stderr: StdioCollector {}
     onRunningChanged: if (!running && launched) {
       launched = false
       minutes = 0
       root.snoozeError = "Could not change notification snooze. Try again."
     }
-    onExited: function(code, status) {
+    onExited: function (code, status) {
       launched = false
       var result = String(snoozeOutput.text).trim()
       if (code !== 0 || status !== 0 || !result || /not found|invalid|error|^no$|^full$/i.test(result)) {
@@ -516,15 +623,19 @@ Item {
   }
 
   function refreshDnd() {
-    if (dndProc.running) { dndRefresh.restart(); return }
-    // isDnd exists on stock 4.0, stock 4.5 and Foamy; dndState was removed in 4.5.
+    if (dndProc.running) {
+      dndRefresh.restart()
+      return
+    }
+    // isDnd exists on stock 4.5 and Foamy (4.5 has no dndState).
     dndProc.command = ["omarchy-shell", "notifications", "isDnd"]
     dndProc.launched = true
     dndProc.running = true
   }
 
   function toggleDnd() {
-    if (dndProc.running) return
+    if (dndProc.running)
+      return
     // Toggle in the daemon so a concurrent external change cannot invert stale UI state.
     dndProc.command = ["omarchy-shell", "notifications", "toggleDnd"]
     dndProc.launched = true
@@ -547,13 +658,27 @@ Item {
   Process {
     id: dndProc
     property bool launched: false
-    stdout: StdioCollector { id: dndOutput }
+    stdout: StdioCollector {
+      id: dndOutput
+    }
     stderr: StdioCollector {}
-    onExited: function(exitCode, exitStatus) { launched = false; root.applyDndResult(exitCode, exitStatus, dndOutput.text); root.refreshSnooze() }
-    onRunningChanged: if (!running && launched) { launched = false; root.applyDndResult(127, 0, ""); root.refreshSnooze() }
+    onExited: function (exitCode, exitStatus) {
+      launched = false
+      root.applyDndResult(exitCode, exitStatus, dndOutput.text)
+      root.refreshSnooze()
+    }
+    onRunningChanged: if (!running && launched) {
+      launched = false
+      root.applyDndResult(127, 0, "")
+      root.refreshSnooze()
+    }
   }
 
-  Timer { id: dndRefresh; interval: 200; onTriggered: root.refreshDnd() }
+  Timer {
+    id: dndRefresh
+    interval: 200
+    onTriggered: root.refreshDnd()
+  }
 
   // Detached, like remove and seed above it: a clear that arrives while the
   // previous one is still running used to return early and never happen, so
@@ -567,8 +692,12 @@ Item {
     // The cutoff is the moment of the click. A clear requested while one runs
     // runs afterwards with its own click-time cutoff (the latest request wins).
     var cut = String(Date.now())
-    if (root.helperUnavailable) return
-    if (clearProc.running) { clearPendingCut = cut; return }
+    if (root.helperUnavailable)
+      return
+    if (clearProc.running) {
+      clearPendingCut = cut
+      return
+    }
     clearProc.cut = cut
     clearProc.running = true
   }
@@ -579,10 +708,16 @@ Item {
     // The cutoff captured at the click goes to the script and to Foamy alike.
     command: root.storeCommand(["clear", cut])
     environment: root.storeEnvironment
-    onExited: function(code, status) {
-      if (code === 0 && status === 0) { if (root.foamySource) root.releaseBefore(cut) }
-      else if (root.storeUnavailable(code)) { root.removalError = FoamyNative.UNAVAILABLE_TEXT; root.clearPendingCut = ""; return }
-      else root.removalError = "Could not clear notifications. Try again."
+    onExited: function (code, status) {
+      if (code === 0 && status === 0) {
+        if (root.foamySource)
+          root.releaseBefore(cut)
+      } else if (root.storeUnavailable(code)) {
+        root.removalError = FoamyNative.UNAVAILABLE_TEXT
+        root.clearPendingCut = ""
+        return
+      } else
+        root.removalError = "Could not clear notifications. Try again."
       if (root.clearPendingCut) {
         cut = root.clearPendingCut
         root.clearPendingCut = ""
@@ -601,23 +736,49 @@ Item {
       return
     }
     // Stopping the old watcher during a config change is an expected lifecycle event.
-    if (root.sourceRestartPending && entry && entry.error === "notification watcher stopped") return
-    if (entry && entry.ok === false) { root.loadError = String(entry.error || "Could not read notification history."); console.warn("Notification history:", root.loadError); return }
+    if (root.sourceRestartPending && entry && entry.error === "notification watcher stopped")
+      return
+    if (entry && entry.ok === false) {
+      root.loadError = String(entry.error || "Could not read notification history.")
+      console.warn("Notification history:", root.loadError)
+      return
+    }
     // The watcher sends one once its watches are up and the store is synced:
     // it started cleanly, so the next failure restarts it after 1 s again.
-    if (entry && entry.event === "storeChanged") { root.watchBackoffMs = 1000; archiveRevision++; reloadArchive.restart(); return }
-    if (entry && entry.event === "dndChanged") { dndRefresh.restart(); return }
-    if (entry && entry.event === "seenChanged") { root.readSeen(); return }
-    if (entry && entry.event === "pruned") { root.releaseNotificationActions(entry.keys || []); return }
+    if (entry && entry.event === "storeChanged") {
+      root.watchBackoffMs = 1000
+      archiveRevision++
+      reloadArchive.restart()
+      return
+    }
+    if (entry && entry.event === "dndChanged") {
+      dndRefresh.restart()
+      return
+    }
+    if (entry && entry.event === "seenChanged") {
+      root.readSeen()
+      return
+    }
+    if (entry && entry.event === "pruned") {
+      root.releaseNotificationActions(entry.keys || [])
+      return
+    }
     // A missing source directory appeared: the watcher exits to be rebuilt with it.
-    if (entry && entry.event === "rewatch") { root.sourceRestartPending = true; return }
-    if (!entry || !entry.key) return
-    if (removedKeys[String(entry.key)]) return
+    if (entry && entry.event === "rewatch") {
+      root.sourceRestartPending = true
+      return
+    }
+    if (!entry || !entry.key)
+      return
+    if (removedKeys[String(entry.key)])
+      return
     // The unread badge follows the unfiltered newest page, search or not.
     absorbUnread(entry)
     for (var i = 0; i < entries.length; i++) {
-      if (entries[i].key !== entry.key) continue
-      if (JSON.stringify(entries[i]) === JSON.stringify(entry)) return
+      if (entries[i].key !== entry.key)
+        continue
+      if (JSON.stringify(entries[i]) === JSON.stringify(entry))
+        return
       archiveRevision++
       var updated = entries.slice()
       updated[i] = entry
@@ -627,9 +788,15 @@ Item {
     }
     archiveRevision++
 
-    if (searchQuery) { reloadArchive.restart(); return }
+    if (searchQuery) {
+      reloadArchive.restart()
+      return
+    }
     var next = [entry].concat(entries)
-    if (next.length > listLimit) { next = next.slice(0, listLimit); hasMore = true }
+    if (next.length > listLimit) {
+      next = next.slice(0, listLimit)
+      hasMore = true
+    }
     entries = next
     entryAdded(entry)
   }
@@ -639,8 +806,10 @@ Item {
   function absorbUnread(entry) {
     var source = unreadSource.slice()
     for (var i = 0; i < source.length; i++) {
-      if (source[i].key !== entry.key) continue
-      if (JSON.stringify(source[i]) === JSON.stringify(entry)) return
+      if (source[i].key !== entry.key)
+        continue
+      if (JSON.stringify(source[i]) === JSON.stringify(entry))
+        return
       source[i] = entry
       unreadSource = source
       return
@@ -650,7 +819,7 @@ Item {
   }
 
   function visibleEntries(data) {
-    return data.filter(function(entry) {
+    return data.filter(function (entry) {
       return !root.removedKeys[String(entry.key)]
     })
   }
@@ -679,12 +848,14 @@ Item {
   property double watchStartedAt: 0
   function scheduleWatchRestart(now) {
     if (!root.sourceRestartPending) {
-      if (watchStartedAt > 0 && now - watchStartedAt >= watchStableMs) watchBackoffMs = 1000
+      if (watchStartedAt > 0 && now - watchStartedAt >= watchStableMs)
+        watchBackoffMs = 1000
       console.warn("Notification history watcher stopped; reconnecting")
     }
     watchStartedAt = 0
     restartWatch.interval = root.sourceRestartPending ? 100 : watchBackoffMs
-    if (!root.sourceRestartPending) watchBackoffMs = Math.min(watchBackoffMs * 2, watchBackoffMaxMs)
+    if (!root.sourceRestartPending)
+      watchBackoffMs = Math.min(watchBackoffMs * 2, watchBackoffMaxMs)
     restartWatch.restart()
   }
 
@@ -697,12 +868,15 @@ Item {
     // Started once the source is resolved (Component.onCompleted).
     running: false
     stdout: SplitParser {
-      onRead: function(line) { root.absorb(line) }
+      onRead: function (line) {
+        root.absorb(line)
+      }
     }
     onStarted: root.watchStartedAt = Date.now()
-    onExited: function(exitCode, exitStatus) {
+    onExited: function (exitCode, exitStatus) {
       launched = false
-      if (root.storeUnavailable(exitCode)) return
+      if (root.storeUnavailable(exitCode))
+        return
       root.scheduleWatchRestart(Date.now())
     }
     onRunningChanged: if (!running && launched) {
@@ -716,36 +890,58 @@ Item {
     interval: 30000
     onTriggered: {
       root.sourceRestartPending = false
-      if (!watchProc.running && root.sourceKind && !root.helperUnavailable) { watchProc.launched = true; watchProc.running = true }
+      if (!watchProc.running && root.sourceKind && !root.helperUnavailable) {
+        watchProc.launched = true
+        watchProc.running = true
+      }
     }
   }
 
-  Timer { id: reloadArchive; interval: 75; onTriggered: root.load() }
+  Timer {
+    id: reloadArchive
+    interval: 75
+    onTriggered: root.load()
+  }
 
   Process {
     id: listProc
     environment: root.storeEnvironment
-    onExited: function(exitCode, exitStatus) {
-      if (root.storeUnavailable(exitCode)) return
-      if (exitCode !== 0 || exitStatus !== 0) root.loadError = "Could not refresh notification history. Reopen the center to retry."
-      if (root.loadPending) reloadArchive.restart()
+    onExited: function (exitCode, exitStatus) {
+      if (root.storeUnavailable(exitCode))
+        return
+      if (exitCode !== 0 || exitStatus !== 0)
+        root.loadError = "Could not refresh notification history. Reopen the center to retry."
+      if (root.loadPending)
+        reloadArchive.restart()
     }
     stdout: StdioCollector {
       onStreamFinished: {
         // A watcher event newer than this read wins; reconcile again after the read drains.
-        if (root.listRevision !== root.archiveRevision) { root.loadPending = true; reloadArchive.restart(); return }
+        if (root.listRevision !== root.archiveRevision) {
+          root.loadPending = true
+          reloadArchive.restart()
+          return
+        }
         var data
         try {
           data = JSON.parse(text)
-        } catch (e) { root.loadError = "Invalid notification history response."; return }
-        if (!Array.isArray(data)) { root.loadError = "Invalid notification history response."; return }
+        } catch (e) {
+          root.loadError = "Invalid notification history response."
+          return
+        }
+        if (!Array.isArray(data)) {
+          root.loadError = "Invalid notification history response."
+          return
+        }
         root.loadError = ""
         root.hasMore = data.length > root.listLimit
         data = root.visibleEntries(data.slice(0, root.listLimit))
-        if (!root.searchQuery) root.unreadSource = data
+        if (!root.searchQuery)
+          root.unreadSource = data
         var wasLoaded = root.loaded
         root.loaded = true
-        if (wasLoaded && !root.differsFrom(data)) return
+        if (wasLoaded && !root.differsFrom(data))
+          return
         root.entries = data
         root.entriesReset()
       }
@@ -759,9 +955,9 @@ Item {
       onStreamFinished: {
         try {
           var data = JSON.parse(text)
-          if (data.ok === true) root.lastSeen = Number(data.seen) || 0
-        } catch (e) {
-        }
+          if (data.ok === true)
+            root.lastSeen = Number(data.seen) || 0
+        } catch (e) {}
       }
     }
   }
@@ -770,7 +966,8 @@ Item {
     id: markProc
     environment: root.storeEnvironment
     onExited: {
-      if (!root.seenPending) return
+      if (!root.seenPending)
+        return
       command = root.storeCommand(["seen", root.seenPending])
       root.seenPending = ""
       running = true
@@ -787,7 +984,8 @@ Item {
 
   Component.onDestruction: {
     // A retiring service must not clear its replacement during a reload.
-    if (Plugin.ServiceRegistry.instance === root) Plugin.ServiceRegistry.instance = null
+    if (Plugin.ServiceRegistry.instance === root)
+      Plugin.ServiceRegistry.instance = null
   }
 
   // Popup actions use public IPC because plugins cannot call each other's services.
@@ -796,9 +994,10 @@ Item {
     target: "foamy.notification-center.store"
     function remove(keysCsv: string): string {
       var keys = keysCsv.split(",")
-      if (!Array.isArray(keys) || keys.length > 100 || keys.some(function(key) {
+      if (!Array.isArray(keys) || keys.length > 100 || keys.some(function (key) {
         return typeof key !== "string" || !/^([0-9]+-[0-9]+|stock-[A-Za-z0-9_-]{1,120})$/.test(key)
-      })) return "error: invalid keys"
+      }))
+        return "error: invalid keys"
       root.removeMany(keys)
       return "ok"
     }
@@ -806,18 +1005,23 @@ Item {
     // here too, without asking Foamy to release them again.
     function handled(keysCsv: string): string {
       var keys = keysCsv.split(",")
-      if (!Array.isArray(keys) || keys.length > 100 || keys.some(function(key) {
+      if (!Array.isArray(keys) || keys.length > 100 || keys.some(function (key) {
         return typeof key !== "string" || !/^[0-9]+-[0-9]+$/.test(key)
-      })) return "error: invalid keys"
+      }))
+        return "error: invalid keys"
       root.removeMany(keys, true)
       return "ok"
     }
     // Foamy started, migrated or changed its settings: re-read over IPC.
     function peerChanged(what: string): string {
-      if (what === "store") root.resolveSource()
-      else if (what === "preferences") root.peerPreferencesChanged()
-      else if (what === "actions") root.refreshLiveActions()
-      else return "error: unknown"
+      if (what === "store")
+        root.resolveSource()
+      else if (what === "preferences")
+        root.peerPreferencesChanged()
+      else if (what === "actions")
+        root.refreshLiveActions()
+      else
+        return "error: unknown"
       return "ok"
     }
   }

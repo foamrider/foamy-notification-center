@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 322db103ce6d6476aac66858d421c75258365a5a2017188906cce61c8b1610ee — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 7729ead2825fe4300b9756b8be28debb9767b042500cacbd46e73249195e1c5c — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Ui
 
@@ -18,8 +18,8 @@ import qs.Ui
 CursorSurface {
   id: root
 
-  signal hovered()
-  signal clicked()
+  signal hovered
+  signal clicked
 
   property int cursorShape: Qt.PointingHandCursor
 
@@ -27,7 +27,8 @@ CursorSurface {
 
   HoverHandler {
     cursorShape: root.cursorShape
-    onHoveredChanged: if (hovered) root.hovered()
+    onHoveredChanged: if (hovered)
+      root.hovered()
   }
   TapHandler {
     onTapped: root.clicked()

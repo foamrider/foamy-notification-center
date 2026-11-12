@@ -1,4 +1,4 @@
-// foamy-kit 0.8.1 48510e842c22a5e5a4c30eac1dbdea461a8c0e0739eb7eff909c98f6ec93e59f — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 38d4a7011dc973f83d321c8e92aa04120fe5f6c4a2fe02e89153013828a73aba — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 
@@ -52,8 +52,8 @@ QtObject {
   readonly property Item panel: menuPanel
   readonly property Item overlayItem: _overlay
 
-  signal aboutToOpen()
-  signal closed()
+  signal aboutToOpen
+  signal closed
 
   property bool _opened: false
   property int _index: -1
@@ -65,20 +65,24 @@ QtObject {
   readonly property var _entries: {
     var level = _parentEntry ? _parentEntry.items : items
     var out = []
-    if (_parentEntry) out.push(_back)
+    if (_parentEntry)
+      out.push(_back)
     var lastSeparator = true
     for (var i = 0; i < level.length; i++) {
       var entry = level[i]
-      if (!entry || entry.visible === false) continue
+      if (!entry || entry.visible === false)
+        continue
       if (entry.separator) {
-        if (lastSeparator) continue
+        if (lastSeparator)
+          continue
         lastSeparator = true
       } else {
         lastSeparator = false
       }
       out.push(entry)
     }
-    while (out.length && out[out.length - 1].separator) out.pop()
+    while (out.length && out[out.length - 1].separator)
+      out.pop()
     return out
   }
 
@@ -88,9 +92,11 @@ QtObject {
   }
 
   function open(keyboard) {
-    if (!anchorItem) return
+    if (!anchorItem)
+      return
     var host = root.host || _findHost()
-    if (!host) return
+    if (!host)
+      return
     aboutToOpen()
     _hostItem = host
     _parentEntry = null
@@ -100,59 +106,97 @@ QtObject {
     _opened = true
     _reserveHolder = null
     for (var item = anchorItem; item; item = item.parent)
-      if ("foamyMenuReserve" in item) { _reserveHolder = item; break }
-    if (keyboard) move(1)
+      if ("foamyMenuReserve" in item) {
+        _reserveHolder = item
+        break
+      }
+    if (keyboard)
+      move(1)
     _overlay.place()
     _overlay.forceActiveFocus()
   }
 
   function close() {
-    if (!_opened) return
+    if (!_opened)
+      return
     _opened = false
     _parentEntry = null
     _index = -1
-    if (_reserveHolder) _reserveHolder.foamyMenuReserve = 0
+    if (_reserveHolder)
+      _reserveHolder.foamyMenuReserve = 0
     _reserveHolder = null
     var restore = _restoreFocus
     _restoreFocus = null
-    if (restore && restore.visible) restore.forceActiveFocus()
+    if (restore && restore.visible)
+      restore.forceActiveFocus()
     closed()
   }
 
-  function toggle(keyboard) { if (_opened) close(); else open(keyboard) }
+  function toggle(keyboard) {
+    if (_opened)
+      close()
+    else
+      open(keyboard)
+  }
 
   function move(delta) {
     var n = _entries.length
-    if (n === 0) { _index = -1; return }
+    if (n === 0) {
+      _index = -1
+      return
+    }
     var i = _index
     for (var step = 0; step < n; step++) {
       i = i < 0 ? (delta > 0 ? 0 : n - 1) : Math.max(0, Math.min(n - 1, i + (delta > 0 ? 1 : -1)))
-      if (selectable(i)) { _index = i; return }
-      if ((delta > 0 && i === n - 1) || (delta < 0 && i === 0)) return
+      if (selectable(i)) {
+        _index = i
+        return
+      }
+      if ((delta > 0 && i === n - 1) || (delta < 0 && i === 0))
+        return
     }
   }
 
   function moveTo(edge) {
     _index = -1
-    if (edge > 0) { _index = _entries.length; move(-1) } else move(1)
+    if (edge > 0) {
+      _index = _entries.length
+      move(-1)
+    } else
+      move(1)
   }
 
-  function hover(i) { if (selectable(i)) _index = i }
+  function hover(i) {
+    if (selectable(i))
+      _index = i
+  }
 
   // Activate entry i (the highlighted one by default).
   function activate(i) {
-    if (i === undefined) i = _index
-    if (!selectable(i)) return
+    if (i === undefined)
+      i = _index
+    if (!selectable(i))
+      return
     var entry = _entries[i]
-    if (entry === _back) { leaveSubmenu(); return }
+    if (entry === _back) {
+      leaveSubmenu()
+      return
+    }
     // A submenu opens in place on its first item (after the Back row).
-    if (entry.hasSubmenu) { _parentEntry = entry; _index = 0; move(1); _overlay.place(); return }
+    if (entry.hasSubmenu) {
+      _parentEntry = entry
+      _index = 0
+      move(1)
+      _overlay.place()
+      return
+    }
     close()
     entry.triggered()
   }
 
   function leaveSubmenu() {
-    if (!_parentEntry) return false
+    if (!_parentEntry)
+      return false
     var from = _parentEntry
     _parentEntry = null
     _index = _entries.indexOf(from)
@@ -163,7 +207,8 @@ QtObject {
   function _findHost() {
     var top = null
     for (var item = anchorItem; item; item = item.parent) {
-      if ("borderSpec" in item && "contentBottomInset" in item) return item
+      if ("borderSpec" in item && "contentBottomInset" in item)
+        return item
       top = item
     }
     return top
@@ -192,7 +237,8 @@ QtObject {
     property real menuHeight: 0
 
     function place() {
-      if (!root._opened || !root.anchorItem || !parent) return
+      if (!root._opened || !root.anchorItem || !parent)
+        return
       // In a FoamyPopup/FoamyPopupCard the card grows to fit the menu below
       // its button (up to the screen); elsewhere a long menu scrolls.
       var holder = root._reserveHolder
@@ -222,30 +268,66 @@ QtObject {
     Connections {
       target: root.anchorItem
       ignoreUnknownSignals: true
-      function onVisibleChanged() { if (root.anchorItem && !root.anchorItem.visible) root.close() }
+      function onVisibleChanged() {
+        if (root.anchorItem && !root.anchorItem.visible)
+          root.close()
+      }
     }
     Connections {
       target: root._hostItem
       ignoreUnknownSignals: true
-      function onVisibleChanged() { if (root._hostItem && !root._hostItem.visible) root.close() }
+      function onVisibleChanged() {
+        if (root._hostItem && !root._hostItem.visible)
+          root.close()
+      }
     }
 
-    Keys.onPressed: function(event) {
+    Keys.onPressed: function (event) {
       var forward = Qt.Key_Right, backward = Qt.Key_Left
-      if (root.mirrored) { forward = Qt.Key_Left; backward = Qt.Key_Right }
+      if (root.mirrored) {
+        forward = Qt.Key_Left
+        backward = Qt.Key_Right
+      }
       switch (event.key) {
-      case Qt.Key_Down: case Qt.Key_J: root.move(1); break
-      case Qt.Key_Up: case Qt.Key_K: root.move(-1); break
-      case Qt.Key_Home: root.moveTo(-1); break
-      case Qt.Key_End: root.moveTo(1); break
-      case Qt.Key_Return: case Qt.Key_Enter: case Qt.Key_Space: root.activate(); break
-      case Qt.Key_L: case forward:
-        if (root.selectable(root._index) && root._entries[root._index].hasSubmenu) root.activate()
+      case Qt.Key_Down:
+      case Qt.Key_J:
+        root.move(1)
         break
-      case Qt.Key_H: case Qt.Key_Backspace: case backward: root.leaveSubmenu(); break
-      case Qt.Key_Escape: if (!root.leaveSubmenu()) root.close(); break
-      case Qt.Key_Tab: case Qt.Key_Backtab: root.close(); break
-      default: break
+      case Qt.Key_Up:
+      case Qt.Key_K:
+        root.move(-1)
+        break
+      case Qt.Key_Home:
+        root.moveTo(-1)
+        break
+      case Qt.Key_End:
+        root.moveTo(1)
+        break
+      case Qt.Key_Return:
+      case Qt.Key_Enter:
+      case Qt.Key_Space:
+        root.activate()
+        break
+      case Qt.Key_L:
+      case forward:
+        if (root.selectable(root._index) && root._entries[root._index].hasSubmenu)
+          root.activate()
+        break
+      case Qt.Key_H:
+      case Qt.Key_Backspace:
+      case backward:
+        root.leaveSubmenu()
+        break
+      case Qt.Key_Escape:
+        if (!root.leaveSubmenu())
+          root.close()
+        break
+      case Qt.Key_Tab:
+      case Qt.Key_Backtab:
+        root.close()
+        break
+      default:
+        break
       }
       // The menu has the keys while it is open.
       event.accepted = true
@@ -256,8 +338,13 @@ QtObject {
       anchors.fill: parent
       hoverEnabled: true
       acceptedButtons: Qt.AllButtons
-      onPressed: function(mouse) { mouse.accepted = true; root.close() }
-      onWheel: function(wheel) { wheel.accepted = true }
+      onPressed: function (mouse) {
+        mouse.accepted = true
+        root.close()
+      }
+      onWheel: function (wheel) {
+        wheel.accepted = true
+      }
     }
 
     Rectangle {
@@ -278,7 +365,13 @@ QtObject {
       Accessible.name: root._parentEntry ? root._parentEntry.text : ""
 
       // Swallow presses between rows so they don't close the menu.
-      MouseArea { anchors.fill: parent; hoverEnabled: true; onWheel: function(wheel) { wheel.accepted = false } }
+      MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        onWheel: function (wheel) {
+          wheel.accepted = false
+        }
+      }
 
       Flickable {
         id: scroller
@@ -323,10 +416,12 @@ QtObject {
                 visible: !row.separator
                 anchors.fill: parent
                 radius: FoamyStyle.innerRadius(FoamyStyle.radius, FoamyStyle.menuPadding / 2)
-                color: row.current && row.usable
-                  ? (row.modelData.destructive ? Qt.alpha(Commons.Color.urgent, 0.14) : FoamyPalette.hoverFill)
-                  : "transparent"
-                Behavior on color { ColorAnimation { duration: FoamyMotion.hover } }
+                color: row.current && row.usable ? (row.modelData.destructive ? Qt.alpha(Commons.Color.urgent, 0.14) : FoamyPalette.hoverFill) : "transparent"
+                Behavior on color {
+                  ColorAnimation {
+                    duration: FoamyMotion.hover
+                  }
+                }
               }
               Row {
                 visible: !row.separator
@@ -337,8 +432,7 @@ QtObject {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: FoamyStyle.rowPadding
                 opacity: row.usable || row.separator ? 1 : FoamyStyle.disabledOpacity
-                readonly property color tone: row.modelData.destructive && row.current
-                  ? FoamyPalette.onSurface(Commons.Color.urgent) : FoamyPalette.text
+                readonly property color tone: row.modelData.destructive && row.current ? FoamyPalette.onSurface(Commons.Color.urgent) : FoamyPalette.text
                 FoamyIcon {
                   name: row.modelData.iconName || "settings"
                   visible: !!row.modelData.iconName
@@ -349,8 +443,7 @@ QtObject {
                   Accessible.ignored: true
                 }
                 Text {
-                  width: parent.width - FoamyStyle.iconSize - parent.spacing
-                    - (trailingIcon.visible ? trailingIcon.width + parent.spacing : 0)
+                  width: parent.width - FoamyStyle.iconSize - parent.spacing - (trailingIcon.visible ? trailingIcon.width + parent.spacing : 0)
                   anchors.verticalCenter: parent.verticalCenter
                   text: String(row.modelData.text || "")
                   textFormat: Text.PlainText
@@ -385,7 +478,9 @@ QtObject {
           }
         }
       }
-      FoamyWheelScroll { target: scroller }
+      FoamyWheelScroll {
+        target: scroller
+      }
     }
   }
 }
