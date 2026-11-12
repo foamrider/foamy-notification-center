@@ -152,7 +152,8 @@ env = dict(
 env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / os.environ["WAYLAND_DISPLAY"])
 for key in ["DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "QT_QUICK_BACKEND"]:
     env.pop(key, None)
-hostenv.isolate(env, base)
+# On the live compositor on purpose; the bus is dbus-run-session's own.
+hostenv.isolate(env, base, display=True)
 env.update(hostenv.make(base, app, env=env))
 env["PATH"] = str(cli) + ":" + env["PATH"]
 process = subprocess.Popen(

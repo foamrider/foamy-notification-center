@@ -214,7 +214,7 @@ if not desktop:
     env["XDG_RUNTIME_DIR"] = str(runtime)
     for key in ["DISPLAY", "WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE"]:
         env.pop(key, None)
-hostenv.isolate(env, base)
+hostenv.isolate(env, base, display=desktop)
 env.update(hostenv.make(base, app, env=env))
 proc = subprocess.Popen(
     ["dbus-run-session", "--", "qs", "-p", str(app), "--no-color"],

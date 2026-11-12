@@ -87,7 +87,9 @@ for k in ["DISPLAY", "WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE"]:
     env.pop(k, None)
 # OMARCHY_PATH exposes only the host's shell/ and default/; omarchy-* are stubs (the stock
 # focus fallback runs the omarchy-hyprland-focus-app test double, never a host script).
-hostenv.isolate(env, base)
+# The re-exec above put this process inside dbus-run-session: notify-send
+# and qs share that private bus, never the desktop's.
+hostenv.isolate(env, base, session_bus=os.environ["DBUS_SESSION_BUS_ADDRESS"])
 env.update(
     hostenv.make(
         base,

@@ -534,7 +534,9 @@ env = dict(
 # A private OMARCHY_PATH (the host's shell/ and default/ only) and logging
 # stubs for every omarchy command: no host script runs, and omarchy-shell
 # reaches only this test's shell.
-hostenv.isolate(env, base)
+# On the live compositor on purpose (real keyboard focus); the bus is
+# dbus-run-session's own.
+hostenv.isolate(env, base, display=True)
 env.update(hostenv.make(base, app, env=env, stubs={"omarchy": OMARCHY}))
 env["PATH"] = str(cli) + ":" + env["PATH"]
 process = subprocess.Popen(
