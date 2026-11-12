@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 6680bf7efe5b60c263ef9910f095dd1f7b2eb9a8286c0bc6caf5b408054831a2 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 7a2d60361f0ea0176830ab8c3911a4ed157c0b9b6171b70bb1ae283611c0d7e9 — do not edit; change foamy-kit and run sync
 import QtQuick
 import Quickshell.Io
 import "FoamyPrefs.js" as Prefs
@@ -29,6 +29,9 @@ import "FoamyPrefs.js" as Prefs
 //   saveTimeoutMs the whole group is SIGKILLed, and so is what's left of it
 //   when the save is stopped by a signal or the queue is destroyed. The next
 //   save starts only after that, so a timed-out save can't write late.
+// - `settings` is read as a plain JSON copy (`storedSettings`): a list that
+//   arrives as a QML sequence wrapper (settings passed through createObject)
+//   is not an Array and would read as an invalid stored array.
 // - Each save merges over `effectiveSettings` (settings + values saved but
 //   not yet reflected back), so two quick saves never undo each other.
 // - A pending value is dropped once `settings` shows it, or after
@@ -36,11 +39,12 @@ import "FoamyPrefs.js" as Prefs
 // - An array whose stored value is invalid (user data the schema rejects)
 //   is never replaced by save(key, value): it fails at once with
 //   FoamyPrefs.STORED_INVALID, nothing is written and it isn't retryable.
-//   storedProblem(key) / storedProblems say so, for the panel to show and to
-//   block editing; save(key, value, true) replaces it on purpose.
+//   storedProblems.<key> says so, for the panel to show and to block
+//   editing (storedProblem(key) returns the same, for code that isn't a
+//   binding); save(key, value, true) replaces it on purpose.
 //
-//     FoamySettingsError { text: FoamyI18n.t(prefs.storedProblem("accounts") ? "Fix the account list in shell.json first." : "") }
-//     FoamyButton { enabled: !prefs.storedProblem("accounts"); onClicked: prefs.save("accounts", next) }
+//     FoamySettingsError { text: FoamyI18n.t(prefs.storedProblems.accounts ? "Fix the account list in shell.json first." : "") }
+//     FoamyButton { enabled: !prefs.storedProblems.accounts; onClicked: prefs.save("accounts", next) }
 //
 // - error is an English message for FoamyI18n.t(): "That value isn't
 //   allowed.", "Couldn't save the setting.", "The saved list in shell.json
@@ -57,8 +61,10 @@ QtObject {
   property int saveTimeoutMs: 20000
   readonly property int stderrLimit: 4096
 
+  // Everything below reads this copy, never `settings` itself (see above).
+  readonly property var storedSettings: Prefs.plain(settings)
   property var pending: ({})
-  readonly property var effectiveSettings: Prefs.overlay(settings, pending)
+  readonly property var effectiveSettings: Prefs.overlay(storedSettings, pending)
   readonly property bool saving: inFlight
   property bool inFlight: false
   readonly property bool busy: saving || waiting.length > 0
@@ -96,7 +102,7 @@ QtObject {
 
   function save(key, value, force) {
     var issue = Prefs.problem(fields, key, value)
-    if (!issue && force !== true && Prefs.keepsStored(fields, settings, key, pending))
+    if (!issue && force !== true && Prefs.keepsStored(fields, storedSettings, key, pending))
       issue = Prefs.STORED_INVALID
     if (issue) {
       error = issue
@@ -147,7 +153,7 @@ QtObject {
   }
 
   function run(key, value, force) {
-    var result = Prefs.save(bar, moduleName, fields, settings, key, value, pending, force)
+    var result = Prefs.save(bar, moduleName, fields, storedSettings, key, value, pending, force)
     if (!result.ok) {
       error = result.error
       // A kept invalid array isn't retryable: the same save would refuse again.
@@ -171,7 +177,7 @@ QtObject {
     // 4.5 reflects an inline save synchronously: `settings` already changed
     // inside Prefs.save(), before this value became pending, so settle now or
     // it would mask later outside changes and be written back by the next save.
-    pending = Prefs.settle(settings, pending)
+    pending = Prefs.settle(storedSettings, pending)
     if (result.inline) {
       saved(key, value)
       Qt.callLater(advance)
@@ -254,7 +260,7 @@ QtObject {
     run(next.key, next.value, next.force)
   }
 
-  onSettingsChanged: pending = Prefs.settle(settings, pending)
+  onStoredSettingsChanged: pending = Prefs.settle(storedSettings, pending)
 
   property Timer expiry: Timer {
     interval: 1000

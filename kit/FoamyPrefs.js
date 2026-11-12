@@ -1,5 +1,5 @@
 .pragma library
-// foamy-kit 0.9.0 58aa5fea59b665ca743da0688fdfa37914ea1a191f14e4605e6a9f03eef8eb4f — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 6cc5852ff9a1eabd8b4868035a9e246f36382c48fc90bebeafb87859239d3432 — do not edit; change foamy-kit and run sync
 
 // Inline widget settings: schema validation and saving, for every plugin.
 //
@@ -21,7 +21,12 @@
 // usable directly:
 //
 //   import "kit/FoamyPrefs.js" as Prefs
-//   readonly property bool showPercentage: Prefs.value(Schema.fields, root.settings, "showPercentage")
+//   readonly property var stored: Prefs.plain(root.settings)
+//   readonly property bool showPercentage: Prefs.value(Schema.fields, stored, "showPercentage")
+//
+// Pass the functions plain(settings), as FoamyPrefsQueue does: a list that
+// reaches QML through createObject (the bar's settings, a plugin test) is a
+// sequence wrapper, not an Array, and would read as an invalid stored array.
 //
 // Saving prefers the in-process bar.shell.updateEntryInline(moduleName,
 // settings). It REPLACES the entry with
@@ -135,6 +140,14 @@ function storedProblems(fields, settings) {
     if (issue) out[fields[i].key] = issue
   }
   return out
+}
+
+// `settings` as plain JSON data, {} unless it is an object. A list in a QML
+// sequence wrapper fails Array.isArray; in the copy it is an Array.
+function plain(settings) {
+  if (!isPlainObject(settings)) return {}
+  var copy = JSON.parse(JSON.stringify(settings))
+  return isPlainObject(copy) ? copy : {}
 }
 
 function clone(value) {
@@ -272,7 +285,7 @@ function save(bar, moduleName, fields, settings, key, next, pending, force) {
 
 if (typeof module !== "undefined") module.exports = {
   NOT_ALLOWED: NOT_ALLOWED, NO_ENTRY: NO_ENTRY, STORED_INVALID: STORED_INVALID, field: field, problem: problem,
-  valid: valid, storedProblem: storedProblem, storedProblems: storedProblems, keepsStored: keepsStored, value: value,
+  valid: valid, storedProblem: storedProblem, storedProblems: storedProblems, keepsStored: keepsStored, plain: plain, value: value,
   values: values, canonical: canonical, equal: equal, overlay: overlay, settle: settle, merged: merged,
   saveCommand: saveCommand, bounded: bounded, killGroupCommand: killGroupCommand, canSaveInline: canSaveInline,
   save: save

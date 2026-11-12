@@ -2,7 +2,7 @@
 # Hashes are of each file's body (the file without its stamp line);
 # notices and REVIEW.md are hashed whole. tests/kit-check.sh verifies them.
 version 0.9.0
-source 2dae544b0373
+source 6d0346d6a41b
 components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyPopup,FoamyPrefs,FoamySettings,FoamyStyle,FoamyWheelScroll,SafeTextField
 83e74c61df1740955057fad78e77dc347f783f735dd61b7a21b49461641bc270  .github/workflows/checks.yml
 98bd9e4430551129a6f4c309ee8ba59b66514db5ca1d4c5b7151ec308f6d632b  .github/workflows/verify-native.yml
@@ -30,8 +30,8 @@ ac985fdddb1be105d4ca5590c31fb7972e55cf5b05a792ef618a80afda25980f  kit/FoamyMotio
 873a308000022a89bd2ea2a137c02ff17b4a357c236456974807251a1ee35748  kit/FoamyPalette.qml
 551330bdcaa04e8f39138b3fb011675e5742d1c007586f7341d738307bc6c2ad  kit/FoamyPeerIpc.qml
 e36d5c1859cf1adf55ced6033755d84241b2abad16a46cbaeecaaf0066179988  kit/FoamyPopup.qml
-58aa5fea59b665ca743da0688fdfa37914ea1a191f14e4605e6a9f03eef8eb4f  kit/FoamyPrefs.js
-6680bf7efe5b60c263ef9910f095dd1f7b2eb9a8286c0bc6caf5b408054831a2  kit/FoamyPrefsQueue.qml
+6cc5852ff9a1eabd8b4868035a9e246f36382c48fc90bebeafb87859239d3432  kit/FoamyPrefs.js
+7a2d60361f0ea0176830ab8c3911a4ed157c0b9b6171b70bb1ae283611c0d7e9  kit/FoamyPrefsQueue.qml
 5ac3d10d8ee34c6a4fa810d12b0f5855faf70bda6b6a225aab3687bd2a16af52  kit/FoamySettingsError.qml
 2bc5d90a32e9d35f884e33793c3875e76eb957a8a4e332f37405cd34ca853546  kit/FoamySettingsHeader.qml
 60f7c15123a900bee96c77742f3278e4edccea01e1f4403309ec45a9b94f5738  kit/FoamySettingsPage.qml
