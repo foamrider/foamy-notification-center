@@ -319,6 +319,12 @@ Use the rows that apply; a QML-only plugin needs no Rust toolchain.
 - Use temporary homes, fake commands and buses, and local fixture servers.
   Never suspend or lock the real desktop, alter real accounts, touch real
   Syncthing data, send notifications or open user dialogs from tests.
+- Tests never show anything on the live desktop unless the user opts in
+  (`FOAMY_TEST_DESKTOP=1` for that run): render offscreen, keep
+  `WAYLAND_DISPLAY`, `HYPRLAND_INSTANCE_SIGNATURE` and `DISPLAY` out of
+  what a test starts, and keep live-compositor tests out of
+  `tests/validate.sh` and `tests/suite.sh`. The kit's harness and
+  `hostenv.isolate()` refuse a live display without the opt-in.
 - For changed UI, inspect populated, empty, loading and error states as
   relevant, plus keyboard focus, narrow layouts, scale, supported themes, RTL
   and reduced motion. Check logs for binding and import errors. Offscreen

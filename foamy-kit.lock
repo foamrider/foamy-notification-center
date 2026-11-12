@@ -2,13 +2,13 @@
 # Hashes are of each file's body (the file without its stamp line);
 # notices and REVIEW.md are hashed whole. tests/kit-check.sh verifies them.
 version 0.9.0
-source 6d0346d6a41b
+source 7136b9813f8d20ee2847f800ddb1cf041445e703
 components FoamyAction,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyPopup,FoamyPrefs,FoamySettings,FoamyStyle,FoamyWheelScroll,SafeTextField
-83e74c61df1740955057fad78e77dc347f783f735dd61b7a21b49461641bc270  .github/workflows/checks.yml
+5079c3e4ecd2ca5399dff48f64327729d8e84916a4c73fbcb9e0491b16014990  .github/workflows/checks.yml
 98bd9e4430551129a6f4c309ee8ba59b66514db5ca1d4c5b7151ec308f6d632b  .github/workflows/verify-native.yml
 23adc6c9c393c6f29eab5dcbabc13a27a38abdee1cf78c07efb69879dc28f6f7  .oxlintrc.json
 771e7eeb95d50551c7a7a8038f0d033ad3385a63b90f6d767133f5f15b872d5a  .qmlformat.ini
-06351992e22e09a3a7ceaaca66b0f8027aaa30575b83fb6d872e264237cf5f1a  REVIEW.md
+f486b8b76dc0d143efdf29b506e3cf39c67a797e37cd0fcf6f269fb95e95bae0  REVIEW.md
 36b6a8f3b7ca613a7652eae6e5ada16595d8c9f846ee6b1505417bbb06ba3e7a  kit/FoamyAction.qml
 31371ef41d02ff56eb60557ef113a98f1f10dd6fd3881d2e0b8f9de55649dbf1  kit/FoamyCursor.qml
 7729ead2825fe4300b9756b8be28debb9767b042500cacbd46e73249195e1c5c  kit/FoamyCursorSurface.qml
@@ -66,7 +66,7 @@ d5632ef6e28002762e9c05ee86b8ac12a2a8503e5097a1f4014d5c276b19f0dc  kit/rust/foamy
 d0471dc6a0e3585b6fa76a6adfc16665b7b826925eeda5b72c71a4bf6e0a831e  kit/rust/foamy-helper/src/sandbox/tests.rs
 1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa  kit/rust/foamy-helper/src/tls.rs
 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
-4f046df8baf61bf62ed1ade8c9f5f315d7bbd981d2b8b2c619b1b1165607fd1c  kit/tooling/validate.py
+d5377f7e0337828bc9950e0e651403e128e8216bb4673b2ec173fde63f24be1b  kit/tooling/validate.py
 4d8c9ad0403a76291a2c89eff71dcdd370281814bbb9055e9c7bf88961b7d6ac  mise.toml
 30062b8bc91b2af48aa4124370f8b9552b2077ad032173dbf5690de4526c7c0d  ruff.toml
 868af8f99d78154f4ab510eaa594ed9833639b763939a7f47fb38a0070ea6f6e  rust-toolchain.toml
