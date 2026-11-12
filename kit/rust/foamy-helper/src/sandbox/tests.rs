@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 d0471dc6a0e3585b6fa76a6adfc16665b7b826925eeda5b72c71a4bf6e0a831e — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 47198aad9597eec308c7e61b9cb3633907ff431511ea8e475dd50d1d93c3dce7 — do not edit; change foamy-kit and run sync
 use super::*;
 use std::time::Duration;
 
@@ -182,6 +182,30 @@ fn bwrap_keeps_its_own_copy_of_the_fds_it_names() {
 }
 
 #[test]
+fn bwrap_names_each_temporary_fd_by_its_own_duplicate() {
+    // Two temporaries opened one after the other get the same number (the
+    // first is closed when its call returns). Naming the caller's number
+    // gave both options that number, and the second file replaced the first
+    // under it, so both binds showed the second file.
+    use std::os::unix::fs::PermissionsExt;
+    let dir = crate::fs::tests::TempDir::new("bwrap-two-fds");
+    let (a, b) = (dir.0.join("a"), dir.0.join("b"));
+    std::fs::write(&a, b"first ").unwrap();
+    std::fs::write(&b, b"second").unwrap();
+    let program = dir.0.join("bwrap");
+    std::fs::write(&program, "#!/bin/sh\ncat <&\"$2\" && exec cat <&\"$5\"\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let sandbox = Bwrap::new(program)
+        .ro_bind_fd(File::open(&a).unwrap(), "/a")
+        .ro_bind_fd(File::open(&b).unwrap(), "/b");
+    let args = sandbox.args();
+    assert_ne!(args[1], args[4], "each option names its own fd: {args:?}");
+    let output = sandbox.bounded(["--", "true"]).run().unwrap();
+    assert!(output.success(), "{output:?}");
+    assert_eq!(output.stdout, b"first second");
+}
+
+#[test]
 fn a_seccomp_memfd_serves_more_than_one_run() {
     // bubblewrap reads the filter from the shared offset: after one run it
     // was at the end, and the next run (`works()` and then the real one,
@@ -325,10 +349,23 @@ fn elf_interpreters_and_path_lookup() {
     assert_eq!(which(text.to_str().unwrap()), None, "not executable");
 }
 
+/// The number of the builder's `index`th retained fd, checked to be a copy
+/// of `original` (same file, a different number).
+fn retained(sandbox: &Bwrap, index: usize, original: &impl AsFd) -> String {
+    let (number, copy, _) = &sandbox.fds[index];
+    assert_eq!(*number, copy.as_raw_fd());
+    let (a, b) = (
+        rustix::fs::fstat(original).unwrap(),
+        rustix::fs::fstat(&**copy).unwrap(),
+    );
+    assert_eq!((a.st_dev, a.st_ino), (b.st_dev, b.st_ino));
+    assert_ne!(*number, original.as_fd().as_raw_fd());
+    number.to_string()
+}
+
 #[test]
 fn bwrap_argv_covers_artwork_and_github_status() {
     let filter = BpfFilter::decoder().unwrap().memfd().unwrap();
-    let fd = filter.as_raw_fd().to_string();
     let decoder = Bwrap::new("/usr/bin/bwrap")
         .unshare_all()
         .die_with_parent()
@@ -352,6 +389,8 @@ fn bwrap_argv_covers_artwork_and_github_status() {
         .setenv("OMP_NUM_THREADS", "1")
         .remount_ro("/")
         .seccomp(&filter);
+    // Options name the builder's own duplicate of each fd (the same file).
+    let fd = retained(&decoder, 0, &filter);
     let argv = decoder.argv(["/usr/bin/magick", "PNG:/input", "RGB:-"]);
     let expected: Vec<&str> = vec![
         "/usr/bin/bwrap",
@@ -422,10 +461,7 @@ fn bwrap_argv_covers_artwork_and_github_status() {
         .ro_bind_fd(&worktree, "/repo")
         .bind_fd(&common, "/repo/.git")
         .end_of_options();
-    let (w, c) = (
-        worktree.as_raw_fd().to_string(),
-        common.as_raw_fd().to_string(),
-    );
+    let (w, c) = (retained(&pin, 0, &worktree), retained(&pin, 1, &common));
     let expected: Vec<&str> = vec![
         "/usr/bin/bwrap",
         "--ro-bind",

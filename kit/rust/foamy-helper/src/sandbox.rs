@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 d5632ef6e28002762e9c05ee86b8ac12a2a8503e5097a1f4014d5c276b19f0dc — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 177670beb2ecd87d0f3dbcc74c67741990f779b2f1ccd15afce3f6f1893d318e — do not edit; change foamy-kit and run sync
 //! Sandboxing for child processes (cargo feature `sandbox`): seccomp-BPF
 //! filters ([`BpfFilter`], generated with `seccompiler`), a Landlock
 //! restriction of what a child may execute ([`ExecOnly`], applied between
@@ -610,14 +610,23 @@ impl Bwrap {
         rest: Option<&OsStr>,
         rewind: bool,
     ) -> Bwrap {
-        match fd.try_clone_to_owned() {
-            Ok(owned) => self.fds.push((fd.as_raw_fd(), Arc::new(owned), rewind)),
+        // The option names the retained duplicate's number, not the
+        // caller's: a temporary fd's number is free again once it is
+        // dropped, so two temporaries can share one, while each duplicate
+        // keeps its own number as long as the builder holds it.
+        let number = match fd.try_clone_to_owned() {
+            Ok(owned) => {
+                let number = owned.as_raw_fd();
+                self.fds.push((number, Arc::new(owned), rewind));
+                number
+            }
             Err(error) => {
                 let code = error.raw_os_error().unwrap_or(libc::EMFILE);
                 self.broken.get_or_insert(code);
+                fd.as_raw_fd()
             }
         }
-        let number = fd.as_raw_fd().to_string();
+        .to_string();
         self.args.push(option.into());
         self.args.push(number.into());
         if let Some(rest) = rest {

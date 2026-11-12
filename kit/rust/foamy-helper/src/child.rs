@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 11fafa25f5fb819dc8a53753b22f80877eca8482e80ceeb38277fc36c0006547 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.9.0 b572966db8ecb2f77c2abdd130281b643cd4c81b8878e2cab6f300eb4cd87270 — do not edit; change foamy-kit and run sync
 //! Bounded child processes: a deadline, a cap on captured output, a kill on
 //! either, and control over the environment, standard input, the process
 //! group or session, resource limits, CPU and I/O priority and death with
@@ -297,6 +297,14 @@ impl Bounded {
         fd: Arc<OwnedFd>,
         rewind: bool,
     ) -> Bounded {
+        // Two files under one number can't both reach the child (the
+        // number of a temporary fd is reused once it is dropped).
+        if self.inherit.iter().any(|held| held.number == number) {
+            return self.fail_spawn(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("two inherited fds want number {number}"),
+            ));
+        }
         self.inherit.push(Inherited { number, fd, rewind });
         self
     }
@@ -1227,6 +1235,25 @@ mod tests {
         let output = sh("ulimit -n").rlimit(Resource::Nofile, 32).run().unwrap();
         assert_eq!(output.stdout_lossy().trim(), "32");
         assert!(Bounded::new("/nonexistent/foamy").run().is_err());
+    }
+
+    #[test]
+    fn two_inherited_fds_for_one_number_fail_the_run() {
+        // A temporary's number is free again once it is dropped, so a
+        // second temporary can come under the same number; the child could
+        // only get one of them under it.
+        let dir = crate::fs::tests::TempDir::new("inherit-two");
+        let (a, b) = (dir.0.join("a"), dir.0.join("b"));
+        std::fs::write(&a, b"a").unwrap();
+        std::fs::write(&b, b"b").unwrap();
+        let first: OwnedFd = std::fs::File::open(&a).unwrap().into();
+        let second: OwnedFd = std::fs::File::open(&b).unwrap().into();
+        let error = sh("true")
+            .inherit_shared(100, Arc::new(first), false)
+            .inherit_shared(100, Arc::new(second), false)
+            .run()
+            .unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidInput, "{error}");
     }
 
     #[test]
