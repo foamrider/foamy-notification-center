@@ -10,8 +10,10 @@ Item {
   property var previewStates: ["default", "menu", "snooze", "empty-menu", "settings"]
   property string previewState: "default"
   property int settleMs: 900
-  property Item popupRef: null
-  readonly property Item popup: popupRef
+  property var popupRef: null
+  // What the harness captures: the Panel's FoamyPopup. A var, as the kit's
+  // preview contract says (qmllint types FoamyPopup as a PanelWindow).
+  readonly property var popup: popupRef
 
   function find(item, name) {
     if (!item)
