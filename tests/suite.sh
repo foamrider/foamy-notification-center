@@ -6,8 +6,9 @@
 #           ones that need magick or inotifywait are skipped without them)
 #   --fast  skip the Quickshell runtime tests
 # Without --ci the helper suites also run the aarch64 build under
-# qemu-aarch64-static when it is installed, and settings-ui and images-ui run
-# when a Wayland session is there (they take real keyboard focus meanwhile).
+# qemu-aarch64-static when it is installed. images-ui and settings-ui open real
+# surfaces on the live desktop and take its keyboard focus: they run only with
+# FOAMY_TEST_DESKTOP=1 in a Wayland session.
 set -uo pipefail
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." || exit 1
 ci=0 fast=0
@@ -66,10 +67,12 @@ for test in browser-ui rtl-rows scrolling settings-number motion stock-runtime; 
 done
 run python3 tests/stock-runtime.py --custom
 run python3 "$FOAMY_KIT/preview/i18n_runtime.py" .
-if [[ -n ${WAYLAND_DISPLAY:-} ]]; then
+if [[ ${FOAMY_TEST_DESKTOP:-} != 1 ]]; then
+  skip "images-ui, settings-ui: real surfaces on the live desktop; set FOAMY_TEST_DESKTOP=1"
+elif [[ -z ${WAYLAND_DISPLAY:-} ]]; then
+  skip "images-ui, settings-ui: no Wayland session"
+else
   run python3 tests/images-ui.py
   run python3 tests/settings-ui.py
-else
-  skip "images-ui, settings-ui: no Wayland session"
 fi
 exit $status

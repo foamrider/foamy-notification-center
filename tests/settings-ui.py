@@ -15,6 +15,10 @@ sys.path.insert(0, str(KIT / "preview"))
 import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
+# Opens real surfaces on the live desktop and takes its keyboard focus: only
+# when asked for (tests/suite.sh runs it with FOAMY_TEST_DESKTOP=1).
+if os.environ.get("FOAMY_TEST_DESKTOP") != "1":
+    raise SystemExit("settings-ui: opens real surfaces on the live desktop; set FOAMY_TEST_DESKTOP=1 to run it")
 base = Path(tempfile.mkdtemp(prefix="foamy-center-settings-"))
 app = base / "app"
 app.mkdir()

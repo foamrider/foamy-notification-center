@@ -11,6 +11,10 @@ sys.path.insert(0, str(KIT / "preview"))
 import hostenv  # noqa: E402  (foamy-kit's preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
+desktop = "--desktop" in sys.argv
+# --desktop opens a real surface on the live desktop: only when asked for.
+if desktop and os.environ.get("FOAMY_TEST_DESKTOP") != "1":
+    raise SystemExit("motion --desktop: opens a real surface on the live desktop; set FOAMY_TEST_DESKTOP=1 to run it")
 base = Path(tempfile.mkdtemp(prefix="foamy-center-motion-"))
 app = base / "app"
 app.mkdir()
@@ -199,7 +203,6 @@ home = base / "home"
 home.mkdir()
 runtime = base / "runtime"
 runtime.mkdir(mode=0o700)
-desktop = "--desktop" in sys.argv
 env = dict(
     os.environ,
     HOME=str(home),
