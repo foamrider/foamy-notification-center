@@ -14,7 +14,7 @@ const activate = panel.slice(start, panel.indexOf("\n  }", start) + 4)
 
 function view(mode = "Auto") {
   const state = vm.createContext({
-    clickAction: mode, Model, store: { focusNotification(row) { state.focusProc.running = true; state.focusProc.row = row; state.delegated.push(row) } }, omarchyPath: "/omarchy", focusProc: {},
+    clickAction: mode, Model, store: { focusNotification(row, useDefault) { state.delegated.push([row, useDefault]) } }, omarchyPath: "/omarchy",
     actions: [], images: [], delegated: [], removed: [], closed: 0,
     Util: { execArgv(argv) { state.actions.push(argv) } },
     Quickshell: { execDetached(argv) { state.images.push(argv) } },
@@ -40,14 +40,15 @@ function fixture(t) {
   } }
 }
 
+// No sender command and no button label of a sender may reach the center.
 function assertDisarmed(entries) {
   for (const row of entries) {
-    assert.equal(Object.hasOwn(row, "exec"), false)
-    assert.equal(Object.hasOwn(row, "execArgv"), false)
+    for (const name of ["exec", "execArgv", "actions", "execActions"])
+      assert.equal(Object.hasOwn(row, name), false, `${row.key} keeps ${name}`)
   }
 }
 
-test("sync discards sender commands from live and historical notifications; stacked clicks delegate the selected image", t => {
+test("sync discards sender commands and button labels from live and historical notifications, and keeps the picture path", t => {
   const f = fixture(t)
   const timestamp = Date.now()
   const files = ["/tmp/a picture.png", "/tmp/another picture.JPEG"]
@@ -55,24 +56,16 @@ test("sync discards sender commands from live and historical notifications; stac
     const argv = ["bash", "-c", "arbitrary sender command", `file://${files[i]}`]
     fs.writeFileSync(path.join(i ? f.source : path.join(f.source, "history"), `${timestamp + i}-${i}.json`),
       JSON.stringify({ timestamp: timestamp + i, app: "Actions", summary: "Picture",
-        exec: "arbitrary legacy command", execArgv: i ? JSON.stringify(argv) : argv }))
+        exec: "arbitrary legacy command", execArgv: i ? JSON.stringify(argv) : argv,
+        actions: ["View", "Reply"], execActions: [["bash", "-c", "x"]] }))
   }
   f.run("sync")
   const entries = f.run("list")
   assert.equal(entries.length, 2)
   assertDisarmed(entries)
   assertDisarmed(fs.readFileSync(f.archive, "utf8").trim().split("\n").map(JSON.parse))
-  const state = view()
-  const collapsed = Model.stackRows(entries, {}, "").filter(row => row.kind === "message")
-  assert.equal(collapsed.length, 1)
-  state.activate(collapsed[0].entry)
-  const expanded = Model.stackRows(entries, { Actions: true }, "").filter(row => row.kind === "message")
-  state.activate(expanded[1].entry)
-  assert.equal(state.actions.length, 0)
-  assert.deepEqual(Array.from(state.delegated, row => row.file), [files[1], files[0]])
-  assert.equal(state.images.length, 0)
-  assert.equal(state.removed.length, 0)
-  assert.equal(state.closed, 0)
+  // The picture survives from both an argv array and a JSON-string argv.
+  assert.deepEqual(entries.map(row => row.file).sort(), [...files].sort())
 })
 
 test("sync and backfill strip both command fields from old archives and retain only image paths", t => {
@@ -120,7 +113,8 @@ test("old commands are ignored before migration, including shell, URL and malfor
     const state = view()
     state.activate({ key: "100-1", app: "Browser", execArgv, exec: "command" })
     assert.equal(state.actions.length + state.images.length, 0)
-    assert.equal(state.focusProc.row.app, "Browser")
+    assert.equal(state.delegated.length, 1)
+    assert.equal(state.delegated[0][0].app, "Browser")
     assert.equal(state.removed.length, 0)
     assert.equal(state.closed, 0)
   }
@@ -131,28 +125,20 @@ test("only absolute raster paths can reach the fixed opener; click settings stil
     "file:///tmp/a.png", "/tmp/a.desktop", "/tmp/a.png.desktop", "/tmp/a.svg", "/tmp/a.png\n", "/tmp/a\u0000.png",
     '/tmp/a".png', "/tmp/a'.png"]) {
     assert.equal(Model.isPreviewFile(file), false)
-    const state = view()
-    state.activate({ key: "100-1", app: "Browser", file })
-    assert.equal(state.images.length + state.actions.length, 0)
-    assert.equal(state.focusProc.running, true)
   }
   for (const file of ["/tmp/preview.png", "/tmp/spaced image.JPG", "/tmp/a.gif", "/tmp/a.webp", "/tmp/a;literal.png"]) {
     const row = { key: "100-1", app: "Browser", file, execArgv: '["bash", "-c", "command"]' }
-    const auto = view()
-    auto.activate(row)
-    assert.equal(auto.focusProc.row, row)
     assert.deepEqual(Model.fileCommand(row), ["xdg-open", file])
-    assert.equal(auto.actions.length + auto.images.length + auto.removed.length, 0)
-    assert.equal(auto.closed, 0)
-    const focus = view("Focus the app")
-    focus.activate(row)
-    assert.equal(focus.actions.length + focus.images.length, 0)
-    assert.equal(focus.focusProc.running, true)
-    const nothing = view("Nothing")
-    nothing.activate(row)
-    assert.equal(nothing.actions.length + nothing.images.length + nothing.removed.length, 0)
-    assert.equal(nothing.focusProc.running, undefined)
-    assert.equal(nothing.closed, 0)
+  }
+  // "Auto" lets the service try the sender's default action first; "Focus the
+  // app" asks for the app window only; "Nothing" does nothing.
+  const row = { key: "100-1", app: "Browser", file: "/tmp/preview.png", execArgv: '["bash", "-c", "command"]' }
+  for (const [mode, expected] of [["Auto", [[row, true]]], ["Focus the app", [[row, false]]], ["Nothing", []]]) {
+    const state = view(mode)
+    state.activate(row)
+    assert.deepEqual(state.delegated, expected, mode)
+    assert.equal(state.actions.length + state.images.length + state.removed.length, 0, mode)
+    assert.equal(state.closed, 0, mode)
   }
 })
 
@@ -235,8 +221,16 @@ test("a focus command that can't start runs the next fallback, then reports the 
  assert.equal(run("[]"),3)
  assert.equal(run("bad JSON"),5)
  assert.equal(run("[]",{QUERY_FAIL:"1"}),1)
+ // A reply that is not a client list is a failed query, never "no window" (3).
+ for(const reply of ["{}","null",'"x"']) {
+  const code=run(reply)
+  assert.notEqual(code,0,reply);assert.notEqual(code,3,reply)
+ }
  const clients=JSON.stringify([{class:"Background",address:"0x1"}])
  assert.equal(run(clients),0)
+ // An Omarchy agent window is found by its title.
+ assert.equal(run(JSON.stringify([{class:"x",initialClass:"org.omarchy.agent",initialTitle:"Background",address:"0x2"}])),0)
+ assert.equal(run(JSON.stringify([{class:"x",initialClass:"other",initialTitle:"Background",address:"0x2"}])),3)
  assert.equal(run(clients,{FOCUS_CODE:"1"}),1)
  })
 
@@ -281,7 +275,7 @@ test("only a two-argument Tensaku image action survives as a fixed intent, inclu
  assert.equal(rows[0].fileAction,"edit-screenshot"); assert.deepEqual(Model.fileCommand(rows[0]),["omasnap",file])
 })
 
-test("fixed image launcher preserves spaces, rejects unsafe paths and reports startup failures without waiting for the editor", t => {
+test("fixed image launcher preserves spaces, rejects unsafe paths and reports startup failures without waiting for the editor", async t => {
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),"notification-image-open-"))
  t.after(()=>fs.rmSync(temp,{recursive:true,force:true}))
  const file=path.join(temp,"a picture.png"),marker=path.join(temp,"opened")
@@ -303,9 +297,26 @@ test("fixed image launcher preserves spaces, rejects unsafe paths and reports st
  const unavailable=path.join(temp,"unavailable");fs.mkdirSync(unavailable)
  fs.symlinkSync("/usr/bin/jq",path.join(unavailable,"jq"))
  assert.equal(run("edit-screenshot",file,{PATH:unavailable}).status,127)
- // A long-lived editor must not hold the center's process or output pipes open.
- fs.writeFileSync(path.join(bin,"omasnap"),'#!/bin/bash\nprintf "%s" "$1" > "$MARKER"\nsleep 1\n',{mode:0o755})
- const start=Date.now();assert.equal(run("edit-screenshot",file).status,0);assert.ok(Date.now()-start<700)
+ // A long-lived editor must not hold the center's process or output pipes
+ // open: spawnSync returns only after the launcher exited and its stdout and
+ // stderr closed, so a launcher that waits for the editor hits the timeout.
+ const pidFile=path.join(temp,"editor.pid")
+ fs.writeFileSync(path.join(bin,"omasnap"),'#!/bin/bash\nprintf "%s" "$$" > "$PIDFILE"\nexec sleep 30\n',{mode:0o755})
+ const deadline=Date.now()+2000
+ try {
+  const result=spawnSync("/usr/bin/bash",[helper,"edit-screenshot",file],{env:{...process.env,PATH:bin,PIDFILE:pidFile},encoding:"utf8",timeout:5000})
+  assert.equal(result.error,undefined);assert.equal(result.signal,null);assert.equal(result.status,0,result.stderr)
+  // The editor still runs, detached from the launcher (it may write its pid
+  // only after the launcher returned, so wait for the file).
+  while(!fs.existsSync(pidFile)&&Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,20))
+  assert.ok(fs.existsSync(pidFile),"the editor never started")
+  process.kill(Number(fs.readFileSync(pidFile,"utf8")),0)
+ } finally {
+  // Stop the stub editor before the temporary directory goes, also when an
+  // assertion failed.
+  while(!fs.existsSync(pidFile)&&Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,20))
+  if(fs.existsSync(pidFile)) try { process.kill(Number(fs.readFileSync(pidFile,"utf8")),"SIGKILL") } catch {}
+ }
 })
 
 test('Omasnap screenshot vectors become a fixed intent and opener falls back in order',t=>{
