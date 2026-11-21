@@ -23,11 +23,11 @@ from pathlib import Path
 
 KIT = Path(os.environ.get("FOAMY_KIT", Path.home() / "GitHub/Personal/foamy-kit"))
 sys.path.insert(0, str(KIT / "preview"))
-import harness  # noqa: E402  (foamy-kit's preview/harness.py)
+import harness  # foamy-kit's preview/harness.py
 
 PLUGIN = Path(__file__).resolve().parents[1]
-# Test functions in SHELL; QtTest also counts its initTestCase and cleanupTestCase.
-CASES = 7
+# Test functions in SHELL; QtTest's count at completion includes one entry of its own.
+CASES = 8
 
 SHELL = r"""
 import QtQuick
@@ -145,6 +145,17 @@ ShellRoot {
         while (!condition() && Date.now() < deadline)
           wait(20)
         check(condition(), what)
+      }
+      // Proves that no page request comes: the panel's paging hooks queue
+      // their check with Qt.callLater, so a marker queued after the state
+      // change runs after them. Then the panel decides once more with the
+      // state as it is now.
+      function noPageRequest(pages, what) {
+        var done = false
+        Qt.callLater(function() { done = true })
+        waitUntil(function() { return done }, "the queued paging checks ran")
+        panel.pageIfAtEnd()
+        same(store.pages, pages, what)
       }
       // The bar items are direct children of the Panel: the bell is the one
       // with a tooltip, the count badge the Rectangle that holds a Text, the
@@ -286,17 +297,14 @@ ShellRoot {
         store.show(shell.entries(500, false))
         openPanel()
         waitUntil(function() { return panel.rows.length === 2 }, "one collapsed stack")
-        wait(100)
-        same(store.pages, 0, "no page request while a read runs")
+        noPageRequest(0, "no page request while a read runs")
         store.listing = false
         waitUntil(function() { return store.pages === 1 }, "the read's end loads the next page")
-        wait(100)
-        same(store.pages, 1, "one request per read")
+        noPageRequest(1, "one request per read")
         // The page came back empty-handed: nothing more to read.
         store.hasMore = false
         store.listing = false
-        wait(100)
-        same(store.pages, 1, "no request without more")
+        noPageRequest(1, "no request without more")
         // A later read finds more (the archive grew) while the list still fits.
         store.hasMore = true
         waitUntil(function() { return store.pages === 2 }, "more turning up loads it")
@@ -309,8 +317,7 @@ ShellRoot {
         openPanel()
         waitUntil(function() { return panel.rows.length === 80 && panel.list.contentHeight > panel.list.height }, "a list longer than the panel")
         store.hasMore = true
-        wait(100)
-        same(store.pages, 0, "no page request above the end")
+        noPageRequest(0, "no page request above the end")
         // Rows below the view are built as they come in, so the end moves
         // while the view gets there.
         waitUntil(function() { panel.list.positionViewAtEnd(); return panel.list.atYEnd }, "the list reaches its end")
@@ -393,7 +400,7 @@ for host in harness.available_hosts(what="panel-ui"):
         line for line in run.log.splitlines() if "WARN" in line and "/plugin/" in line and "/plugin/kit/" not in line
     ]
     summary = [line for line in run.log.splitlines() if "PANEL_UI" in line]
-    passed = f"PANEL_UI {CASES + 2} passed 0 failed" in run.log
+    passed = f"PANEL_UI {CASES + 1} passed 0 failed" in run.log
     if run.ok and passed and not warnings and not run.host_commands() and saves == [SAVE, SAVE]:
         print(f"{host}: panel-ui passed ({summary[-1].split('PANEL_UI', 1)[1].strip()})")
         run.cleanup()
