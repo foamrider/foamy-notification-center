@@ -165,8 +165,7 @@ test('a first page that fits the viewport (collapsed stacks) still loads the nex
  store.listProc.running=false;ui.pageIfAtEnd();assert.equal(store.listLimit,1000);assert.equal(store.loads,1)
  store.listProc.running=true;ui.pageIfAtEnd();store.listProc.running=false;ui.pageIfAtEnd();assert.equal(store.listLimit,1000,'never past maxItems')
  ui.opened=false;store.listLimit=500;ui.pageIfAtEnd();assert.equal(store.listLimit,500,'closed: no paging')
- // Wiring: every change that can leave the list at its end re-checks.
- for(const hook of [/function onHasMoreChanged\(\) \{\s*Qt\.callLater\(root\.pageIfAtEnd\)\s*\}/,/function onListingChanged\(\) \{\s*Qt\.callLater\(root\.pageIfAtEnd\)\s*\}/,/onAtYEndChanged: Qt\.callLater\(root\.pageIfAtEnd\)/,/onContentHeightChanged: Qt\.callLater\(root\.pageIfAtEnd\)/]) assert.match(panel,hook)
+ // The panel re-checks when `listing` ends (tests/panel-ui.py, real Panel.qml); it must follow the read process.
  assert.match(service,/readonly property bool listing: listProc\.running/)
 })
 test('search folds Unicode case like the panel and matches the query literally',t=>{

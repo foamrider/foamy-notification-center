@@ -332,6 +332,7 @@ python3 tests/browser-ui.py
 FOAMY_TEST_DESKTOP=1 python3 tests/settings-ui.py
 python3 tests/settings-number.py
 python3 tests/images-ui.py
+python3 tests/panel-ui.py
 python3 tests/rtl-rows.py
 python3 tests/scrolling.py
 python3 tests/stock-runtime.py

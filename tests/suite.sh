@@ -58,11 +58,11 @@ else
 fi
 
 if ((ci || fast)); then
-  skip "the Quickshell runtime tests (browser-ui, rtl-rows, scrolling, settings-number, motion, stock-runtime, i18n_runtime, images-ui, settings-ui)"
+  skip "the Quickshell runtime tests (browser-ui, rtl-rows, scrolling, settings-number, motion, stock-runtime, i18n_runtime, images-ui, panel-ui, settings-ui)"
   exit $status
 fi
 unset LD_LIBRARY_PATH
-for test in browser-ui rtl-rows scrolling settings-number motion stock-runtime images-ui; do
+for test in browser-ui rtl-rows scrolling settings-number motion stock-runtime images-ui panel-ui; do
   run python3 "tests/$test.py"
 done
 run python3 tests/stock-runtime.py --custom
