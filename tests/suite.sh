@@ -37,8 +37,10 @@ for tool in magick inotifywait file; do
   command -v "$tool" >/dev/null || tools=0
 done
 needs_tools='magick|inotifywait'
+# These run the helper but never make an image or start the watcher.
+tool_free=' tests/retention-property.test.js tests/transient.test.js tests/batch-remove.test.js tests/archive.test.js tests/actions.test.js '
 for test in tests/*.test.js tests/*.test.cjs; do
-  if ((ci && ! tools)) && grep -Eq "$needs_tools|helper\.cjs" "$test"; then
+  if ((ci && ! tools)) && [[ $tool_free != *" $test "* ]] && grep -Eq "$needs_tools|helper\.cjs" "$test"; then
     skip "$test: the helper needs magick, inotifywait and file"
     continue
   fi
