@@ -12,7 +12,8 @@ function fixture(t) {
  const source=path.join(dir,'source'),store=path.join(dir,'store')
  fs.mkdirSync(path.join(source,'history'),{recursive:true})
  const env={...process.env,NC_SRC_DIR:source,NC_SRC_HISTORY:path.join(source,'history'),NC_STORE:store,NC_PREVIEWS:'0'}
- const run=(...args)=>{const r=helper.spawnSync(args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr);return JSON.parse(r.stdout)}
+ // A crash (no status) names its signal.
+ const run=(...args)=>{const r=helper.spawnSync(args,{env,encoding:'utf8',timeout:5000});assert.equal(r.status,0,r.stderr||String(r.signal));return JSON.parse(r.stdout)}
  return {dir,source,store,env,run}
 }
 test('replacement updates retain identity and images; repeated ingestion is idempotent',t=>{
@@ -215,6 +216,24 @@ test('whitespace-only or truncated source files are skipped, not fatal',t=>{
  fs.writeFileSync(path.join(f.source,`${stamp}-3.json`),'{"timestamp":'+stamp+',"app":"Half')
  f.run('sync')
  assert.deepEqual(f.run('list').map(r=>r.summary),['Kept'])
+})
+test('a source nested as deep as the parser allows is archived without its command; a deeper file is skipped',t=>{
+ const f=fixture(t),stamp=Date.now()
+ // execArgv is the sender's omarchy-exec-argv hint, parsed as JSON by the helper.
+ const deep='['.repeat(9999)+']'.repeat(9999)
+ fs.writeFileSync(path.join(f.source,`${stamp}-1.json`),JSON.stringify({timestamp:stamp,app:'Deep',summary:'Kept',execArgv:deep}))
+ fs.writeFileSync(path.join(f.source,`${stamp}-2.json`),'['.repeat(10001)+']'.repeat(10001))
+ f.run('sync')
+ assert.deepEqual(f.run('list').map(r=>[r.summary,r.file,r.execArgv]),[['Kept','',undefined]])
+})
+test('an archive whose last line lost its newline still takes the next arrival on a line of its own',t=>{
+ const f=fixture(t),stamp=Date.now()
+ f.run('list')
+ const archive=path.join(f.store,'archive.jsonl')
+ fs.writeFileSync(archive,JSON.stringify({key:`${stamp-10}-1`,timestamp:stamp-10,summary:'Before'}))
+ fs.writeFileSync(path.join(f.source,`${stamp}-2.json`),JSON.stringify({timestamp:stamp,app:'A',summary:'After'}))
+ f.run('sync')
+ assert.deepEqual(f.run('list').map(r=>r.summary),['After','Before'])
 })
 test('archive search matches the joined app, title and text like the panel',t=>{
  const f=fixture(t);f.run('list')
