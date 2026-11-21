@@ -1,4 +1,8 @@
-"""Exercise archive normalization through the real service and visible image controls."""
+"""Exercise archive normalization through the real service and visible image controls (offscreen).
+
+Theme icon names do not resolve offscreen (Quickshell.iconPath finds no icon
+theme there), so the themed-icon step checks that the archive keeps the name,
+not that the shell draws it."""
 
 import json
 import os
@@ -13,10 +17,6 @@ sys.path.insert(0, str(KIT / "preview"))
 import hostenv  # noqa: E402  (foamy-kit"s preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
-# Opens real surfaces on the live desktop and takes its keyboard focus: only
-# when asked for (tests/suite.sh runs it with FOAMY_TEST_DESKTOP=1).
-if os.environ.get("FOAMY_TEST_DESKTOP") != "1":
-    raise SystemExit("images-ui: opens real surfaces on the live desktop; set FOAMY_TEST_DESKTOP=1 to run it")
 base = Path(tempfile.mkdtemp(prefix="foamy-center-images-"))
 app = base / "app"
 app.mkdir()
@@ -130,7 +130,7 @@ ShellRoot {
         updated.appIcon="foot";updated.summary="Themed icon retained"
         input.setText(JSON.stringify(updated))
         tryVerify(function(){return root.entry.summary==="Themed icon retained"})
-        compare(root.entry.appIcon,"foot");tryCompare(icon,"status",Image.Ready)
+        compare(root.entry.appIcon,"foot")
       }
     }
   }
@@ -148,15 +148,15 @@ env = dict(
     NC_SRC_HISTORY=str(notifications / "history"),
     NC_STORE=str(base / "state/omarchy-notification-center"),
     PATH=str(cli) + ":" + os.environ["PATH"],
-    QT_QPA_PLATFORM="wayland",
+    QT_QPA_PLATFORM="offscreen",
+    QT_QUICK_BACKEND="software",
     QT_QPA_PLATFORMTHEME="basic",
     QT_STYLE_OVERRIDE="Fusion",
 )
-env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / os.environ["WAYLAND_DISPLAY"])
-for key in ["DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "QT_QUICK_BACKEND"]:
+for key in ["DISPLAY", "WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE"]:
     env.pop(key, None)
-# On the live compositor on purpose; the bus is dbus-run-session's own.
-hostenv.isolate(env, base, display=True)
+# Offscreen; the bus is dbus-run-session's own.
+hostenv.isolate(env, base)
 env.update(hostenv.make(base, app, env=env))
 env["PATH"] = str(cli) + ":" + env["PATH"]
 # qs and dbus-run-session's daemon in one process group, stopped as a whole

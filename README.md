@@ -331,7 +331,7 @@ bash tests/kit-check.sh
 python3 tests/browser-ui.py
 FOAMY_TEST_DESKTOP=1 python3 tests/settings-ui.py
 python3 tests/settings-number.py
-FOAMY_TEST_DESKTOP=1 python3 tests/images-ui.py
+python3 tests/images-ui.py
 python3 tests/rtl-rows.py
 python3 tests/scrolling.py
 python3 tests/stock-runtime.py
@@ -355,9 +355,9 @@ kit/native/build-native.sh .           # bin/x86_64, bin/aarch64, native/native.
 kit/native/build-native.sh . --verify  # clean rebuild, byte compare
 bash tests/kit-check.sh
 ```
-`settings-ui.py` and `images-ui.py` require a running Wayland session: they
-open real surfaces on the live desktop and take its keyboard focus, so they
-run only with `FOAMY_TEST_DESKTOP=1` (also in `tests/suite.sh`). The
+`settings-ui.py` requires a running Wayland session: it opens real surfaces
+on the live desktop and takes its keyboard focus, so it runs only with
+`FOAMY_TEST_DESKTOP=1` (also in `tests/suite.sh`). The
 tests load the installed Omarchy 4.5 shell (`/usr/share/omarchy`; only its QML
 and data, never its scripts) through foamy-kit's `preview/hostenv.py`, from the
 kit checkout at `$FOAMY_KIT` (default `~/GitHub/Personal/foamy-kit`): every
