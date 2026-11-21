@@ -57,6 +57,20 @@ ShellRoot {
      }
     }
    }
+   // Sender markup is shown as plain text: entities decoded (relays escape up to
+   // three times), allowed tags dropped, a link keeps only its label, and any other
+   // tag stays literal, so nothing can load a file or open a link.
+   function test_markup_is_plain_text() {
+    var saved=row.entry;
+    row.entry={summary:'<b>Bold</b> &amp;amp; <a href="https://x.test">link</a> <3',body:'<img src="file:///etc/passwd">',timestamp:1};
+    var lines=[], column=findChild(row,"notificationRowText");
+    // QtTest messages do not reach the log: say what failed before failing.
+    var check=function(ok,what){if(!ok)console.log("RTL_ROWS FAIL",what); verify(ok,what)};
+    for(var i=0;i<column.children.length;i++){var item=column.children[i]; if(item.textFormat!==undefined){lines.push(item.text); check(item.textFormat===Text.PlainText,"row text "+JSON.stringify(item.text)+" is not plain text")}}
+    check(lines.indexOf("Bold & link <3")>=0, "summary shown as "+JSON.stringify(lines));
+    check(lines.indexOf('<img src="file:///etc/passwd">')>=0, "body shown as "+JSON.stringify(lines));
+    row.entry=saved;
+   }
    onCompletedChanged: if(completed)console.log("RTL_ROWS",qtest_results.passCount,"passed",qtest_results.failCount,"failed")
   }
  }
@@ -94,4 +108,4 @@ output = log.read_text()
 print(output)
 print("Row captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert status == 0 and "RTL_ROWS 2 passed 0 failed" in output, output
+assert status == 0 and "RTL_ROWS 3 passed 0 failed" in output, output
