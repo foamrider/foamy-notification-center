@@ -9,8 +9,8 @@ center's bar entry and Foamy Notifications' plugins[] entry, a model of Foamy
 Notifications' preference endpoint and of the stock daemon's snooze and DND
 calls, the host's setBarWidget endpoint, a test double of `omarchy bar set`
 and an omasnap stand-in. XDG_CONFIG_HOME points away from
-$HOME/.config: the host reads shell.json only there, so the panel and the
-store must watch that path.
+$HOME/.config: the host reads shell.json only there, so the panel must watch
+that path (the store's watcher of the same file has no runtime test yet).
 
 Runs through foamy-kit's preview/harness.py (isolated HOME, private bus, no
 host commands, offscreen screen) against the Omarchy 4.5 shell host."""
@@ -125,6 +125,17 @@ ShellRoot {
   Plugin.Service { id: store }
   // The store's own seed command; its exit reloads the list.
   Process { id: seeder; command: store.storeCommand(["seed", "4"]); environment: store.storeEnvironment; onExited: store.load() }
+  // The archived keys as a fresh helper `list` reads them. The Service's
+  // memory (the removed keys it filters out, a list it emptied before its
+  // helper ran) cannot stand in for what the archive holds.
+  property var stored: null
+  Process {
+    id: reader
+    command: store.storeCommand(["list", "100", ""])
+    environment: store.storeEnvironment
+    stdout: StdioCollector { onStreamFinished: root.stored = JSON.parse(text).map(function(row) { return row.key }) }
+    onExited: function(code) { if (code !== 0) console.log("SETTINGS_FAILURE the store read exited with " + code) }
+  }
   FileView { id: editorReady; path: Quickshell.env("HOME") + "/editor-ready" }
   // The bar API the panel uses. It has no shell.updateEntryInline, so center
   // saves take the `omarchy bar set` path (kit FoamyPrefs saveCommand).
@@ -552,6 +563,19 @@ ShellRoot {
             return false
         return true
       }
+      // Reads the archive with a new helper process until `done(keys)` holds:
+      // the Service's removal or clear may still be running.
+      function storedUntil(done, what) {
+        tryVerify(function() {
+          if (reader.running)
+            return false
+          if (Array.isArray(root.stored) && done(root.stored))
+            return true
+          root.stored = null
+          reader.running = true
+          return false
+        }, roundTrip, what)
+      }
       function test_09_dismiss_and_clear_all() {
         try {
         // Seeding can bring back the fixture row too (it resets the
@@ -567,18 +591,24 @@ ShellRoot {
         var key = panel.rows[panel.cursorIndex].entry.key
         keyClick(Qt.Key_Delete)
         tryVerify(function() { return store.entries.length === before - 1 && gone(key) }, roundTrip, "Delete removes the cursor's card")
-        // A right click on a card removes it, for good.
+        // A right click on a card removes it from the archive, for good.
         var card = null
         tryVerify(function() { card = listSettled() ? listedCard(panel.list) : null; return card !== null }, roundTrip, "a card is shown")
         key = card.entry.key; before = store.entries.length
         mouseClick(card, 20, card.height / 2, Qt.RightButton)
         tryVerify(function() { return store.entries.length === before - 1 && gone(key) }, roundTrip, "a right click removes the card")
+        storedUntil(function(keys) { return keys.indexOf(key) < 0 }, "the removed card is gone from the archive")
+        compare(store.removalError, "", "the removal reports no error")
         store.load()
         tryVerify(function() { return !store.listing && store.entries.length === before - 1 && gone(key) }, roundTrip, "the removal is durable")
-        // Clear all empties the list and then has nothing to do.
+        // Clear all empties the archive, not only the list, and then has
+        // nothing to do.
         verify(store.entries.length > 0, "rows are left to clear")
         mouseClick(control("clearAllNotifications"))
         tryVerify(function() { return store.entries.length === 0 && panel.rows.length === 0 }, roundTrip, "Clear all empties the list")
+        storedUntil(function(keys) { return keys.length === 0 }, "Clear all empties the archive")
+        store.load()
+        tryVerify(function() { return !store.listing && store.entries.length === 0 && store.removalError === "" }, roundTrip, "the list stays empty after a reload")
         tryVerify(function() { return !control("clearAllNotifications").actionEnabled }, roundTrip, "Clear all is off for an empty list")
         } catch (error) { console.log("SETTINGS_FAILURE dismiss", error.message, error.stack); throw error }
       }
