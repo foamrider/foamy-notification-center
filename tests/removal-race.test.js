@@ -148,6 +148,38 @@ test("a queued Clear all keeps its own click-time cutoff (requests at 1000 and 2
  assert.equal(state.clearPendingCut,"")
 })
 
+test("a failed Clear all says so and reloads, or runs the queued clear; a missing helper drops the queue", () => {
+ const FoamyNative=require("../kit/node-loader.cjs").load("FoamyNative")
+ const exit=source.indexOf("    onExited: function (code, status) {",source.indexOf("    id: clearProc"))
+ const handler=source.slice(exit+"    onExited: ".length,source.indexOf("\n    }",exit)+6)
+ const take=name=>{const start=source.indexOf(`  function ${name}(`);return source.slice(start,source.indexOf("\n  }",start)+4)}
+ // The clear handler as Quickshell runs it on clearProc, with the real storeUnavailable.
+ const finish=(code,pending)=>{
+  const state=service(),released=[]
+  Object.assign(state,{FoamyNative,console:{warn(){}},helperUnavailable:false,loads:0,clearPendingCut:pending,
+   load(){state.loads++},releaseBefore(cut){released.push(cut)}})
+  vm.runInContext(take("storeUnavailable"),state)
+  const proc=vm.createContext({cut:"1000",running:false,starts:[],root:state,FoamyNative})
+  Object.defineProperty(proc,"running",{get(){return false},set(v){if(v)proc.starts.push(proc.cut)}})
+  vm.runInContext(`(${handler})(${code}, 0)`,proc)
+  return {state,released,starts:proc.starts}
+ }
+ // Failed, nothing queued: the error shows, the list is read again, Foamy is not asked.
+ let r=finish(1,"")
+ assert.equal(r.state.removalError,"Could not clear notifications. Try again.")
+ assert.equal(r.state.loads,1);assert.deepEqual(r.released,[]);assert.deepEqual(r.starts,[])
+ // Failed with a clear queued: that clear starts with its own cutoff.
+ r=finish(1,"2000")
+ assert.equal(r.state.removalError,"Could not clear notifications. Try again.")
+ assert.deepEqual(r.starts,["2000"]);assert.equal(r.state.clearPendingCut,"");assert.equal(r.state.loads,0)
+ // No helper for this CPU: its own text, and the queued clear is dropped.
+ r=finish(127,"2000")
+ assert.equal(r.state.removalError,FoamyNative.UNAVAILABLE_TEXT)
+ assert.equal(r.state.clearPendingCut,"");assert.deepEqual(r.starts,[]);assert.equal(r.state.loads,0);assert.deepEqual(r.released,[])
+ // A clear that worked is released to Foamy with its cutoff.
+ r=finish(0,"");assert.deepEqual(r.released,["1000"]);assert.equal(r.state.removalError,"");assert.equal(r.state.loads,1)
+})
+
 test("single-key releases are compacted and the in-flight batch is never lost", () => {
  const state=service(),calls=[],answers=[]
  state.releasePending=[];state.releaseInFlight=[];state.releaseLimit=50000;state.releaseRetry={running:false,restart(){this.running=true}}
