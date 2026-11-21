@@ -8,4 +8,4 @@ function text(key, language, values) {
   const number = value => new Intl.NumberFormat(language === 'nb' ? 'no' : language).format(value);
   return I18n.translator(catalog, en, number).t(key, values);
 }
-module.exports = {text, no, en, norwegian: no, nb: no};
+module.exports = {text, no, en};
