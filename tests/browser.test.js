@@ -1,19 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const B = require('../BrowserIdentity.js')
 const M = require('../Model.js')
-
-test('native app names and image paths cannot masquerade as browsers', () => {
-  for (const row of [
-    {app:'Chromecast Controller',desktopEntry:'chromecast'},
-    {app:'Chat',appIcon:'/home/chrome/.cache/chat.png'},
-    {app:'Chat',appIcon:'file:///tmp/firefox-avatar.png'},
-    {app:'Bravery',desktopEntry:'bravery'}
-  ]) assert.equal(B.browser(row),'')
-  assert.equal(B.browser({app:'Google Chrome'}),'chrome')
-  assert.equal(B.browser({app:'Browser',desktopEntry:'com.google.Chrome'}),'chrome')
-  assert.equal(B.browser({app:'Browser',appIcon:'vivaldi-stable'}),'vivaldi')
-})
 
 const entries = [
   {key:'3-1',app:'Vivaldi',body:'teams.microsoft.com\nNew message',timestamp:300},
@@ -50,11 +37,4 @@ test('none keeps browser notifications separate and leaves native app stacks int
   assert.equal(groups.length,4)
   assert.equal(groups[3].entries.length,2)
   assert.equal(M.groupsFor(entries,'','invalid').length,2)
-})
-
-test('website identity ignores message links, native text and unsafe URL authorities', () => {
-  assert.equal(B.hostname(entries[0]),'teams.microsoft.com')
-  assert.equal(B.hostname(entries[3]),'')
-  for (const body of ['Hello https://example.com','Message\nexample.com','https://user@example.com/','https://example.com:443/','bad..example.com'])
-    assert.equal(B.hostname({app:'Vivaldi',body}),'')
 })

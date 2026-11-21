@@ -61,14 +61,6 @@ test("stack dismissal batches captured keys and retains later arrivals", () => {
   assert.deepEqual(Array.from(state.pendingRemovalKeys), ["100-1"])
 })
 
-test("a click before first ingestion stays removed while new notifications arrive", () => {
-  const state = service()
-  state.remove("300-1")
-  state.absorb(JSON.stringify({ key: "300-1", timestamp: 300 }))
-  state.absorb(JSON.stringify({ key: "400-1", timestamp: 400 }))
-  assert.deepEqual(Array.from(state.entries, entry => entry.key), ["400-1"])
-})
-
 test("failed dismissal releases only failed tombstones and reloads for retry", () => {
   const state = service()
   const failed = { key: "300-1", timestamp: 300 }

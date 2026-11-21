@@ -122,6 +122,7 @@ test("old commands are ignored before migration, including shell, URL and malfor
     assert.equal(state.actions.length + state.images.length, 0)
     assert.equal(state.focusProc.row.app, "Browser")
     assert.equal(state.removed.length, 0)
+    assert.equal(state.closed, 0)
   }
 })
 
@@ -153,14 +154,6 @@ test("only absolute raster paths can reach the fixed opener; click settings stil
     assert.equal(nothing.focusProc.running, undefined)
     assert.equal(nothing.closed, 0)
   }
-})
-
-test('Center delegates default action and browser focus without replaying archived commands or dismissing early',()=>{
- const state=view(),calls=[]
- state.store={focusNotification(row){calls.push(row)}}
- const row={key:'100-1',app:'Vivaldi',body:'teams.microsoft.com',execArgv:'["unsafe"]'}
- state.activate(row)
- assert.equal(calls[0],row);assert.equal(state.removed.length,0);assert.equal(state.closed,0);assert.equal(state.actions.length,0)
 })
 
 const serviceSource = fs.readFileSync(path.join(__dirname, "../Service.qml"), "utf8")

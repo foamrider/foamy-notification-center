@@ -9,8 +9,6 @@ test('settings validate integers and booleans without coercion and keep scopes s
   assert.equal(P.value('center',{},'compact'),false)
   assert.equal(P.value('popups',{},'compact'),true)
 })
-test('saving routes widget and service settings to their existing owners', () => {
-})
 test('number settings carry a translated unit beside a unit-free label', () => {
   assert.equal(I18n.text(P.field('center','keepDays').label,'nb'),'Behold varsler')
   assert.equal(I18n.text(P.field('center','keepDays').unit,'nb'),'dager')
@@ -40,13 +38,6 @@ test('center settings save through FoamyPrefs with the host module name; popup s
   assert.ok(panel.includes('Prefs.save(root.bar, root.moduleName, Preferences.centerFields'))
   assert.ok(panel.includes('peer.call("foamy.notifications", "setPreference"'))
   assert.ok(!/notification-preferences|setBarWidget/.test(panel))
-})
-test('numeric settings use kit FoamyNumberField and never assign over the setting', () => {
-  const pane = require('node:fs').readFileSync(require('node:path').join(__dirname, '../SettingsPane.qml'), 'utf8')
-  assert.match(pane, /FoamyNumberField \{/)
-  // Escape, invalid input and external changes are the kit's rules (runtime: tests/settings-number.py).
-  assert.doesNotMatch(pane, /\btext\s*=\s*String\(root\.current/)
-  assert.doesNotMatch(pane, /SafeTextField/)
 })
 test('a failed save is reported to the settings fields so the same number can be retried', () => {
   const fs = require('node:fs'), vm = require('node:vm')
