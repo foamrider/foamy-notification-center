@@ -323,8 +323,11 @@ test("fixed image launcher preserves spaces, rejects unsafe paths and reports st
   // Stop the stub editor before the temporary directory goes, also when an
   // assertion failed.
   while(!fs.existsSync(pidFile)&&Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,20))
-  // An editor that already ended is fine here; any other error is not.
-  if(fs.existsSync(pidFile)) try { process.kill(editorPid(),"SIGKILL") } catch(error) { if(error.code!=="ESRCH") throw error }
+  // Never kill(0) here: a pid that is not valid already failed the test
+  // above. An editor that already ended is fine; any other error is logged,
+  // since a throw here would hide the assertion that failed.
+  const pid=fs.existsSync(pidFile)?Number(fs.readFileSync(pidFile,"utf8")):0
+  if(Number.isInteger(pid)&&pid>1) try { process.kill(pid,"SIGKILL") } catch(error) { if(error.code!=="ESRCH") console.error("could not stop the stub editor:",error) }
  }
 })
 
