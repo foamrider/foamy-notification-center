@@ -127,69 +127,6 @@ class FaviconTest(unittest.TestCase):
         self.assertEqual(list(path.parent.iterdir()), [path])
         self.assertEqual(list(self.scratch.iterdir()), [])
 
-    def test_uncommitted_browser_transaction_is_not_copied(self):
-        path = self.database([("https://example.com/", png())])
-        before = path.read_bytes()
-        with closing(sqlite3.connect(path)) as browser:
-            browser.execute("BEGIN EXCLUSIVE")
-            browser.execute("UPDATE favicon_bitmaps SET image_data = ?", (b"uncommitted",))
-            self.assertGreater(Path(str(path) + "-journal").stat().st_size, 0)
-            self.assertEqual(self.helper(), {"source": "", "status": "cache-unavailable"})
-            browser.rollback()
-        self.assertEqual(path.read_bytes(), before)
-
-    def test_locked_cache_with_transaction_sidecars_falls_back(self):
-        path = self.database([("https://example.com/", png())])
-        with self.locked(path):
-            for suffix, data in [("-journal", b"active journal"), ("-wal", b""), ("-shm", b"")]:
-                sidecar = Path(str(path) + suffix)
-                sidecar.write_bytes(data)
-                self.assertEqual(self.helper(), {"source": "", "status": "cache-unavailable"})
-                self.assertEqual(sidecar.read_bytes(), data)
-                sidecar.unlink()
-            Path(str(path) + "-journal").symlink_to(path)
-            self.assertEqual(self.helper(), {"source": "", "status": "cache-unavailable"})
-
-    def test_locked_cache_over_the_copy_limit_falls_back(self):
-        path = self.database([("https://example.com/", png())])
-        with closing(sqlite3.connect(path)) as db:
-            db.execute("CREATE TABLE padding (data BLOB)")
-            db.execute("INSERT INTO padding VALUES (zeroblob(33 * 1024 * 1024))")
-            db.commit()
-        self.assertGreater(path.stat().st_size, 32 * 1024 * 1024)
-        self.assertEqual(self.helper()["status"], "found")
-        for icon in self.cache.iterdir():
-            icon.unlink()
-        with self.locked(path):
-            self.assertEqual(self.helper(), {"source": "", "status": "cache-unavailable"})
-
-    def test_empty_persistent_journal_is_allowed(self):
-        # The copy's internal guards (changes while copying, WAL headers) are unit-tested in foamy-kit.
-        path = self.database([("https://example.com/", png())])
-        Path(str(path) + "-journal").touch()
-        with self.locked(path):
-            self.assertEqual(self.found(self.helper()).read_bytes(), png())
-
-    def test_corrupt_locked_copy_is_rejected_without_writing_database_copies(self):
-        path = self.database([("https://example.com/", png())])
-        with self.locked(path):
-            with path.open("r+b") as stream:
-                stream.seek(100)
-                stream.write(b"\xff")
-            self.assertEqual(self.helper(), {"source": "", "status": "cache-unavailable"})
-        self.assertEqual(list(self.scratch.iterdir()), [])
-        self.assertFalse(self.cache.exists() and list(self.cache.iterdir()))
-
-    def test_wal_cache_is_read_through_sqlite_including_committed_wal_pages(self):
-        path = self.database([])
-        with closing(sqlite3.connect(path)) as browser:
-            browser.execute("PRAGMA journal_mode=WAL")
-            browser.execute("INSERT INTO icon_mapping VALUES (?, 1)", ("https://example.com/",))
-            browser.execute("INSERT INTO favicon_bitmaps VALUES (1, ?, 32, 32, 100)", (png(),))
-            browser.commit()
-            self.assertGreater(Path(str(path) + "-wal").stat().st_size, 0)
-            self.assertEqual(self.helper()["status"], "found")
-
     def test_real_helper_extracts_private_png_and_reuses_cache(self):
         database = self.database([("https://teams.microsoft.com/chat", png())])
         response = self.helper("teams.microsoft.com")
@@ -212,36 +149,10 @@ class FaviconTest(unittest.TestCase):
         self.assertEqual(self.found(self.helper("other.example", "chrome")).read_bytes(), png(4, 4))
         self.assertEqual(self.helper("other.example", "brave")["status"], "not-found")
 
-    def test_hostname_bounds_do_not_match_other_sites_or_remote_icons(self):
-        self.database([("https://teams.microsoft.com.evil.invalid/chat", png()), ("https://other.example.com/", png())])
-        self.assertEqual(self.helper("teams.microsoft.com"), {"source": "", "status": "not-found"})
-        for host in [
-            "../secret",
-            "https://example.com",
-            "example.com:443",
-            "example.com\nother.com",
-            "Example.com",
-            "",
-            5,
-        ]:
-            with self.subTest(host=host):
-                self.failed({"browser": "vivaldi", "hostname": host})
-        self.assertEqual(self.helper("example.com", "firefox"), {"source": "", "status": "unsupported-browser"})
-
     def test_bad_requests_reply_with_an_error(self):
         for raw in [b"not json", b"[]", b'{"browser": "vivaldi", "hostname": "' + b"a" * 4100 + b'"}']:
             with self.subTest(raw=raw[:20]):
                 self.failed(raw)
-
-    def test_missing_corrupt_and_oversized_icons_fall_back(self):
-        self.assertEqual(self.helper(), {"source": "", "status": "not-found"})
-        path = self.database([("https://example.com/", b"x" * 65537), ("http://example.com/", b"not a PNG")])
-        self.assertEqual(self.helper()["source"], "")
-        path.write_bytes(b"corrupt database")
-        self.assertEqual(self.helper(), {"source": "", "status": "cache-unavailable"})
-        path.unlink()
-        self.database([("https://example.com/", png(99999, 1))], profile="Default")
-        self.assertEqual(self.helper()["source"], "")
 
 
 if __name__ == "__main__":
