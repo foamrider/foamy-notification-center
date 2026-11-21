@@ -66,6 +66,11 @@ archive_icon = home / ".local/state/omarchy-notification-center/images/1000-1-ap
 archive_icon.parent.mkdir(parents=True)
 archive_icon.write_bytes(png())
 app_icon = ('"' + archive_icon.as_uri() + '"') if center else 'Qt.resolvedUrl("fallback.svg").toString()'
+# Real pictures a tampered archive could name: outside the store, and reached
+# from the store's image folder by "..".
+outside_icon = base / "outside.png"
+outside_icon.write_bytes(png())
+(archive_icon.parent.parent / "escaped.png").write_bytes(png())
 
 widget = (
     """NotificationStackHeader {
@@ -150,6 +155,20 @@ MODEL_CHECK
         tryVerify(function(){return resolver.requests.length===0 && resolver.active===null})
         compare(resolver.source({app:"Vivaldi",body:"missing.example.com\\nMessage"}),"")
       }
+      function test_untrusted_app_icons_are_not_loaded(){
+        var appIcon=findChild(card,"notificationAppIcon"),trusted=root.entry.appIcon
+        var letter=function(){for(var i=0;i<appIcon.parent.children.length;i++){var c=appIcon.parent.children[i];if(c.text!==undefined&&c.visible)return c.text}return ""}
+        var use=function(icon){root.entry=Object.assign({},root.entry,{appIcon:icon})}
+        root.overrideSource=""
+        // Only the archive's own copies and theme names load; the letter shows instead.
+        for(var value of [OUTSIDE_URI,OUTSIDE_PATH,card.storeImages+"../escaped.png",card.storeImages+"x/../../escaped.png","https://example.test/a.png","image://icon/foot","/etc/hostname"]){
+          use(value)
+          compare(card.iconSource,"",value);compare(String(appIcon.source),"",value)
+          verify(!appIcon.visible,value);compare(letter(),"V",value)
+        }
+        use(trusted);tryCompare(appIcon,"status",Image.Ready);compare(String(appIcon.source),trusted);verify(appIcon.visible);compare(letter(),"")
+        use(trusted)
+      }
     }
   }
 }
@@ -159,6 +178,8 @@ MODEL_CHECK
     .replace("IDENTITY_ENTRY", identity_entry)
     .replace("MODEL_CHECK", model_check)
     .replace("APP_ICON", app_icon)
+    .replace("OUTSIDE_URI", json.dumps(outside_icon.as_uri()))
+    .replace("OUTSIDE_PATH", json.dumps(str(outside_icon)))
     .replace("HELPER", helper)
 )
 runtime = base / "runtime"
@@ -205,4 +226,4 @@ output = log.read_text()
 print(output)
 print("Browser captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert status == 0 and "BROWSER_UI 3 passed 0 failed" in output
+assert status == 0 and "BROWSER_UI 4 passed 0 failed" in output
