@@ -5,7 +5,7 @@ const path = require("node:path")
 const test = require("node:test")
 const helper = require("./helper.cjs")
 
-test("batch removal preserves other and newer entries and rejects invalid keys before mutation", () => {
+test("batch removal preserves other and newer entries and their images and rejects invalid keys before mutation", () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "notification-batch-"))
   try {
     const source = path.join(temp, "source")
@@ -22,8 +22,15 @@ test("batch removal preserves other and newer entries and rejects invalid keys b
     const before = fs.readFileSync(archive, "utf8")
     assert.notEqual(run("remove", records[0].key, "../../invalid").status, 0)
     assert.equal(fs.readFileSync(archive, "utf8"), before)
+    // The center's image copies of a removed row go; the others stay.
+    const images = path.join(store, "images")
+    fs.mkdirSync(images, { recursive: true })
+    const copy = r => path.join(images, `${r.key}-appIcon.png`)
+    for (const r of [records[0], records[2]]) fs.writeFileSync(copy(r), "png")
     assert.equal(run("remove", records[0].key, records[1].key).status, 0)
     assert.deepEqual(JSON.parse(run("list").stdout).map(r => r.key), [records[2].key])
+    assert.equal(fs.existsSync(copy(records[0])), false)
+    assert.equal(fs.existsSync(copy(records[2])), true)
     // The source's files are never deleted here (contract v2: its daemon is asked over IPC).
     assert.equal(fs.existsSync(path.join(source, records[0].key + ".json")), true)
     assert.equal(fs.existsSync(path.join(source, records[2].key + ".json")), true)

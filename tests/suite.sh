@@ -6,9 +6,7 @@
 #           ones that need magick or inotifywait are skipped without them)
 #   --fast  skip the Quickshell runtime tests
 # Without --ci the helper suites also run the aarch64 build under
-# qemu-aarch64-static when it is installed. images-ui and settings-ui open real
-# surfaces on the live desktop and take its keyboard focus: they run only with
-# FOAMY_TEST_DESKTOP=1 in a Wayland session.
+# qemu-aarch64-static when it is installed.
 set -uo pipefail
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." || exit 1
 ci=0 fast=0
@@ -37,8 +35,10 @@ for tool in magick inotifywait file; do
   command -v "$tool" >/dev/null || tools=0
 done
 needs_tools='magick|inotifywait'
+# These run the helper but never make an image or start the watcher.
+tool_free=' tests/retention-property.test.js tests/transient.test.js tests/batch-remove.test.js tests/archive.test.js tests/actions.test.js '
 for test in tests/*.test.js tests/*.test.cjs; do
-  if ((ci && ! tools)) && grep -Eq "$needs_tools|helper\.cjs" "$test"; then
+  if ((ci && ! tools)) && [[ $tool_free != *" $test "* ]] && grep -Eq "$needs_tools|helper\.cjs" "$test"; then
     skip "$test: the helper needs magick, inotifywait and file"
     continue
   fi
@@ -58,21 +58,13 @@ else
 fi
 
 if ((ci || fast)); then
-  skip "the Quickshell runtime tests (browser-ui, rtl-rows, scrolling, settings-number, motion, stock-runtime, i18n_runtime, images-ui, settings-ui)"
+  skip "the Quickshell runtime tests (browser-ui, rtl-rows, scrolling, settings-number, motion, stock-runtime, i18n_runtime, images-ui, panel-ui, settings-ui)"
   exit $status
 fi
 unset LD_LIBRARY_PATH
-for test in browser-ui rtl-rows scrolling settings-number motion stock-runtime; do
+for test in browser-ui rtl-rows scrolling settings-number motion stock-runtime images-ui panel-ui settings-ui; do
   run python3 "tests/$test.py"
 done
 run python3 tests/stock-runtime.py --custom
 run python3 "$FOAMY_KIT/preview/i18n_runtime.py" .
-if [[ ${FOAMY_TEST_DESKTOP:-} != 1 ]]; then
-  skip "images-ui, settings-ui: real surfaces on the live desktop; set FOAMY_TEST_DESKTOP=1"
-elif [[ -z ${WAYLAND_DISPLAY:-} ]]; then
-  skip "images-ui, settings-ui: no Wayland session"
-else
-  run python3 tests/images-ui.py
-  run python3 tests/settings-ui.py
-fi
 exit $status

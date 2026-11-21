@@ -9,13 +9,14 @@ const Model = require('../Model.js')
 const source = fs.readFileSync(path.join(__dirname, '../Service.qml'), 'utf8')
 const plain = value => JSON.parse(JSON.stringify(value))
 
-function service(answers) {
+// With `held`, peer callbacks are kept there for the test to answer later.
+function service(answers, held) {
   const calls = [], events = []
   const state = vm.createContext({
     Model, sourceKind: 'foamy', liveActions: {}, liveActionsLoading: false, liveActionsAgain: false,
     pressingAction: false, focusError: '', focusProc: { running: false },
     focusCompleted() { events.push('completed') },
-    peer: { call(target, method, args, done) { calls.push([target, method, Array.from(args)]); done(true, answers[method]) } }
+    peer: { call(target, method, args, done) { calls.push([target, method, Array.from(args)]); if (held) held.push(done); else done(true, answers[method]) } }
   })
   state.root = state
   for (const name of ['refreshLiveActions', 'pressAction']) {
@@ -30,6 +31,9 @@ test('Foamy\'s reply is validated: exact keys, a few plain labels', () => {
   for (const bad of ['', 'nope', '[]', '{"../x":["a"]}', '{"10-1":[]}', '{"10-1":[1]}', '{"10-1":[" "]}', '{"10-1":"a"}',
     JSON.stringify({ '10-1': Array(13).fill('a') })]) assert.deepEqual(plain(Model.parseLiveActions(bad)), {}, bad)
   assert.equal(Model.parseLiveActions(JSON.stringify({ '10-1': ['x'.repeat(200)] }))['10-1'][0].length, 80)
+  // A huge reply is cut to 400 notifications.
+  const many = Object.fromEntries(Array.from({ length: 401 }, (_, i) => [`${i + 1}-1`, ['View']]))
+  assert.equal(Object.keys(Model.parseLiveActions(JSON.stringify(many))).length, 400)
 })
 
 test('labels are read from Foamy, never from the archive', () => {
@@ -59,7 +63,29 @@ test('an action that expired meanwhile says so and refreshes the buttons', () =>
   assert.deepEqual(events, []); assert.equal(calls.at(-1)[1], 'centerActions')
 })
 
-test('the archive keeps no sender commands or button labels', () => {
-  const ingest = fs.readFileSync(path.join(__dirname, '../native/src/ingest.rs'), 'utf8')
-  assert.doesNotMatch(ingest, /entry\.insert\("(exec|execArgv|execActions|actions)"/)
+test('one press and one refresh run at a time; a busy press says so and refreshes', () => {
+  const held = []
+  const { state, calls } = service({}, held)
+  const count = method => calls.filter(call => call[1] === method).length
+  // Refreshes asked for while one runs become exactly one more refresh.
+  state.refreshLiveActions(); state.refreshLiveActions(); state.refreshLiveActions(); state.refreshLiveActions()
+  assert.equal(count('centerActions'), 1)
+  held.shift()(true, '{"10-1":["View"]}')
+  assert.equal(count('centerActions'), 2)
+  held.shift()(true, '{"10-1":["View"]}')
+  assert.equal(count('centerActions'), 2)
+  // A second press before Foamy answers, or a press while a focus runs, does nothing.
+  state.focusProc.running = true
+  state.pressAction({ key: '10-1' }, 0)
+  assert.equal(count('invokeCenterAction'), 0)
+  state.focusProc.running = false
+  state.pressAction({ key: '10-1' }, 0); state.pressAction({ key: '10-1' }, 0)
+  assert.equal(count('invokeCenterAction'), 1)
+  held.shift()(true, 'busy')
+  assert.equal(state.focusError, 'This notification is already being opened. Try again.')
+  assert.equal(count('centerActions'), 3)
+  // Once Foamy answered, the next press goes through.
+  held.shift()(true, '{"10-1":["View"]}')
+  state.pressAction({ key: '10-1' }, 0)
+  assert.equal(count('invokeCenterAction'), 2)
 })

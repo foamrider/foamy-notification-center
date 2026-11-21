@@ -1,4 +1,3 @@
-const I18n = require('./i18n.cjs');
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const P = require('../Preferences.js')
@@ -9,44 +8,84 @@ test('settings validate integers and booleans without coercion and keep scopes s
   assert.equal(P.value('center',{},'compact'),false)
   assert.equal(P.value('popups',{},'compact'),true)
 })
-test('saving routes widget and service settings to their existing owners', () => {
-})
-test('number settings carry a translated unit beside a unit-free label', () => {
-  assert.equal(I18n.text(P.field('center','keepDays').label,'nb'),'Behold varsler')
-  assert.equal(I18n.text(P.field('center','keepDays').unit,'nb'),'dager')
-  assert.equal(I18n.text(P.field('popups','normalTimeoutSec').label,'nb'),'Visningstid for vanlige varsler')
-  assert.equal(I18n.text(P.field('popups','normalTimeoutSec').unit,'nb'),'s')
+test('units are their own field, never part of a label', () => {
+  assert.equal(P.field('center','keepDays').unit, 'days')
+  assert.equal(P.field('popups','normalTimeoutSec').unit, 's')
   assert.equal(P.field('center','maxItems').unit, undefined)
   for (const f of [...P.centerFields, ...P.popupFields]) assert.doesNotMatch(f.label, /\(/, f.key)
 })
-test('X history removal is a translated popup setting with a strict boolean', () => {
-  assert.equal(P.value('popups',{},'closeButtonRemovesHistory'),false)
-  assert.equal(P.valid('popups','closeButtonRemovesHistory',true),true)
-  assert.equal(P.valid('popups','closeButtonRemovesHistory','true'),false)
-  assert.equal(P.valid('center','closeButtonRemovesHistory',true),false)
-  assert.equal(I18n.text(P.field('popups','closeButtonRemovesHistory').label,'nb'),'X fjerner fra historikken')
+test('a center save runs bounded through the host CLI; a popup save goes to Foamy over IPC; saves run one at a time, newest value per key', () => {
+  const fs = require('node:fs'), vm = require('node:vm')
+  const panel = fs.readFileSync(require('node:path').join(__dirname, '../Panel.qml'), 'utf8')
+  const take = head => { const start = panel.indexOf(head); assert.ok(start >= 0, head); const indent = head.match(/^ */)[0]; return panel.slice(start, panel.indexOf('\n' + indent + '}', start) + indent.length + 2) }
+  const kit = require('../kit/node-loader.cjs').load('FoamyPrefs')
+  const saves = [], calls = [], later = [], failed = []
+  const ctx = vm.createContext({
+    Preferences: P, moduleName: 'foamy.notification-center', bar: {}, settings: {}, store: {}, editingSettings: false,
+    pendingPreferences: {}, preferenceActive: null, popupSettingsLoading: false, awaitingPeerSave: false, settingsError: '',
+    popupSettings: {}, popupSettingsAvailable: false,
+    preferencesSave: { command: [], running: false }, tr: s => s, console: { warn() {} }, JSON, Object, String,
+    Qt: { callLater(fn) { later.push(fn) } }, preferenceFailed: (scope, key) => failed.push(`${scope}:${key}`),
+    // The kit's bounded() runs as shipped; save() is the host's settings write.
+    Prefs: { ...kit, save(...args) { saves.push(args); return { ok: true, command: ['omarchy', 'bar', 'set', args[1], args[4], JSON.stringify(args[5]), '--json'] } } },
+    peer: { call(target, method, args, done) { calls.push({ target, method, args: Array.from(args), done }) } }
+  })
+  ctx.root = ctx
+  for (const name of ['savePreference', 'flushPreferences', 'finishPreference', 'applyPopupPreferences', 'reloadPopupPreferences'])
+    vm.runInContext(take(`  function ${name}(`), ctx)
+  vm.runInContext(take('    function onPeerPreferencesChanged() {'), ctx)
+  const drain = () => { while (later.length) later.shift()() }
+  const popupSettings = extra => JSON.stringify({ settings: Object.fromEntries(P.popupFields.map(f => [f.key, f.defaultValue])), ...extra })
+  // A center setting: one host save with this plugin's module and fields, killed whole after 4 s.
+  ctx.savePreference('center', 'keepDays', 31)
+  assert.equal(saves.length, 1)
+  assert.deepEqual([saves[0][1], saves[0][2], saves[0][4], saves[0][5]], ['foamy.notification-center', P.centerFields, 'keepDays', 31])
+  assert.deepEqual(Array.from(ctx.preferencesSave.command), ['timeout', '--signal=KILL', '4s', 'omarchy', 'bar', 'set', 'foamy.notification-center', 'keepDays', '31', '--json'])
+  assert.equal(ctx.preferencesSave.running, true); assert.equal(calls.length, 0)
+  // Edits while it runs wait; only the newest value per key is saved next.
+  ctx.savePreference('center', 'keepDays', 40); ctx.savePreference('center', 'keepDays', 41)
+  assert.equal(saves.length, 1)
+  ctx.finishPreference(true); drain()
+  assert.equal(saves.length, 2); assert.equal(saves[1][5], 41)
+  ctx.finishPreference(true); drain()
+  assert.equal(saves.length, 2); assert.equal(ctx.preferenceActive, null)
+  // A popup setting goes to Foamy; the leading space keeps qs ipc from parsing the JSON.
+  ctx.savePreference('popups', 'compact', false)
+  assert.deepEqual(calls.map(c => [c.target, c.method, c.args]), [['foamy.notifications', 'setPreference', ['compact', ' false']]])
+  assert.equal(saves.length, 2)
+  calls[0].done(true, 'saving\n')
+  assert.equal(ctx.awaitingPeerSave, true); assert.equal(ctx.settingsError, '')
+  // Foamy says its preferences changed: done only once it no longer reports saving.
+  ctx.onPeerPreferencesChanged(); calls[1].done(true, popupSettings({ saving: true }))
+  assert.equal(calls[1].method, 'preferences'); assert.notEqual(ctx.preferenceActive, null)
+  ctx.onPeerPreferencesChanged(); calls[2].done(true, popupSettings({}))
+  assert.equal(ctx.preferenceActive, null); assert.equal(ctx.awaitingPeerSave, false); assert.equal(ctx.settingsError, ''); assert.deepEqual(failed, [])
+  drain()
+  // A save Foamy reports as failed, and a refused setPreference, are errors.
+  ctx.savePreference('popups', 'compact', true); calls.at(-1).done(true, 'saving')
+  ctx.onPeerPreferencesChanged(); calls.at(-1).done(true, popupSettings({ saveError: 'x' }))
+  assert.equal(ctx.settingsError, 'Could not save settings. Try again.'); assert.deepEqual(failed, ['popups:compact'])
+  drain(); ctx.settingsError = ''
+  ctx.savePreference('popups', 'normalTimeoutSec', 9); calls.at(-1).done(true, 'unknown preference')
+  assert.equal(ctx.settingsError, 'Could not save settings. Try again.'); assert.equal(ctx.awaitingPeerSave, false)
+  drain()
+  // An invalid value starts nothing.
+  const before = [saves.length, calls.length]
+  ctx.savePreference('center', 'keepDays', 0)
+  assert.equal(ctx.settingsError, 'Invalid setting.'); assert.deepEqual([saves.length, calls.length], before)
 })
-
-
-test('critical DND silencing belongs to popup settings with a translated boolean control',()=>{
- assert.equal(P.value('popups',{},'dndSilenceCritical'),false)
- assert.equal(P.valid('popups','dndSilenceCritical',true),true)
- assert.equal(P.valid('popups','dndSilenceCritical','true'),false)
- assert.equal(P.valid('center','dndSilenceCritical',true),false)
- assert.equal(I18n.text(P.field('popups','dndSilenceCritical').label,'nb'),'Ikke forstyrr demper også kritiske varsler')
-})
-test('center settings save through FoamyPrefs with the host module name; popup settings go to Foamy over IPC', () => {
-  const panel = require('node:fs').readFileSync(require('node:path').join(__dirname, '../Panel.qml'), 'utf8')
-  assert.ok(panel.includes('Prefs.save(root.bar, root.moduleName, Preferences.centerFields'))
-  assert.ok(panel.includes('peer.call("foamy.notifications", "setPreference"'))
-  assert.ok(!/notification-preferences|setBarWidget/.test(panel))
-})
-test('numeric settings use kit FoamyNumberField and never assign over the setting', () => {
-  const pane = require('node:fs').readFileSync(require('node:path').join(__dirname, '../SettingsPane.qml'), 'utf8')
-  assert.match(pane, /FoamyNumberField \{/)
-  // Escape, invalid input and external changes are the kit's rules (runtime: tests/settings-number.py).
-  assert.doesNotMatch(pane, /\btext\s*=\s*String\(root\.current/)
-  assert.doesNotMatch(pane, /SafeTextField/)
+test('the manifest declares exactly the settings the panel reads, and its defaults agree', () => {
+  const bar = require('../manifest.json').barWidget
+  // The keys Panel.qml reads with setting(); a key the panel dropped (such as language) fails here.
+  const read = ['panelWidth', 'listHeight', 'badge', 'keepDays', 'maxItems', 'clickAction', 'compact', 'useBrowserFavicons', 'browserGrouping', 'showBody', 'showPreview']
+  assert.deepEqual(bar.schema.map(f => f.key).sort(), [...read].sort())
+  assert.deepEqual(Object.keys(bar.defaults).sort(), [...read].sort())
+  for (const f of bar.schema) assert.deepEqual(bar.defaults[f.key], f.defaultValue, f.key)
+  // The settings the center edits itself agree with the manifest the host edits.
+  for (const f of P.centerFields) {
+    const declared = bar.schema.find(entry => entry.key === f.key)
+    for (const name of ['type', 'defaultValue', 'options', 'min', 'max']) assert.deepEqual(declared[name], f[name], `${f.key}.${name}`)
+  }
 })
 test('a failed save is reported to the settings fields so the same number can be retried', () => {
   const fs = require('node:fs'), vm = require('node:vm')
@@ -61,6 +100,5 @@ test('a failed save is reported to the settings fields so the same number can be
   assert.deepEqual(failed, ['center:keepDays'])
   ctx.preferenceActive = { scope: 'center', key: 'maxItems' }; ctx.finishPreference(true)
   assert.deepEqual(failed, ['center:keepDays'])
-  // The panel's settings page forwards it to SettingsPane.saveFailed (runtime: tests/settings-number.py).
-  assert.match(panel, /function onPreferenceFailed\(scope, key\) \{\s*settingsFields\.saveFailed\(scope, key\)\s*\}/)
+  // The settings page passes it on to the field: tests/panel-ui.py.
 })

@@ -89,3 +89,39 @@ test("snooze commands that can't start report an error; a probe that can't start
   state.refreshSnooze();state.snoozeProbe.failStart()
   assert.equal(state.snoozeAvailable,false)
 })
+test("snooze is offered only for a JSON object or array reply; failed or refused snooze commands report an error",()=>{
+  const service=()=>{
+    const state=vm.createContext({snoozeAvailable:true,snoozeError:"",console:{warn(){}},refreshDnd(){ state.dndRefreshes++ },dndRefreshes:0})
+    state.root=state
+    for (const name of ["snoozeAll","refreshSnooze"]) {
+      const start=source.indexOf(`  function ${name}(`)
+      vm.runInContext(source.slice(start,source.indexOf("\n  }",start)+4),state)
+    }
+    state.snoozeProc=processFixture(source,"snoozeProc",state,{minutes:0,snoozeOutput:{text:""}})
+    state.snoozeProbe=processFixture(source,"snoozeProbe",state,{snoozeProbeOutput:{text:""}})
+    return state
+  }
+  // A daemon that answers but refuses: no snoozeAll step, no DND refresh.
+  for (const reply of ["","not found","Invalid minutes","error: no timer","no","full"]) {
+    const state=service()
+    state.snoozeAll(30);state.snoozeProc.snoozeOutput.text=reply;state.snoozeProc.exit(0,0)
+    assert.match(state.snoozeError,/Try again/,reply)
+    assert.deepEqual(Array.from(state.snoozeProc.command),["omarchy-shell","notifications","unsnooze","*"],reply)
+    assert.equal(state.snoozeProc.running,false,reply);assert.equal(state.dndRefreshes,0,reply)
+  }
+  // A failed exit is an error even with a good reply.
+  let state=service()
+  state.snoozeAll(30);state.snoozeProc.snoozeOutput.text="ok";state.snoozeProc.exit(1,0)
+  assert.match(state.snoozeError,/Try again/);assert.equal(state.snoozeProc.running,false)
+  // Resume (0 minutes) is one step: unsnooze, then the DND state is read again.
+  state=service()
+  state.snoozeAll(0);state.snoozeProc.snoozeOutput.text="unsnoozed";state.snoozeProc.exit(0,0)
+  assert.deepEqual(Array.from(state.snoozeProc.command),["omarchy-shell","notifications","unsnooze",""])
+  assert.equal(state.snoozeProc.running,false);assert.equal(state.snoozeError,"");assert.equal(state.dndRefreshes,1)
+  // The probe: only a JSON object (or array) reply of a successful run offers snooze.
+  for (const [code,reply,available] of [[0,"{}",true],[0,'{"*":1700000000}',true],[0,"not json",false],[0,"null",false],[0,"",false],[1,"{}",false]]) {
+    state=service()
+    state.refreshSnooze();state.snoozeProbe.snoozeProbeOutput.text=reply;state.snoozeProbe.exit(code,0)
+    assert.equal(state.snoozeAvailable,available,`${code} ${reply}`)
+  }
+})

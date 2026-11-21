@@ -125,7 +125,7 @@ with (
         ["quickshell", "-p", str(app), "--no-color"], env=env, stdout=out, stderr=subprocess.STDOUT
     ) as shell,
 ):
-    shell.wait(60)
+    status = shell.wait(60)
 output = log.read_text()
 hostenv.check(env, output, *hostenv.calls(base))
 print(
@@ -135,7 +135,5 @@ print(
         if "NUMBER_SETTINGS" in line or "FAIL" in line or "Actual" in line or "Expected" in line or "Error" in line
     )
 )
-import re
-
-match = re.search(r"NUMBER_SETTINGS (\d+) passed (\d+) failed", output)
-assert match and int(match.group(1)) >= 5 and match.group(2) == "0", output
+# Five test functions plus QtTest's own count: a function that stops running fails here.
+assert status == 0 and "NUMBER_SETTINGS 6 passed 0 failed" in output, output

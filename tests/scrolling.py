@@ -1,8 +1,9 @@
-"""Wheel and touchpad scrolling of the notification list (kit FoamyWheelScroll).
+"""Wheel scrolling of the notification list (kit FoamyWheelScroll).
 
-One wheel notch scrolls `wheelStep` px however the mouse splits it (a
-high-resolution wheel sends 8 x 15 instead of 1 x 120), notches add up,
-touchpad pixels map 1:1, and a list that fits does not move.
+One wheel notch scrolls `wheelStep` px over a card and over both gutters,
+however the mouse splits it (a high-resolution wheel sends 8 x 15 instead of
+1 x 120), and a list that fits does not move. The kit's own tests cover how
+notches add up, pixel deltas and the bounds.
 """
 
 import os
@@ -48,7 +49,7 @@ ShellRoot {
   Timer { interval: 300; running: true; onTriggered: test.ready = true }
   TestCase {
    id: test; property bool ready: false; when: ready; name: "NotificationScrolling"
-   function init() { list.scrollBy(-100000, false); wait(Kit.FoamyMotion.slider + 50) }
+   function init() { wait(Kit.FoamyMotion.slider + 50); list.contentY = list.originY }
    function settle() { wait(Kit.FoamyMotion.slider + 80) }
    function test_notchOnCardAndBothGutters() {
     verify(list.wheelStep > 0)
@@ -64,29 +65,6 @@ ShellRoot {
     for (var i = 0; i < 8; i++) mouseWheel(list, 100, 100, 0, -15, Qt.NoButton)
     settle()
     fuzzyCompare(list.contentY, list.originY + list.wheelStep, 1)
-   }
-   function test_scrollbarAtOuterEdge() {
-    var bar = list.ScrollBar.vertical
-    compare(bar.x + bar.width, list.width - list.scrollbarInset)
-    compare(bar.height, list.height)
-    verify(bar.active)
-    compare(bar.availableWidth, list.scrollbarWidth)
-   }
-   function test_fastNotchesAccumulate() {
-    for (var i = 0; i < 4; i++) mouseWheel(list, 100, 100, 0, -120, Qt.NoButton)
-    settle()
-    fuzzyCompare(list.contentY, list.originY + 4 * list.wheelStep, 1)
-   }
-   function test_edgesAndPixelMovement() {
-    list.scrollBy(-1000, false)
-    compare(list.contentY, list.originY)
-    list.scrollBy(23, false)
-    compare(list.contentY, list.originY + 23)
-    list.scrollBy(100000, false)
-    compare(list.contentY, list.originY + list.contentHeight - list.height)
-    mouseWheel(list, 100, 100, 0, -120, Qt.NoButton)
-    settle()
-    compare(list.contentY, list.originY + list.contentHeight - list.height)
    }
    function test_shortListDoesNotScroll() {
     list.model = 1; wait(100)
@@ -128,4 +106,4 @@ with (
 output = log.read_text()
 print(output)
 hostenv.check(env, output, *hostenv.calls(base))
-assert status == 0 and "SCROLLING 7 passed 0 failed" in output, output
+assert status == 0 and "SCROLLING 4 passed 0 failed" in output, output

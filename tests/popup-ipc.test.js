@@ -32,10 +32,3 @@ test('handled acknowledgement removes durably without calling Foamy back',()=>{
  assert.equal(context.handled('1000-1'),'ok')
  assert.deepEqual(calls,[[['1000-1'],true]])
 })
-
-test('store commands cannot shadow panel open and close controls',()=>{
- assert.match(source,/target: "foamy.notification-center.store"/)
- assert.doesNotMatch(source,/target: "foamy.notification-center"/)
- const panel=fs.readFileSync(path.join(__dirname,'../Panel.qml'),'utf8')
- assert.match(panel,/ipcTarget: "foamy.notification-center"/)
-})

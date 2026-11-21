@@ -1,8 +1,17 @@
-"""Exercise archive normalization through the real service and visible image controls."""
+"""Exercise archive normalization through the real service and visible image controls.
+
+  python3 tests/images-ui.py                                # offscreen
+  FOAMY_TEST_DESKTOP=1 python3 tests/images-ui.py --desktop  # live Wayland session
+
+Theme icon names do not resolve offscreen (Quickshell.iconPath finds no icon
+theme there, not even a fixture theme on XDG_DATA_DIRS), so offscreen the
+themed-icon step checks only that the archive keeps the name. With --desktop
+it also checks that the stack header draws the theme icon."""
 
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,10 +22,10 @@ sys.path.insert(0, str(KIT / "preview"))
 import hostenv  # noqa: E402  (foamy-kit"s preview/hostenv.py)
 
 source = Path(__file__).resolve().parents[1]
-# Opens real surfaces on the live desktop and takes its keyboard focus: only
-# when asked for (tests/suite.sh runs it with FOAMY_TEST_DESKTOP=1).
-if os.environ.get("FOAMY_TEST_DESKTOP") != "1":
-    raise SystemExit("images-ui: opens real surfaces on the live desktop; set FOAMY_TEST_DESKTOP=1 to run it")
+desktop = "--desktop" in sys.argv
+# --desktop opens real surfaces on the live desktop: only when asked for.
+if desktop and os.environ.get("FOAMY_TEST_DESKTOP") != "1":
+    raise SystemExit("images-ui --desktop: opens real surfaces on the live desktop; set FOAMY_TEST_DESKTOP=1 to run it")
 base = Path(tempfile.mkdtemp(prefix="foamy-center-images-"))
 app = base / "app"
 app.mkdir()
@@ -130,12 +139,16 @@ ShellRoot {
         updated.appIcon="foot";updated.summary="Themed icon retained"
         input.setText(JSON.stringify(updated))
         tryVerify(function(){return root.entry.summary==="Themed icon retained"})
-        compare(root.entry.appIcon,"foot");tryCompare(icon,"status",Image.Ready)
+        compare(root.entry.appIcon,"foot")
+THEMED_CHECK
       }
     }
   }
 }
-""".replace("INPUT_PATH", json.dumps(str(notification))).replace("SOURCE_ENTRY", json.dumps(entry))
+""".replace("INPUT_PATH", json.dumps(str(notification)))
+    .replace("SOURCE_ENTRY", json.dumps(entry))
+    # The header loads a theme name through the icon theme, which only the desktop has.
+    .replace("THEMED_CHECK", '        tryCompare(icon,"status",Image.Ready)' if desktop else "")
 )
 env = dict(
     os.environ,
@@ -148,15 +161,21 @@ env = dict(
     NC_SRC_HISTORY=str(notifications / "history"),
     NC_STORE=str(base / "state/omarchy-notification-center"),
     PATH=str(cli) + ":" + os.environ["PATH"],
-    QT_QPA_PLATFORM="wayland",
+    QT_QPA_PLATFORM="wayland" if desktop else "offscreen",
     QT_QPA_PLATFORMTHEME="basic",
     QT_STYLE_OVERRIDE="Fusion",
 )
-env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / os.environ["WAYLAND_DISPLAY"])
-for key in ["DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "QT_QUICK_BACKEND"]:
-    env.pop(key, None)
-# On the live compositor on purpose; the bus is dbus-run-session's own.
-hostenv.isolate(env, base, display=True)
+if desktop:
+    # The compositor's socket, found from the caller's runtime directory.
+    env["WAYLAND_DISPLAY"] = str(Path(os.environ["XDG_RUNTIME_DIR"]) / os.environ["WAYLAND_DISPLAY"])
+    for key in ["DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE", "QT_QUICK_BACKEND"]:
+        env.pop(key, None)
+else:
+    env["QT_QUICK_BACKEND"] = "software"
+    for key in ["DISPLAY", "WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE"]:
+        env.pop(key, None)
+# The bus is dbus-run-session's own; only --desktop keeps the compositor.
+hostenv.isolate(env, base, display=desktop)
 env.update(hostenv.make(base, app, env=env))
 env["PATH"] = str(cli) + ":" + env["PATH"]
 # qs and dbus-run-session's daemon in one process group, stopped as a whole
@@ -174,6 +193,7 @@ with (
     status = shell.wait(60)
 output = log.read_text()
 print(output)
-print("Image captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert status == 0 and "IMAGES_UI 2 passed 0 failed" in output
+assert status == 0 and "IMAGES_UI 2 passed 0 failed" in output, f"images-ui failed; log and captures in {base}"
+# Keep the captures only when they are needed to see what failed.
+shutil.rmtree(base)

@@ -189,8 +189,8 @@ test('watch prints its events as fixed lines', async t => {
   fs.writeFileSync(f.file('seen'), '5')
   await until(() => lines.includes('{"event":"seenChanged"}'))
   fs.rmSync(f.store, {recursive: true, force: true})
-  const code = await new Promise(resolve => watch.on('exit', resolve))
-  await new Promise(r => setTimeout(r, 50))
+  // close comes after stdout has ended, so the last line has been read.
+  const code = await new Promise(resolve => watch.on('close', resolve))
   assert.equal(code, 1)
   assert.equal(lines.at(-1), '{"ok":false,"error":"notification source changed; reconnecting"}')
 })

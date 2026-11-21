@@ -463,10 +463,16 @@ mod tests {
             screenshot_action(r#"["omasnap","/s.png","x"]"#, "/s.png"),
             ""
         );
-        assert_eq!(
+        // Two vectors are not the one standard vector: no editor intent (Model.fileCommand).
+        assert_ne!(
             screenshot_action(r#"["omasnap","/s.png"] ["omasnap","/s.png"]"#, "/s.png"),
-            "edit-screenshot\nedit-screenshot"
+            "edit-screenshot"
         );
         assert_eq!(screenshot_action("bad", "/s.png"), "");
+        // backfill prints an old row's execArgv array with jq_raw and reads it here.
+        let printed =
+            json::jq_raw(&json::parse(br#"["omasnap","/s.png"]"#, json::Dialect::Jq).unwrap());
+        assert_eq!(preview_source(&printed), "/s.png");
+        assert_eq!(screenshot_action(&printed, "/s.png"), "edit-screenshot");
     }
 }

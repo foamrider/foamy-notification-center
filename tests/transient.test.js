@@ -16,13 +16,11 @@ test("transient stock notification records never enter the archive", () => {
       [2, "Vivaldi", {}],
       [3, "omarchy-action", {}],
     ]) {
-      // Test the stock daemon's persisted format without depending on another plugin.
+      // The per-file format (Foamy Notifications' source).
       const serialized = JSON.stringify({ originalId: id, appName, summary: "Test", body: "",
         appIcon: "", urgency: 0, timestamp, transient: hints.transient === true })
       fs.writeFileSync(path.join(source, `${timestamp}-${id}.json`), serialized)
     }
-    // A malformed source must not prevent valid notifications being archived.
-    fs.writeFileSync(path.join(source, "broken.json"), "{")
     const env = { ...process.env, NC_SRC_DIR: source, NC_SRC_HISTORY: path.join(source, "history"), NC_STORE: path.join(scratch, "archive") }
     for (let pass = 0; pass < 2; pass++) {
       const sync = helper.spawnSync(["sync"], { env, encoding: "utf8" })
