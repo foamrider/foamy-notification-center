@@ -11,7 +11,8 @@ right click silences without opening; the panel's open/close IPC target;
 the loading, empty, no-match and error lines; the next page loads when the
 list ends inside the viewport, after a read, when more turns up and when the
 list is scrolled to its end; rows are not rebuilt while the panel is closed
-and are current when it opens again.
+and are current when it opens again; a number setting whose save failed can
+be saved again with the same number.
 
 Runs through foamy-kit's preview/harness.py (isolated HOME, private bus, no
 host commands, offscreen screen) against the Omarchy 4.5 shell host."""
@@ -26,7 +27,7 @@ import harness  # noqa: E402  (foamy-kit's preview/harness.py)
 
 PLUGIN = Path(__file__).resolve().parents[1]
 # Test functions in SHELL; QtTest also counts its initTestCase and cleanupTestCase.
-CASES = 6
+CASES = 7
 
 SHELL = r"""
 import QtQuick
@@ -126,6 +127,8 @@ ShellRoot {
       when: window.ready
       // A guard for a step that waits on layout and timers, not a speed limit.
       readonly property int settle: 10000
+      // The bar's inline save, while a case takes it away.
+      property QtObject inlineShell: null
       // QtTest's own messages do not reach the qs log; this line does.
       function check(ok, what) {
         if (!ok)
@@ -191,6 +194,12 @@ ShellRoot {
       // panel drops it a second after closing), so no row animation of the
       // case before can move the list while the next one measures it.
       function cleanup() {
+        if (panel.editingSettings)
+          panel.closeSettings()
+        if (inlineShell) {
+          bar.shell = inlineShell
+          inlineShell = null
+        }
         if (panel.opened)
           closePanel()
         waitUntil(function() { return !panel.popupContentActive }, "the closed panel releases its list")
@@ -323,6 +332,35 @@ ShellRoot {
         check(panel.rows.some(function(row) { return row.kind === "message" && row.entry.key === next[0].key }), "the new entry is listed")
       }
 
+      function typeNine(number) {
+        number.field.forceActiveFocus()
+        keyClick(Qt.Key_End); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_Backspace)
+        keyClick(Qt.Key_9); keyClick(Qt.Key_Return)
+      }
+
+      function test_failed_number_save_can_be_retried() {
+        // Without the bar's inline save the panel runs `omarchy bar set`;
+        // the fake omarchy fails its first call and saves after that.
+        inlineShell = bar.shell
+        bar.shell = null
+        openPanel()
+        panel.openSettings()
+        var days = null
+        waitUntil(function() {
+          days = panel.settingsPane ? findChild(panel.settingsPane, "center-keepDays") : null
+          return days !== null && days.visible && !panel.popupSettingsLoading
+        }, "the settings page shows the number field")
+        same(days.field.text, "30", "the stored number")
+        typeNine(days)
+        waitUntil(function() { return panel.preferenceActive === null && panel.settingsError !== "" }, "the failed save ends")
+        same(panel.settingsError, "Could not save settings. Try again.", "the error after a failed save")
+        same(days.field.text, "30", "the field shows the stored number again")
+        waitUntil(function() { return !panel.popupSettingsLoading }, "the settings page settles")
+        // The same number again is a new attempt, not a commit already made.
+        typeNine(days)
+        waitUntil(function() { return panel.preferenceActive === null && !panel.popupSettingsLoading && panel.settingsError === "" }, "the same number saves again")
+      }
+
       onCompletedChanged: if (completed) {
         console.log("PANEL_UI", qtest_results.passCount, "passed", qtest_results.failCount, "failed")
         console.log("FOAMY DONE")
@@ -333,16 +371,30 @@ ShellRoot {
 }
 """
 
+# `omarchy bar set` for the center's own settings: the first save fails,
+# later ones succeed. Foamy Notifications (reached through omarchy-shell
+# for the popup settings) is not running.
+FAKEBIN = {
+    "omarchy": '#!/bin/sh\nprintf "%s\\n" "$*" >> "$FOAMY_OUT/omarchy-calls.log"\n'
+    '[ "$(wc -l < "$FOAMY_OUT/omarchy-calls.log")" -gt 1 ]\n',
+    "omarchy-shell": "#!/bin/sh\nexit 1\n",
+}
+SAVE = "bar set foamy.notification-center keepDays 9 --json"
+
 status = 0
 for host in harness.available_hosts(what="panel-ui"):
-    run = harness.Run(host, SHELL, plugin=PLUGIN, prefix=f"foamy-center-panel-{host}-").run(timeout=120)
+    run = harness.Run(host, SHELL, plugin=PLUGIN, prefix=f"foamy-center-panel-{host}-", fakebin=FAKEBIN).run(
+        timeout=120
+    )
+    calls_log = run.out / "omarchy-calls.log"
+    saves = calls_log.read_text().splitlines() if calls_log.exists() else []
     # Any QML warning from the plugin's own files fails the run too.
     warnings = [
         line for line in run.log.splitlines() if "WARN" in line and "/plugin/" in line and "/plugin/kit/" not in line
     ]
     summary = [line for line in run.log.splitlines() if "PANEL_UI" in line]
     passed = f"PANEL_UI {CASES + 2} passed 0 failed" in run.log
-    if run.ok and passed and not warnings and not run.host_commands():
+    if run.ok and passed and not warnings and not run.host_commands() and saves == [SAVE, SAVE]:
         print(f"{host}: panel-ui passed ({summary[-1].split('PANEL_UI', 1)[1].strip()})")
         run.cleanup()
     else:
@@ -350,5 +402,6 @@ for host in harness.available_hosts(what="panel-ui"):
         print(run.log)
         print("\n".join(warnings))
         print("host commands ran:", *run.host_commands(), sep="\n  ")
+        print("omarchy calls:", *saves, sep="\n  ")
         print(f"{host}: panel-ui FAILED; log at {run.base}/qs.log")
 sys.exit(status)
