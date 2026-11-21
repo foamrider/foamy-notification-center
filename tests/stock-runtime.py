@@ -173,6 +173,15 @@ def send(title, replace=None):
 
 try:
     wait(lambda: ipc("notifications", "ping") == "ok" and status()["loaded"])
+    # Foamy Notifications calls the store target by name. The bare
+    # `foamy.notification-center` target belongs to the Panel (users bind
+    # keys to its open/close), so the service must not register it.
+    shown = subprocess.check_output(["qs", "ipc", "-n", "-p", str(app), "show"], env=env, text=True, timeout=3)
+    targets = {line.split()[1] for line in shown.splitlines() if line.startswith("target ")}
+    assert {"foamy.notification-center.store", "foamy.notification-center.test"} <= targets, shown
+    assert "foamy.notification-center" not in targets, shown
+    assert ipc("foamy.notification-center.store", "remove", "../x") == "error: invalid keys"
+    assert ipc("foamy.notification-center.store", "peerChanged", "nope") == "error: unknown"
     first = send("Stock before")
     wait(lambda: status()["newest"] == "Stock before")
     send("Stock replaced", first)

@@ -32,9 +32,3 @@ test('handled acknowledgement removes durably without calling Foamy back',()=>{
  assert.equal(context.handled('1000-1'),'ok')
  assert.deepEqual(calls,[[['1000-1'],true]])
 })
-
-// The panel's own open/close target is checked at runtime (tests/panel-ui.py).
-test('store commands cannot shadow panel open and close controls',()=>{
- assert.match(source,/target: "foamy.notification-center.store"/)
- assert.doesNotMatch(source,/target: "foamy.notification-center"/)
-})
