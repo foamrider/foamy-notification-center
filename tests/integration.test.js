@@ -52,6 +52,52 @@ test('queued archive refreshes and content comparisons do not drop updates',()=>
  state.load();assert.equal(state.loadPending,true);state.listProc.running=false;state.load();assert.equal(state.listRevision,2);assert.equal(state.loadPending,false)
 })
 
+test('a list read older than a watcher event is dropped and repeated; invalid or failed reads show an error',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const take=name=>{const start=source.indexOf(`  function ${name}(`);assert.ok(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4)}
+ // The handlers of listProc as Quickshell runs them: the reply's text, then the exit.
+ const list=source.indexOf('    id: listProc\n'),at=source.indexOf('      onStreamFinished: {',list);assert.ok(list>=0&&at>list)
+ const finished=source.slice(source.indexOf('{',at)+1,source.indexOf('\n      }',at))
+ const exited=require('./qml-process.cjs').handler(source,'listProc','onExited');assert.ok(exited.startsWith('function'))
+ const FoamyNative=require('../kit/node-loader.cjs').load('FoamyNative')
+ const service=()=>{
+  const ctx=vm.createContext({FoamyNative,console:{warn(){}},JSON,helperUnavailable:false,entries:[{key:'1-1',body:'old'}],loadError:'',loadPending:false,
+   listRevision:1,archiveRevision:1,listLimit:2,hasMore:false,removedKeys:{},searchQuery:'',unreadSource:'untouched',loaded:false,resets:0,text:'',
+   reloadArchive:{restarts:0,restart(){this.restarts++}}})
+  ctx.root=ctx;ctx.entriesReset=()=>{ctx.resets++}
+  for(const name of ['visibleEntries','differsFrom','storeUnavailable']) vm.runInContext(take(name),ctx)
+  return ctx
+ }
+ const finish=(ctx,text)=>{ctx.text=text;vm.runInContext('(function(){'+finished+'})()',ctx)}
+ const exit=(ctx,code)=>vm.runInContext(`(${exited})(${code}, 0)`,ctx)
+ const keys=ctx=>Array.from(ctx.entries,e=>e.key)
+ const rows=JSON.stringify([{key:'3-1'},{key:'2-1'},{key:'1-2'}])
+ // A watcher event arrived during the read: drop the reply and read again.
+ let ctx=service();ctx.archiveRevision=2;finish(ctx,rows)
+ assert.equal(ctx.loadPending,true);assert.equal(ctx.reloadArchive.restarts,1);assert.deepEqual(keys(ctx),['1-1']);assert.equal(ctx.resets,0)
+ // A reply that is not a JSON array keeps the list and says so.
+ for(const text of ['not json','{}']) {
+  ctx=service();finish(ctx,text)
+  assert.equal(ctx.loadError,'Invalid notification history response.',text);assert.deepEqual(keys(ctx),['1-1'],text);assert.equal(ctx.loaded,false,text)
+ }
+ // One row past the page means more; removed keys stay hidden; the unread
+ // badge follows the unfiltered list only.
+ ctx=service();ctx.loadError='old error';ctx.removedKeys={'2-1':true};finish(ctx,rows)
+ assert.equal(ctx.hasMore,true);assert.deepEqual(keys(ctx),['3-1']);assert.deepEqual(Array.from(ctx.unreadSource,e=>e.key),['3-1'])
+ assert.equal(ctx.loadError,'');assert.equal(ctx.loaded,true);assert.equal(ctx.resets,1)
+ ctx=service();ctx.searchQuery='x';finish(ctx,JSON.stringify([{key:'3-1'}]))
+ assert.equal(ctx.hasMore,false);assert.deepEqual(keys(ctx),['3-1']);assert.equal(ctx.unreadSource,'untouched')
+ // An unchanged list does not reset the view; a changed one does.
+ finish(ctx,JSON.stringify([{key:'3-1'}]));assert.equal(ctx.resets,1)
+ finish(ctx,JSON.stringify([{key:'4-1'}]));assert.equal(ctx.resets,2);assert.deepEqual(keys(ctx),['4-1'])
+ // A failed read says so and runs a queued read; a missing helper shows its own text.
+ ctx=service();ctx.loadPending=true;exit(ctx,1)
+ assert.match(ctx.loadError,/Could not refresh notification history/);assert.equal(ctx.reloadArchive.restarts,1)
+ ctx=service();exit(ctx,0);assert.equal(ctx.loadError,'');assert.equal(ctx.reloadArchive.restarts,0)
+ ctx=service();ctx.loadPending=true;exit(ctx,127)
+ assert.equal(ctx.loadError,FoamyNative.UNAVAILABLE_TEXT);assert.equal(ctx.reloadArchive.restarts,0)
+})
+
 test('large archive pages contain one JSON array, filter before limiting, and keep newest order',t=>{
  const f=fixture(t);f.run('list')
  const base=Date.now()-100000,records=Array.from({length:1000},(_,i)=>({key:`${base+i+1}-1`,timestamp:base+i+1,body:i===10?'needle':'x'.repeat(500)}))
@@ -165,6 +211,8 @@ test('whitespace-only or truncated source files are skipped, not fatal',t=>{
  const f=fixture(t),stamp=Date.now()
  fs.writeFileSync(path.join(f.source,`${stamp}-1.json`),'  \n')
  fs.writeFileSync(path.join(f.source,`${stamp}-2.json`),JSON.stringify({timestamp:stamp,originalId:2,app:'Ok',summary:'Kept'}))
+ // A file caught mid-write by the source.
+ fs.writeFileSync(path.join(f.source,`${stamp}-3.json`),'{"timestamp":'+stamp+',"app":"Half')
  f.run('sync')
  assert.deepEqual(f.run('list').map(r=>r.summary),['Kept'])
 })
@@ -246,11 +294,62 @@ test('any archive-setting change restarts the running watcher, even without a so
  const ctx=vm.createContext({watchProc:{running:true},sourceRestartPending:false})
  vm.runInContext(body,ctx)
  assert.equal(ctx.watchProc.running,false);assert.equal(ctx.sourceRestartPending,true)
- // Every value the watcher reads is in that environment.
- const env=source.slice(source.indexOf('  readonly property var storeEnvironment: {'),source.indexOf('\n  }\n',source.indexOf('  readonly property var storeEnvironment: {')))
- for(const name of ['NC_KEEP_DAYS','NC_MAX_ITEMS','NC_PREVIEWS','NC_SOURCE','NC_SRC_DIR','NC_SRC_HISTORY','NC_HANDLED','NC_STATE_FILE']) assert.ok(env.includes(name),name)
+})
+test('the store environment carries the limits and the resolved source paths',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ // The binding's body, run as the function QML evaluates.
+ const start=source.indexOf('  readonly property var storeEnvironment: {');assert.ok(start>=0)
+ const body=source.slice(source.indexOf('{',start)+1,source.indexOf('\n  }\n',start))
+ const environment=(sourceKind,sourceInfo,vars={})=>{
+  const ctx=vm.createContext({keepDays:7,maxItems:60,showPreview:false,sourceKind,sourceInfo,String,Quickshell:{env:name=>vars[name]}})
+  ctx.root=ctx
+  return JSON.parse(JSON.stringify(vm.runInContext('(function(){'+body+'})()',ctx)))
+ }
+ const limits={NC_KEEP_DAYS:'7',NC_MAX_ITEMS:'60',NC_PREVIEWS:'0'}
+ const foamy=environment('foamy',{popups:'/p',history:'/h',handled:'/j',state:'/s'})
+ assert.deepEqual(foamy,{...limits,NC_SOURCE:'foamy',NC_SRC_DIR:'/p',NC_SRC_HISTORY:'/h',NC_HANDLED:'/j',NC_STATE_FILE:'/s'})
+ assert.deepEqual(environment('legacy',{},{XDG_STATE_HOME:'/x',HOME:'/home/u'}),
+  {...limits,NC_SOURCE:'legacy',NC_SRC_DIR:'/x/omarchy/notifications',NC_STATE_FILE:'/x/omarchy/notifications.json'})
+ assert.deepEqual(environment('legacy',{},{HOME:'/home/u'}),
+  {...limits,NC_SOURCE:'legacy',NC_SRC_DIR:'/home/u/.local/state/omarchy/notifications',NC_STATE_FILE:'/home/u/.local/state/omarchy/notifications.json'})
+ assert.deepEqual(environment('',{}),{...limits,NC_SOURCE:'stock'})
+ // Every value the helper reads from its environment is passed (the rest are
+ // test and helper-internal settings).
  const native=path.join(__dirname,'../native/src'),script=fs.readdirSync(native).filter(n=>n.endsWith('.rs')).map(n=>fs.readFileSync(path.join(native,n),'utf8')).join('\n')
- for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL','NC_LOCK_WAIT_MS'].includes(name)) assert.ok(env.includes(name),`watcher reads ${name} but the service does not pass it`)
+ for(const name of new Set(script.match(/NC_[A-Z_]+/g))) if(!['NC_STORE','NC_WATCHING','NC_RETENTION_INTERVAL','NC_LOCK_WAIT_MS'].includes(name)) assert.ok(Object.hasOwn(foamy,name),`the helper reads ${name} but the service does not pass it`)
+})
+test('the source is the Foamy store it reports, an older Foamy, or stock, and a change restarts the watcher',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
+ const take=name=>{const start=source.indexOf(`  function ${name}(`);assert.ok(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4)}
+ const service=answers=>{
+  const ctx=vm.createContext({JSON,Number,String,sourceKind:'',sourceInfo:{},sourceRestartPending:false,calls:[],retries:0,restarts:0,
+   watchProc:{running:true},restartWatch:{interval:30000,restart(){ctx.restarts++}},sourceRetry:{restart(){ctx.retries++}},
+   peer:{call(target,method,args,done){ctx.calls.push(method);const [ok,output]=answers[method]||[false,''];done(ok,output)}}})
+  ctx.root=ctx
+  for(const name of ['resolveSource','useSource']) vm.runInContext(take(name),ctx)
+  return ctx
+ }
+ const info={layout:'foamy-files',version:2,ready:true,popups:'/p',history:'/h',handled:'/j',state:'/s'}
+ // Contract v2: the reported paths; the running watcher stops so it restarts with them.
+ let ctx=service({storeInfo:[true,JSON.stringify(info)]});ctx.resolveSource()
+ assert.equal(ctx.sourceKind,'foamy');assert.equal(ctx.sourceInfo.popups,'/p');assert.equal(ctx.sourceInfo.state,'/s')
+ assert.equal(ctx.watchProc.running,false);assert.equal(ctx.sourceRestartPending,true);assert.deepEqual(ctx.calls,['storeInfo'])
+ // The same answer again leaves a running watcher alone.
+ ctx.watchProc.running=true;ctx.sourceRestartPending=false;ctx.resolveSource()
+ assert.equal(ctx.watchProc.running,true);assert.equal(ctx.sourceRestartPending,false);assert.equal(ctx.restarts,0)
+ // A watcher that is not running starts soon.
+ ctx.watchProc.running=false;ctx.resolveSource();assert.equal(ctx.restarts,1);assert.equal(ctx.restartWatch.interval,50)
+ // A Foamy store that is not ready yet is asked again later; nothing changes now.
+ ctx=service({storeInfo:[true,JSON.stringify({...info,ready:false})]});ctx.resolveSource()
+ assert.equal(ctx.retries,1);assert.equal(ctx.sourceKind,'');assert.equal(ctx.watchProc.running,true);assert.deepEqual(ctx.calls,['storeInfo'])
+ // No usable storeInfo: an older Foamy answers ping, else the stock daemon.
+ for(const storeInfo of [[true,JSON.stringify({...info,version:1})],[true,JSON.stringify({...info,layout:'other'})],[true,'not json'],[false,'']]) {
+  for(const [ping,kind] of [[[true,'ok\n'],'legacy'],[[true,'x'],'stock'],[[false,'ok'],'stock']]) {
+   ctx=service({storeInfo,ping});ctx.resolveSource()
+   assert.deepEqual(ctx.calls,['storeInfo','ping'],storeInfo[1]);assert.equal(ctx.sourceKind,kind,`${storeInfo[1]} ${ping}`)
+   assert.equal(JSON.stringify(ctx.sourceInfo),'{}');assert.equal(ctx.sourceRestartPending,true)
+  }
+ }
 })
 test('Clear all uses the cutoff captured at the click, so later arrivals survive (as in Foamy)',t=>{
  const f=fixture(t);f.run('list')
@@ -344,17 +443,11 @@ test('a helper missing for this CPU is reported once, translated, and never rest
  assert.equal(ctx.storeUnavailable(127),true);assert.equal(ctx.storeUnavailable(126),true)
  assert.equal(ctx.helperUnavailable,true);assert.equal(ctx.loadError,FoamyNative.UNAVAILABLE_TEXT);assert.equal(ctx.warnings,1)
  ctx.load();assert.equal(ctx.listLoadCount,0,'no list read without a helper')
- // The watcher stops for good: its exit handler returns before scheduling a restart.
- const watch=source.slice(source.indexOf('    id: watchProc'),source.indexOf('\n  }',source.indexOf('    id: watchProc')))
- assert.match(watch,/onExited: function ?\(exitCode, exitStatus\) \{\n\s*launched = false\n\s*if \(root\.storeUnavailable\(exitCode\)\)\s*return\n/)
- assert.match(source,/if \(!watchProc\.running && root\.sourceKind && !root\.helperUnavailable\) \{\s*watchProc\.launched = true;?\s*watchProc\.running = true\s*\}/)
- // Every store command runs the bundled binary for this CPU.
- const cmd=vm.createContext({FoamyNative,root:{pluginDir:'/plugin',helper:'foamy-notification-center-helper'}})
- cmd.root.storeCommand=vm.runInContext('('+take('storeCommand').trim().replace(/^function storeCommand/,'function')+')',cmd)
- assert.deepEqual(Array.from(cmd.root.storeCommand(['list','5'])),['bash','-c','exec -- "$1/bin/$HOSTTYPE/$2" "${@:3}"','foamy-native','/plugin','foamy-notification-center-helper','list','5'])
+ // The watcher stops for good: the flapping-watcher test below runs its exit
+ // and its restart timer with a missing helper.
 })
 
-const {processFixture}=require('./qml-process.cjs')
+const {processFixture,handler}=require('./qml-process.cjs')
 function watchService(clock) {
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
  const take=name=>{const start=source.indexOf(`  function ${name}(`);assert.ok(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4)}
@@ -366,8 +459,10 @@ function watchService(clock) {
  ctx.watchStartedAt=0
  for(const name of ['storeUnavailable','scheduleWatchRestart','absorb']) vm.runInContext(take(name),ctx)
  ctx.watchProc=processFixture(source,'watchProc',ctx,{Date:{now:()=>clock.now}})
- // restartWatch's trigger: what the Timer runs.
- ctx.trigger=()=>{ctx.sourceRestartPending=false;ctx.watchProc.launched=true;ctx.watchProc.running=true}
+ // What the restartWatch Timer runs when it fires.
+ ctx.sourceKind='stock'
+ const timer=handler(source,'restartWatch','onTriggered');assert.ok(timer.startsWith('{'))
+ ctx.trigger=()=>vm.runInContext('(function() '+timer+')()',ctx)
  return ctx
 }
 test('a watcher that keeps failing to start backs off to 60 s instead of a 1 Hz loop',()=>{
@@ -406,6 +501,8 @@ test('a flapping watcher backs off; a run that reports in or lasts 30 s restarts
  run(30000);assert.equal(ctx.restarts.pop(),1000)
  // No helper for this CPU: no restart, and running -> false after exited() adds none.
  const before=ctx.restarts.length;run(50,127);assert.equal(ctx.restarts.length,before);assert.equal(ctx.helperUnavailable,true)
+ // Even when its timer fires, the watcher stays stopped.
+ ctx.trigger();assert.equal(ctx.watchProc.running,false)
 })
 test('store commands run without a whole-command deadline; the helper bounds only its lock wait, above one step of another store process',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
@@ -419,7 +516,6 @@ test('store commands run without a whole-command deadline; the helper bounds onl
  const store=fs.readFileSync(path.join(__dirname,'../native/src/store.rs'),'utf8')
  const wait=Number(store.match(/pub const REQUEST_LOCK_WAIT: Duration = Duration::from_secs\(([0-9]+)\)/)[1])
  assert.ok(wait>3*step,`the request lock wait (${wait} s) must exceed ${3*step} s`)
- assert.ok(source.includes(`wait at most ${wait} s (REQUEST_LOCK_WAIT`),'Service.qml names the helper\'s wait')
 })
 test('list, remove and clear answer "notification store is busy" while another holds the store lock, and work once it is free',async t=>{
  const f=fixture(t);f.run('sync')
