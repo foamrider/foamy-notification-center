@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -130,6 +131,9 @@ ShellRoot {
     TestCase {
       name:"BrowserIcons";when:window.ready
       onCompletedChanged:if(completed)console.log("BROWSER_UI",qtest_results.passCount,"passed",qtest_results.failCount,"failed")
+      // QtTest's own messages do not reach the qs log; these lines do.
+      function check(ok,what){if(!ok)console.log("BROWSER_UI FAIL "+what);verify(ok,what)}
+      function same(actual,expected,what){if(actual!==expected)console.log("BROWSER_UI FAIL "+what+": "+JSON.stringify(actual)+" instead of "+JSON.stringify(expected));compare(actual,expected,what)}
       function capture(name){var done=false;card.grabToImage(function(r){verify(r.saveToFile(Qt.resolvedUrl(name+".png").toString().replace("file://","")));done=true});tryVerify(function(){return done})}
       function test_failed_helper_start_does_not_block_the_queue(){
         var row={app:"Vivaldi",body:"failed.example.com\\nMessage"}
@@ -160,14 +164,14 @@ MODEL_CHECK
         var letter=function(){for(var i=0;i<appIcon.parent.children.length;i++){var c=appIcon.parent.children[i];if(c.text!==undefined&&c.visible)return c.text}return ""}
         var use=function(icon){root.entry=Object.assign({},root.entry,{appIcon:icon})}
         root.overrideSource=""
-        // Only the archive's own copies and theme names load; the letter shows instead.
+        // Only the archive's own copies load here; the letter shows instead.
         for(var value of [OUTSIDE_URI,OUTSIDE_PATH,card.storeImages+"../escaped.png",card.storeImages+"x/../../escaped.png","https://example.test/a.png","image://icon/foot","/etc/hostname"]){
           use(value)
-          compare(card.iconSource,"",value);compare(String(appIcon.source),"",value)
-          verify(!appIcon.visible,value);compare(letter(),"V",value)
+          same(card.iconSource,"","header icon for "+value);same(String(appIcon.source),"","loaded image for "+value)
+          check(!appIcon.visible,"no image shows for "+value);same(letter(),"V","letter for "+value)
         }
-        use(trusted);tryCompare(appIcon,"status",Image.Ready);compare(String(appIcon.source),trusted);verify(appIcon.visible);compare(letter(),"")
-        use(trusted)
+        use(trusted);tryCompare(appIcon,"status",Image.Ready);same(String(appIcon.source),trusted,"the archive's own copy loads")
+        check(appIcon.visible,"the archive's own copy shows");same(letter(),"","no letter beside the archive's own copy")
       }
     }
   }
@@ -224,6 +228,7 @@ finally:
     browser.close()
 output = log.read_text()
 print(output)
-print("Browser captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert status == 0 and "BROWSER_UI 4 passed 0 failed" in output
+assert status == 0 and "BROWSER_UI 4 passed 0 failed" in output, f"browser-ui failed; log and captures in {base}"
+# Keep the captures only when they are needed to see what failed.
+shutil.rmtree(base)
