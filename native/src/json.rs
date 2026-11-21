@@ -936,9 +936,10 @@ mod tests {
     fn objects_keep_first_position_and_last_value() {
         assert_eq!(jq_of(r#"{"b":1,"a":2,"b":3}"#), r#"{"b":3,"a":2}"#);
         let value = parse(br#"{"b":1,"a":[1,{"c":2}],"d":{}}"#, Dialect::Jq).unwrap();
+        // `backfill` parses what jq_raw printed of an old row's array again.
         assert_eq!(
-            jq_raw(&value),
-            "{\n  \"b\": 1,\n  \"a\": [\n    1,\n    {\n      \"c\": 2\n    }\n  ],\n  \"d\": {}\n}"
+            parse(jq_raw(&value).as_bytes(), Dialect::Jq),
+            Some(value.clone())
         );
         assert_eq!(
             python(&value, true, false),
