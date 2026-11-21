@@ -216,14 +216,18 @@ test('whitespace-only or truncated source files are skipped, not fatal',t=>{
  f.run('sync')
  assert.deepEqual(f.run('list').map(r=>r.summary),['Kept'])
 })
-test('a source nested as deep as the parser allows is archived without its command; a deeper file is skipped',t=>{
+test('a sender command nested deeper than the parser allows cannot crash the helper',t=>{
  const f=fixture(t),stamp=Date.now()
- // execArgv is the sender's omarchy-exec-argv hint, parsed as JSON by the helper.
- const deep='['.repeat(9999)+']'.repeat(9999)
- fs.writeFileSync(path.join(f.source,`${stamp}-1.json`),JSON.stringify({timestamp:stamp,app:'Deep',summary:'Kept',execArgv:deep}))
- fs.writeFileSync(path.join(f.source,`${stamp}-2.json`),'['.repeat(10001)+']'.repeat(10001))
+ // execArgv is the sender's omarchy-exec-argv hint, parsed as JSON by the
+ // helper. 9,999 levels sit just inside the parser's depth limit, so the
+ // helper's main stack must hold that many; 60,000 levels (within the size
+ // limit of a source file) would overflow it if the limit did not stop the
+ // parser first. Neither is a command, so both rows keep no command.
+ const nested=depth=>'['.repeat(depth)+']'.repeat(depth)
+ fs.writeFileSync(path.join(f.source,`${stamp}-1.json`),JSON.stringify({timestamp:stamp,app:'Deep',summary:'At the limit',execArgv:nested(9999)}))
+ fs.writeFileSync(path.join(f.source,`${stamp}-2.json`),JSON.stringify({timestamp:stamp,app:'Deep',summary:'Past the limit',execArgv:nested(60000)}))
  f.run('sync')
- assert.deepEqual(f.run('list').map(r=>[r.summary,r.file,r.execArgv]),[['Kept','',undefined]])
+ assert.deepEqual(f.run('list').map(r=>[r.summary,r.file,r.execArgv]).sort(),[['At the limit','',undefined],['Past the limit','',undefined]])
 })
 test('an archive whose last line lost its newline still takes the next arrival on a line of its own',t=>{
  const f=fixture(t),stamp=Date.now()
