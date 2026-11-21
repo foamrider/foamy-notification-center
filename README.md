@@ -356,8 +356,9 @@ kit/native/build-native.sh .           # bin/x86_64, bin/aarch64, native/native.
 kit/native/build-native.sh . --verify  # clean rebuild, byte compare
 bash tests/kit-check.sh
 ```
-Only `motion.py --desktop` needs a Wayland session and `FOAMY_TEST_DESKTOP=1`;
-the other checks render offscreen. The
+Only `motion.py --desktop` and `images-ui.py --desktop` (which also checks that a
+theme icon name draws in a stack header) need a Wayland session and
+`FOAMY_TEST_DESKTOP=1`; the other checks render offscreen. The
 tests load the installed Omarchy 4.5 shell (`/usr/share/omarchy`; only its QML
 and data, never its scripts) through foamy-kit's `preview/hostenv.py`, from the
 kit checkout at `$FOAMY_KIT` (default `~/GitHub/Personal/foamy-kit`): every
