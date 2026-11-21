@@ -469,5 +469,10 @@ mod tests {
             "edit-screenshot"
         );
         assert_eq!(screenshot_action("bad", "/s.png"), "");
+        // backfill prints an old row's execArgv array with jq_raw and reads it here.
+        let printed =
+            json::jq_raw(&json::parse(br#"["omasnap","/s.png"]"#, json::Dialect::Jq).unwrap());
+        assert_eq!(preview_source(&printed), "/s.png");
+        assert_eq!(screenshot_action(&printed, "/s.png"), "edit-screenshot");
     }
 }
