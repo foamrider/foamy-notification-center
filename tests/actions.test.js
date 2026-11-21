@@ -301,8 +301,16 @@ test("fixed image launcher preserves spaces, rejects unsafe paths and reports st
  // open: spawnSync returns only after the launcher exited and its stdout and
  // stderr closed, so a launcher that waits for the editor hits the timeout.
  const pidFile=path.join(temp,"editor.pid")
- fs.writeFileSync(path.join(bin,"omasnap"),'#!/bin/bash\nprintf "%s" "$$" > "$PIDFILE"\nexec sleep 30\n',{mode:0o755})
+ // The stub renames a finished file into place, so the test never reads a
+ // half-written pid. An empty pid would read as 0, and kill(0) signals the
+ // test's own process group.
+ fs.writeFileSync(path.join(bin,"omasnap"),'#!/bin/bash\nprintf "%s" "$$" > "$PIDFILE.tmp" && /usr/bin/mv "$PIDFILE.tmp" "$PIDFILE"\nexec sleep 30\n',{mode:0o755})
  const deadline=Date.now()+2000
+ const editorPid=()=>{
+  const pid=Number(fs.readFileSync(pidFile,"utf8"))
+  assert.ok(Number.isInteger(pid)&&pid>1,`the editor wrote an invalid pid ${pid}`)
+  return pid
+ }
  try {
   const result=spawnSync("/usr/bin/bash",[helper,"edit-screenshot",file],{env:{...process.env,PATH:bin,PIDFILE:pidFile},encoding:"utf8",timeout:5000})
   assert.equal(result.error,undefined);assert.equal(result.signal,null);assert.equal(result.status,0,result.stderr)
@@ -310,12 +318,13 @@ test("fixed image launcher preserves spaces, rejects unsafe paths and reports st
   // only after the launcher returned, so wait for the file).
   while(!fs.existsSync(pidFile)&&Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,20))
   assert.ok(fs.existsSync(pidFile),"the editor never started")
-  process.kill(Number(fs.readFileSync(pidFile,"utf8")),0)
+  process.kill(editorPid(),0)
  } finally {
   // Stop the stub editor before the temporary directory goes, also when an
   // assertion failed.
   while(!fs.existsSync(pidFile)&&Date.now()<deadline) await new Promise(resolve=>setTimeout(resolve,20))
-  if(fs.existsSync(pidFile)) try { process.kill(Number(fs.readFileSync(pidFile,"utf8")),"SIGKILL") } catch {}
+  // An editor that already ended is fine here; any other error is not.
+  if(fs.existsSync(pidFile)) try { process.kill(editorPid(),"SIGKILL") } catch(error) { if(error.code!=="ESRCH") throw error }
  }
 })
 
