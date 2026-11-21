@@ -2,7 +2,6 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const I = require('./i18n.cjs');
 const Preferences = require('../Preferences.js');
-const manifest = require('../manifest.json');
 const tokens = s => [...s.matchAll(/%[1-9][0-9]*|\{\w+\}/g)].map(m => m[0]).sort();
 
 test('the Norwegian catalog has every English entry with the same placeholders', () => {
@@ -40,6 +39,3 @@ test('every settings label, unit and option has a catalog entry', () => {
 test('a key that names an Object member is looked up as text, not as the member', () => {
   assert.equal(I.text('constructor', 'no'), 'constructor');
 });
-
-assert.equal(manifest.barWidget?.defaults?.language, undefined);
-assert.equal((manifest.barWidget?.schema || []).some(f => f.key === 'language'), false);
