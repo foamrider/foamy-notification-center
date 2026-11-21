@@ -5,7 +5,7 @@ const path = require("node:path");
 const test = require("node:test");
 const helper = require("./helper.cjs")
 
-test("prune retains valid records after corruption and clear deletes them", () => {
+test("a retention rewrite keeps the valid rows around a corrupt line, and clear deletes them", () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "notification-archive-test-"));
   try {
     const state = path.join(temp, "omarchy-notification-center");
@@ -20,8 +20,16 @@ test("prune retains valid records after corruption and clear deletes them", () =
     const archive = path.join(state, "archive.jsonl");
     const timestamp = Date.now() - 1000;
     const records = [1, 2].map(i => ({ key: `${timestamp}-${i}`, timestamp, summary: `record ${i}` }));
-    fs.writeFileSync(archive, JSON.stringify(records[0]) + "\ncorrupt\n" + JSON.stringify(records[1]) + "\n");
+    // A row older than the 30 days makes sync rewrite the archive (retention).
+    const old = Date.now() - 40 * 86400000;
+    fs.writeFileSync(archive, [JSON.stringify(records[0]), "corrupt", JSON.stringify(records[1]),
+      JSON.stringify({ key: `${old}-3`, timestamp: old, summary: "old" })].join("\n") + "\n");
     run("sync");
+    // The rewrite drops the old row and keeps the valid rows on both sides of
+    // the corrupt line.
+    const written = fs.readFileSync(archive, "utf8");
+    for (const row of records) assert.ok(written.includes(`"key":"${row.key}"`), `${row.key} was lost:\n${written}`);
+    assert.equal(written.includes(`"key":"${old}-3"`), false, written);
     assert.deepEqual(JSON.parse(run("list")).map(row => row.key).sort(), records.map(row => row.key));
     const image = path.join(state, "images", `${records[0].key}-image.png`);
     fs.mkdirSync(path.dirname(image), { recursive: true }); fs.writeFileSync(image, "png");
