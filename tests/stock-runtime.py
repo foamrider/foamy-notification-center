@@ -180,8 +180,10 @@ try:
     targets = {line.split()[1] for line in shown.splitlines() if line.startswith("target ")}
     assert {"foamy.notification-center.store", "foamy.notification-center.test"} <= targets, shown
     assert "foamy.notification-center" not in targets, shown
-    assert ipc("foamy.notification-center.store", "remove", "../x") == "error: invalid keys"
-    assert ipc("foamy.notification-center.store", "peerChanged", "nope") == "error: unknown"
+    reply = ipc("foamy.notification-center.store", "remove", "../x")
+    assert reply == "error: invalid keys", f"remove ../x answered {reply!r}"
+    reply = ipc("foamy.notification-center.store", "peerChanged", "nope")
+    assert reply == "error: unknown", f"peerChanged nope answered {reply!r}"
     first = send("Stock before")
     wait(lambda: status()["newest"] == "Stock before")
     send("Stock replaced", first)
