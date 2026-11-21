@@ -188,8 +188,6 @@ try:
     wait(lambda: status()["newest"] == "Stock replaced")
     assert status()["entries"] == 1
     ipc("notifications", "dismissAll")
-    time.sleep(0.3)
-    assert status()["entries"] == 1
     ipc("notifications", "toggleDnd")
     wait(lambda: status()["doNotDisturb"])
     ipc("notifications", "toggleDnd")
@@ -198,49 +196,56 @@ try:
     wait(lambda: status()["unread"] == 0)
     center_dnd(True)
     send("Stock silenced")
+    # 2, not 1: the daemon's dismissAll above did not remove "Stock replaced"
+    # from the history. The watcher handles the daemon's writes in order, so
+    # this later arrival is the barrier for the dismissal.
     wait(lambda: status()["entries"] == 2)
     center_dnd(False)
     ipc("foamy.notification-center.test", "clear")
     wait(lambda: status()["entries"] == 0)
     send("After clear")
     wait(lambda: status()["entries"] == 1)
-    ipc("review", "focus")
-    wait(lambda: bool(status()["focusError"]))
-    assert status()["entries"] == 1
-    clients.write_text(json.dumps([{"class": "Stock Review", "address": "0x123"}]))
-    ipc("review", "focus")
-    wait(lambda: status()["entries"] == 0)
-    assert dispatches.read_text() == "focused"
-    assert not status()["focusError"]
-    # An omarchy-shell that can't start (its interpreter is missing: exec fails, so
-    # Quickshell emits no exited()). The stubs stay first on PATH, so no host
-    # omarchy-shell is ever reached. The click still gets the stock focus
-    # fallback; the DND toggle shows its error.
-    shells = [
-        path / "omarchy-shell" for path in map(Path, env["PATH"].split(":")) if (path / "omarchy-shell").exists()
-    ][:2]
-    assert shells == [bin / "omarchy-shell", Path(env["PATH"].split(":")[1]) / "omarchy-shell"], shells
-    saved = [(path, path.read_text()) for path in shells]
-    for path in shells:
-        path.write_text("#!/nonexistent/omarchy-shell-interpreter\n")
-    send("Shell missing")
-    wait(lambda: status()["entries"] == 1)
-    ipc("review", "focus")
-    wait(lambda: status()["entries"] == 0)
-    assert not status()["focusError"]
-    assert not status()["dndError"]
-    assert "Process failed to start" in (base / "log").read_text(), "omarchy-shell did start"
-    toggle()
-    wait(lambda: bool(status()["dndError"]) and not status()["dndBusy"])
-    assert not status()["doNotDisturb"]
-    for path, text in saved:
-        path.write_text(text)
-        path.chmod(0o755)
-    center_dnd(True)
-    center_dnd(False)
+    # Focus, a shell that cannot start and the watcher backoff use no state
+    # path: the --custom run, which checks only the paths, leaves them out.
     if not custom:
+        ipc("review", "focus")
+        wait(lambda: bool(status()["focusError"]))
+        assert status()["entries"] == 1
+        clients.write_text(json.dumps([{"class": "Stock Review", "address": "0x123"}]))
+        ipc("review", "focus")
+        wait(lambda: status()["entries"] == 0)
+        assert dispatches.read_text() == "focused"
+        assert not status()["focusError"]
+        # An omarchy-shell that can't start (its interpreter is missing: exec fails, so
+        # Quickshell emits no exited()). The stubs stay first on PATH, so no host
+        # omarchy-shell is ever reached. The click still gets the stock focus
+        # fallback; the DND toggle shows its error.
+        shells = [
+            path / "omarchy-shell" for path in map(Path, env["PATH"].split(":")) if (path / "omarchy-shell").exists()
+        ][:2]
+        assert shells == [bin / "omarchy-shell", Path(env["PATH"].split(":")[1]) / "omarchy-shell"], shells
+        saved = [(path, path.read_text()) for path in shells]
+        for path in shells:
+            path.write_text("#!/nonexistent/omarchy-shell-interpreter\n")
+        send("Shell missing")
+        wait(lambda: status()["entries"] == 1)
+        ipc("review", "focus")
+        wait(lambda: status()["entries"] == 0)
+        assert not status()["focusError"]
+        assert not status()["dndError"]
+        assert "Process failed to start" in (base / "log").read_text(), "omarchy-shell did start"
+        toggle()
+        wait(lambda: bool(status()["dndError"]) and not status()["dndBusy"])
+        assert not status()["doNotDisturb"]
+        for path, text in saved:
+            path.write_text(text)
+            path.chmod(0o755)
+        center_dnd(True)
+        center_dnd(False)
         # A watcher that dies at every start (here: inotifywait exits at once) backs
-        # off 1 s, 2 s, 4 s, 8 s rather than looping at 1 Hz, and recovers.
+        # off 1 s, 2 s, 4 s rather than looping at 1 Hz, and recovers. The exact
+        # schedule is checked with a controlled clock in integration.test.js; this
+        # checks the real wiring. Each start of the fake inotifywait writes a stamp.
         helper = str(app / "center/bin" / os.uname().machine / "foamy-notification-center-helper")
 
         def watchers():
@@ -256,27 +261,34 @@ try:
                     pass
             return found
 
+        stamps = base / "inotify-starts"
+
+        def starts():
+            return [float(line) for line in stamps.read_text().split()] if stamps.exists() else []
+
         wait(lambda: len(watchers()) == 1 and status()["watching"])
         fake = bin / "inotifywait"
-        fake.write_text("#!/bin/sh\nexit 1\n")
+        fake.write_text('#!/bin/sh\ndate +%s.%N >> "' + str(stamps) + '"\nexit 1\n')
         fake.chmod(0o755)
-
-        def reconnects():
-            return (base / "log").read_text().count("Notification history watcher stopped; reconnecting")
-
-        before = reconnects()
         os.kill(watchers()[0], signal.SIGTERM)
-        time.sleep(8.5)
-        failures = reconnects() - before
-        # Exits at about 0, 1, 3 and 7 s (a 1 Hz loop: 9).
-        assert 3 <= failures <= 5, f"{failures} watcher restarts in 8.5 s"
+        wait(lambda: len(starts()) >= 3, timeout=20)
+        # The starts come about 2 s and then 4 s apart. A 1 Hz loop gives 1 s, and a
+        # backoff that does not double gives 2 s. Load can only make a gap longer.
+        found = starts()
+        assert found[2] - found[1] >= 3, f"watcher starts at {[round(t - found[0], 2) for t in found]} s"
         fake.unlink()
         wait(lambda: status()["watching"] and len(watchers()) == 1, timeout=12)
         send("After watcher recovery")
         wait(lambda: status()["newest"] == "After watcher recovery")
-    print(
-        "PASS stock default-action fallback, failed focus retention and retry; stock: delivery, in-place replacement, dismissal history, read state, DND both ways, silenced history, clear and subsequent arrival; Foamy Notifications absent; a missing omarchy-shell: focus fallback and DND error; watcher restart backoff and recovery"
-    )
+    stock = "stock: delivery, in-place replacement, dismissal history, read state, DND both ways, silenced history, clear and subsequent arrival"
+    if custom:
+        print("PASS with a custom XDG_STATE_HOME; " + stock)
+    else:
+        print(
+            "PASS stock default-action fallback, failed focus retention and retry; "
+            + stock
+            + "; Foamy Notifications absent; a missing omarchy-shell: focus fallback and DND error; watcher restart backoff and recovery"
+        )
 finally:
     proc.stop()
     log.close()
