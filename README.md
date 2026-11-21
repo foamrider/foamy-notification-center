@@ -329,7 +329,7 @@ node --test tests/*.test.js tests/*.test.cjs
 python3 -I -m unittest discover -s tests -p '*_test.py' -v
 bash tests/kit-check.sh
 python3 tests/browser-ui.py
-FOAMY_TEST_DESKTOP=1 python3 tests/settings-ui.py
+python3 tests/settings-ui.py
 python3 tests/settings-number.py
 python3 tests/images-ui.py
 python3 tests/panel-ui.py
@@ -356,9 +356,8 @@ kit/native/build-native.sh .           # bin/x86_64, bin/aarch64, native/native.
 kit/native/build-native.sh . --verify  # clean rebuild, byte compare
 bash tests/kit-check.sh
 ```
-`settings-ui.py` requires a running Wayland session: it opens real surfaces
-on the live desktop and takes its keyboard focus, so it runs only with
-`FOAMY_TEST_DESKTOP=1` (also in `tests/suite.sh`). The
+Only `motion.py --desktop` needs a Wayland session and `FOAMY_TEST_DESKTOP=1`;
+the other checks render offscreen. The
 tests load the installed Omarchy 4.5 shell (`/usr/share/omarchy`; only its QML
 and data, never its scripts) through foamy-kit's `preview/hostenv.py`, from the
 kit checkout at `$FOAMY_KIT` (default `~/GitHub/Personal/foamy-kit`): every
