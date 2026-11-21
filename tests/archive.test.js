@@ -28,8 +28,10 @@ test("a retention rewrite keeps the valid rows around a corrupt line, and clear 
     // The rewrite drops the old row and keeps the valid rows on both sides of
     // the corrupt line.
     const written = fs.readFileSync(archive, "utf8");
-    for (const row of records) assert.ok(written.includes(`"key":"${row.key}"`), `${row.key} was lost:\n${written}`);
-    assert.equal(written.includes(`"key":"${old}-3"`), false, written);
+    // Keys of the rows that parse; how the helper spaces its JSON does not matter.
+    const keys = written.split("\n").flatMap(line => { try { return [JSON.parse(line).key]; } catch { return []; } });
+    for (const row of records) assert.ok(keys.includes(row.key), `${row.key} was lost:\n${written}`);
+    assert.equal(keys.includes(`${old}-3`), false, written);
     assert.deepEqual(JSON.parse(run("list")).map(row => row.key).sort(), records.map(row => row.key));
     const image = path.join(state, "images", `${records[0].key}-image.png`);
     fs.mkdirSync(path.dirname(image), { recursive: true }); fs.writeFileSync(image, "png");
