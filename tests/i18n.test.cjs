@@ -90,12 +90,14 @@ test('every text a kit field asks the plugin catalog for has an entry', () => {
   }
 });
 
-test('every catalog entry is a text the plugin, its kit copy or its manifest names', () => {
+test('every catalog entry is a text the plugin or its kit copy names', () => {
   // A key no source names as a string literal is never shown: drop it from
-  // the catalogs. Keys are looked up literally, never built from parts.
+  // the catalogs. Keys are looked up literally, never built from parts. The
+  // host never looks up a manifest text, such as the widget's name, in this
+  // catalog.
   const root = path.join(__dirname, '..');
   // The helper's watcher, sync and store errors reach the panel's error line too.
-  const files = ['manifest.json', 'native/src/watch.rs', 'native/src/main.rs', 'native/src/store.rs'];
+  const files = ['native/src/watch.rs', 'native/src/main.rs', 'native/src/store.rs'];
   for (const dir of ['.', 'components', 'kit']) {
     for (const name of fs.readdirSync(path.join(root, dir))) if (/\.(qml|js)$/.test(name)) files.push(path.join(dir, name));
   }
