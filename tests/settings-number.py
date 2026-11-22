@@ -39,24 +39,37 @@ ShellRoot {
   Timer { interval: 300; running: true; onTriggered: test.ready = true }
   TestCase {
    id: test; property bool ready: false; when: ready; name: "NumberSettings"
-   function editor() { var f = findChild(pane, "center-keepDays"); verify(f !== null); return f }
+   // QtTest's own messages do not reach the qs log; these lines do.
+   function check(ok, what) {
+    try { verify(ok, what) } catch (error) { console.log("NUMBER_SETTINGS FAIL " + what); throw error }
+   }
+   function same(actual, expected, what) {
+    try { compare(actual, expected, what) } catch (error) {
+     console.log("NUMBER_SETTINGS FAIL " + what + ": " + JSON.stringify(actual) + " instead of " + JSON.stringify(expected))
+     throw error
+    }
+   }
+   function waitUntil(condition, what) {
+    try { tryVerify(condition, 5000, what) } catch (error) { console.log("NUMBER_SETTINGS FAIL " + what); throw error }
+   }
+   function editor() { var f = findChild(pane, "center-keepDays"); check(f !== null, "the keep-days field is on the page"); return f }
    function test_external_change_shows_while_open() {
     var f = editor()
-    compare(f.field.text, "30")
+    same(f.field.text, "30", "the field shows the stored number")
     pane.settings = ({ keepDays: 14, maxItems: 1000 })     // another monitor, the CLI
-    tryCompare(f.field, "text", "14")
-    compare(pane.saved.length, 0)
+    waitUntil(function() { return f.field.text === "14" }, "the field shows a number changed elsewhere")
+    same(pane.saved.length, 0, "a change made elsewhere is not saved again")
    }
    function test_escape_restores_and_stays() {
     var f = editor()
     f.field.forceActiveFocus()
     keyClick(Qt.Key_End); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_7)
-    verify(f.editing)
+    check(f.editing, "typing starts an edit")
     keyClick(Qt.Key_Escape)
-    compare(f.field.text, String(pane.settings.keepDays))
-    verify(!f.editing)
+    same(f.field.text, String(pane.settings.keepDays), "Escape shows the stored number again")
+    check(!f.editing, "Escape ends the edit")
     f.field.focus = false
-    compare(pane.saved.length, 0)
+    same(pane.saved.length, 0, "an edit Escape ended is not saved")
    }
    function test_enter_commits_once() {
     var f = editor()
@@ -64,48 +77,48 @@ ShellRoot {
     keyClick(Qt.Key_End); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_9)
     keyClick(Qt.Key_Return)
     f.field.focus = false
-    compare(pane.saved, ["center:keepDays=9"])
+    same(pane.saved, ["center:keepDays=9"], "Enter and focus-out save the number once")
    }
    function test_same_number_retries_after_a_failed_save() {
     var f = editor()
     f.field.forceActiveFocus()
     keyClick(Qt.Key_End); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_1); keyClick(Qt.Key_4)
     keyClick(Qt.Key_Return)
-    compare(pane.saved, ["center:keepDays=14"])
+    same(pane.saved, ["center:keepDays=14"], "Enter saves the number")
     pane.saveFailed("center", "keepDays", 14)                // Panel.finishPreference(false); value stays 30
-    compare(f.field.text, "30")
+    same(f.field.text, "30", "a failed save shows the stored number again")
     keyClick(Qt.Key_End); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_1); keyClick(Qt.Key_4)
     keyClick(Qt.Key_Return)
-    compare(pane.saved, ["center:keepDays=14", "center:keepDays=14"])
+    same(pane.saved, ["center:keepDays=14", "center:keepDays=14"], "the same number saves again after a failed save")
     f.field.focus = false
-    compare(pane.saved.length, 2)                           // focus-out does not send it a third time
+    same(pane.saved.length, 2, "focus-out does not send it a third time")
    }
    function test_a_failed_pick_shows_the_stored_choice_again() {
-    var g = findChild(pane, "center-browserGrouping"); verify(g !== null)
-    compare(g.shownValue, "browser")
+    var g = findChild(pane, "center-browserGrouping"); check(g !== null, "the grouping choice is on the page")
+    same(g.shownValue, "browser", "the choice shows the stored value")
     g.select("hostname"); g.select("none")
-    compare(pane.saved, ["center:browserGrouping=hostname", "center:browserGrouping=none"])
+    same(pane.saved, ["center:browserGrouping=hostname", "center:browserGrouping=none"], "each pick is saved")
     // The panel saves one pick per key at a time: the older one failed and
     // the newer one still waits, so it stays on show.
     pane.saveFailed("center", "browserGrouping", "hostname")
-    compare(g.shownValue, "none")
+    same(g.shownValue, "none", "the waiting pick stays on show when an older one fails")
     pane.saveFailed("center", "browserGrouping", "none")      // value stays "browser"
-    compare(g.shownValue, "browser")
+    same(g.shownValue, "browser", "a failed pick shows the stored choice again")
    }
    function test_short_values_are_rows() {
     // DESIGN.md "Short values use the row form": numbers and the grouping
     // choice are rows as tall as a toggle row, ending on the same edge.
     var days = editor(), most = findChild(pane, "center-maxItems")
     var grouping = findChild(pane, "center-browserGrouping"), toggle = findChild(pane, "center-compact")
-    verify(days.compact && most.compact && grouping.compact)
-    compare(days.label, "Keep notifications")
-    compare(days.unit, "days")
-    compare(most.unit, "")
+    check(days.compact && most.compact && grouping.compact, "the numbers and the grouping choice use the row form")
+    same(days.label, "Keep notifications", "the keep-days label")
+    same(days.unit, "days", "the keep-days unit")
+    same(most.unit, "", "the maximum has no unit")
     for (var row of [days, most, grouping]) {
-     compare(row.height, toggle.height)
-     compare(row.mapToItem(pane, row.width, 0).x, toggle.mapToItem(pane, toggle.width, 0).x)
+     same(row.height, toggle.height, row.objectName + " is as tall as a toggle row")
+     same(row.mapToItem(pane, row.width, 0).x, toggle.mapToItem(pane, toggle.width, 0).x, row.objectName + " ends on the toggle row's edge")
     }
-    verify(days.field.width < pane.width / 4)
+    check(days.field.width < pane.width / 4, "the number field is narrow")
    }
    function cleanup() { pane.settings = ({ keepDays: 30, maxItems: 1000 }); pane.saved = []; wait(50) }
    onCompletedChanged: if (completed) console.log("NUMBER_SETTINGS", qtest_results.passCount, "passed", qtest_results.failCount, "failed")
