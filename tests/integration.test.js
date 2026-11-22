@@ -102,6 +102,10 @@ test('a list read older than a watcher event is dropped and repeated; invalid or
  // A failed read says so and runs a queued read; a missing helper shows its own text.
  ctx=service();ctx.loadPending=true;exit(ctx,1)
  assert.match(ctx.loadError,/Could not refresh notification history/);assert.equal(ctx.reloadArchive.restarts,1)
+ // The helper's failure reply is not a list, but its exit comes last and
+ // names the failure: the refresh error stays, the rows are kept.
+ ctx=service();finish(ctx,JSON.stringify({ok:false,error:'cannot read notification archive'}));exit(ctx,1)
+ assert.match(ctx.loadError,/Could not refresh notification history/);assert.deepEqual(keys(ctx),['1-1'])
  ctx=service();exit(ctx,0);assert.equal(ctx.loadError,'');assert.equal(ctx.reloadArchive.restarts,0)
  ctx=service();ctx.loadPending=true;exit(ctx,127)
  assert.equal(ctx.loadError,FoamyNative.UNAVAILABLE_TEXT);assert.equal(ctx.reloadArchive.restarts,0)
