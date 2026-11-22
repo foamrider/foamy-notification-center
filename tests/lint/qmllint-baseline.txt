@@ -12,7 +12,6 @@ Panel.qml: missing-property: Member "bodySmall" not found on type "QObject" | fo
 Panel.qml: missing-property: Member "caption" not found on type "QObject" | font.pixelSize: Math.max(8, FoamyStyle.font.caption - Style.space(3))
 Panel.qml: missing-property: Member "chromeHeight" not found on type "QQuickItem" | readonly property real listAvailableHeight: Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - (view ? view.chromeHeight : Style.s
 Panel.qml: missing-property: Member "contentHeight" not found on type "QObject" | visible: (root.rows.length > 0 || (item && item.contentHeight > 0))
-Panel.qml: missing-property: Member "contentHeight" not found on type "QObject" | visible: root.rows.length === 0 && (!listLoader.item || listLoader.item.contentHeight <= 0)
 Panel.qml: missing-property: Member "header" not found on type "QQuickItem" | readonly property var header: view ? view.header : null
 Panel.qml: missing-property: Member "list" not found on type "QQuickItem" | readonly property var list: view ? view.list : null
 Panel.qml: missing-property: Member "pluginRegistry" not found on type "QObject" | var registry = bar && "pluginRegistry" in bar ? bar.pluginRegistry : null
