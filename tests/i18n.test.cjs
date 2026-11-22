@@ -64,3 +64,17 @@ test('every error the panel shows from the service or a text field has a catalog
     assert.ok(Object.hasOwn(I.no, error), `${file}: "${error}" is not in no.json`);
   }
 });
+
+test('every catalog entry is a text the plugin, its kit copy or its manifest names', () => {
+  // A key no source names as a string literal is never shown: drop it from
+  // the catalogs. Keys are looked up literally, never built from parts.
+  const root = path.join(__dirname, '..');
+  const files = ['manifest.json'];
+  for (const dir of ['.', 'components', 'kit']) {
+    for (const name of fs.readdirSync(path.join(root, dir))) if (/\.(qml|js)$/.test(name)) files.push(path.join(dir, name));
+  }
+  const source = files.map(file => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
+  assert.ok(files.length >= 30, `read only ${files.length} files`);
+  const unused = Object.keys(I.en).filter(key => !source.includes(JSON.stringify(key)) && !source.includes(`'${key}'`));
+  assert.deepEqual(unused, [], 'catalog entries no source uses');
+});

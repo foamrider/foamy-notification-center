@@ -8,7 +8,6 @@
   "Reading settings…": "Leser innstillinger…",
   "Plugin not installed": "Utvidelsen er ikke installert",
   "Plugin not enabled": "Utvidelsen er ikke aktivert",
-  "Could not read Foamy Notifications settings. Reopen Settings to retry.": "Kunne ikke lese innstillingene for Foamy Notifications. Åpne Innstillinger på nytt for å prøve igjen.",
   "Could not save settings. Try again.": "Kunne ikke lagre innstillingene. Prøv igjen.",
   "Invalid setting.": "Ugyldig innstilling.",
   "Group browser notifications by": "Grupper nettleservarsler etter",
@@ -26,12 +25,6 @@
   "Hostname": "Vertsnavn",
   "Do not group": "Ikke grupper",
   "Show pictures": "Vis bilder",
-  "Do not disturb": "Ikke forstyrr",
-  "1 unread": "1 ulest",
-  "%1 unread": {
-    "one": "%1 ulest",
-    "other": "%1 uleste"
-  },
   "Silenced · %1 new": "Dempet · %1 nye",
   "Notifications silenced": "Varsler er dempet",
   "1 new notification": "1 nytt varsel",

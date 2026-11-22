@@ -8,7 +8,6 @@
   "Reading settings…": "Reading settings…",
   "Plugin not installed": "Plugin not installed",
   "Plugin not enabled": "Plugin not enabled",
-  "Could not read Foamy Notifications settings. Reopen Settings to retry.": "Could not read Foamy Notifications settings. Reopen Settings to retry.",
   "Could not save settings. Try again.": "Could not save settings. Try again.",
   "Invalid setting.": "Invalid setting.",
   "Group browser notifications by": "Group browser notifications by",
@@ -26,12 +25,6 @@
   "Hostname": "Hostname",
   "Do not group": "Do not group",
   "Show pictures": "Show pictures",
-  "Do not disturb": "Do not disturb",
-  "1 unread": "1 unread",
-  "%1 unread": {
-    "one": "%1 unread",
-    "other": "%1 unread"
-  },
   "Silenced · %1 new": "Silenced · %1 new",
   "Notifications silenced": "Notifications silenced",
   "1 new notification": "1 new notification",
