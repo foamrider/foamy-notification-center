@@ -89,7 +89,7 @@ test("snooze commands that can't start report an error; a probe that can't start
   state.refreshSnooze();state.snoozeProbe.failStart()
   assert.equal(state.snoozeAvailable,false)
 })
-test("snooze is offered only for a JSON object or array reply; failed or refused snooze commands report an error",()=>{
+test("snooze is offered only for a JSON object reply; failed or refused snooze commands report an error",()=>{
   const service=()=>{
     const state=vm.createContext({snoozeAvailable:true,snoozeError:"",console:{warn(){}},refreshDnd(){ state.dndRefreshes++ },dndRefreshes:0})
     state.root=state
@@ -118,8 +118,8 @@ test("snooze is offered only for a JSON object or array reply; failed or refused
   state.snoozeAll(0);state.snoozeProc.snoozeOutput.text="unsnoozed";state.snoozeProc.exit(0,0)
   assert.deepEqual(Array.from(state.snoozeProc.command),["omarchy-shell","notifications","unsnooze",""])
   assert.equal(state.snoozeProc.running,false);assert.equal(state.snoozeError,"");assert.equal(state.dndRefreshes,1)
-  // The probe: only a JSON object (or array) reply of a successful run offers snooze.
-  for (const [code,reply,available] of [[0,"{}",true],[0,'{"*":1700000000}',true],[0,"not json",false],[0,"null",false],[0,"",false],[1,"{}",false]]) {
+  // The probe: only a JSON object reply of a successful run offers snooze.
+  for (const [code,reply,available] of [[0,"{}",true],[0,'{"*":1700000000}',true],[0,"[]",false],[0,'["*"]',false],[0,"not json",false],[0,"null",false],[0,"",false],[1,"{}",false]]) {
     state=service()
     state.refreshSnooze();state.snoozeProbe.snoozeProbeOutput.text=reply;state.snoozeProbe.exit(code,0)
     assert.equal(state.snoozeAvailable,available,`${code} ${reply}`)

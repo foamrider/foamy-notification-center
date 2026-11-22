@@ -910,13 +910,16 @@ impl Store {
 
     /// Older records may outlive their sender files: convert their retained
     /// copies before any list is returned. New URLs avoid Qt reusing a
-    /// cached original.
+    /// cached original. A row whose timestamp readers cannot order (written
+    /// before ingest bounded it) gets the one ingest gives it now.
     pub fn normalize_archive(&mut self) -> Step {
         let data = read_file(&self.archive)?;
+        let mut unordered = false;
         let (pending, failed) = per_line(&data, |row| {
             let Some(value) = row else {
                 return Ok(Vec::new());
             };
+            unordered |= !orderable(&value)?;
             let format = value.field("imageFormat")?;
             if matches!(&format, Value::Num(n) if n.f64() == 1.0) {
                 return Ok(Vec::new());
@@ -933,7 +936,7 @@ impl Store {
         if failed {
             return Err(Bad);
         }
-        if pending.is_empty() {
+        if pending.is_empty() && !unordered {
             return Ok(());
         }
         let pending: Vec<Value> = pending
@@ -973,10 +976,17 @@ impl Store {
             let Value::Str(key) = value.field("key")? else {
                 return Err(json::JqError);
             };
-            Ok(vec![match updates.iter().find(|(k, _)| *k == key) {
-                Some((_, update)) if update.truthy() => json::jq(update),
-                _ => json::jq(&value),
-            }])
+            let mut value = match updates.iter().find(|(k, _)| *k == key) {
+                Some((_, update)) if update.truthy() => update.clone(),
+                _ => value,
+            };
+            if !orderable(&value)?
+                && let Value::Obj(object) = &mut value
+            {
+                let source = object.get("timestamp").cloned().unwrap_or(Value::Null);
+                object.insert("timestamp", archived_timestamp(source, &key));
+            }
+            Ok(vec![json::jq(&value)])
         });
         if failed {
             return Err(Bad);
@@ -1318,6 +1328,37 @@ impl Store {
             .custom_flags(OFlags::NOFOLLOW.bits() as i32)
             .open(&self.dismissed);
     }
+}
+
+/// Archived timestamps are milliseconds below 1e14, the bound stock rows
+/// have (stock.rs: below 1e11 seconds).
+const TIMESTAMP_LIMIT: f64 = 1e14;
+
+/// The timestamp a row is archived with: the source's when it is a number in
+/// (0, [`TIMESTAMP_LIMIT`]), else the key's stamp when it is in that range,
+/// else 0. Readers (list, clear, unread, retention) order rows as numbers. In
+/// jq order a string, array or object ranks above every number, and a stamp
+/// in micro- or nanoseconds above every real one: such a row would sort
+/// first, stay unread and survive Clear all. The result always passes
+/// [`orderable`], or `normalize_archive` would rewrite the row on every list.
+pub fn archived_timestamp(source: Value, key: &str) -> Value {
+    let in_range = |value: &Value| matches!(value, Value::Num(n) if n.f64() > 0.0 && n.f64() < TIMESTAMP_LIMIT);
+    if in_range(&source) {
+        return source;
+    }
+    text::key_stamp(key)
+        .and_then(|stamp| json::tonumber(stamp).ok())
+        .map(Value::Num)
+        .filter(in_range)
+        .unwrap_or(Value::int(0))
+}
+
+/// Whether readers can order an archived row: its `.timestamp // 0` is a
+/// number below [`TIMESTAMP_LIMIT`]. A missing, zero or negative one only
+/// hides the row, as it always did.
+fn orderable(row: &Value) -> json::Jq<bool> {
+    let timestamp = row.field("timestamp")?.or(Value::int(0));
+    Ok(matches!(timestamp, Value::Num(n) if n.f64() < TIMESTAMP_LIMIT))
 }
 
 /// Retention's kept rows (as lines) and dropped (key, timestamp) pairs.

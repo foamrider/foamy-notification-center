@@ -9,7 +9,7 @@ const entries = [
 ]
 
 test("groups order by newest, use app icons, and retain older critical state", () => {
-  const groups = Model.groupsFor(entries, "")
+  const groups = Model.groupsFor(entries)
   assert.deepEqual(groups.map(g => g.app), ["Chat", "Other"])
   assert.deepEqual(groups[0].entries.map(e => e.key), ["3-1", "1-1"])
   assert.equal(groups[0].critical, true)
@@ -33,19 +33,30 @@ test("collapsed and expanded stacks flatten into virtualizable rows", () => {
   assert.equal(expanded[2].layered, false)
 })
 
-test("search shows only matching keys, expands matches, and updates urgency", () => {
-  const rows = Model.stackRows(entries, {}, "message")
-  assert.equal(rows[0].group.critical, false)
-  assert.deepEqual(rows[0].group.entries.map(e => e.key), ["3-1"])
-  const appMatches = Model.stackRows(entries, {}, "chat")
-  assert.equal(appMatches[0].expanded, true)
-  assert.equal(appMatches.length, 3)
-  assert.deepEqual(Model.stackRows(entries, {}, "missing"), [])
+test("a search shows every row the store found, with each stack open", () => {
+  // The store matches with full Unicode case folding and a trimmed query, so
+  // its answer is shown as it is: "strasse" found "Straße", "foo " found "foo".
+  const cases = [
+    { query: "strasse", found: { key: "5-1", app: "Maps", timestamp: 500, summary: "Straße closed" }, keys: ["5-1", "3-1", "1-1", "2-1"] },
+    { query: "foo ", found: { key: "6-1", app: "Chat", timestamp: 600, body: "said foo" }, keys: ["6-1", "3-1", "1-1", "2-1"] }
+  ]
+  for (const { query, found, keys } of cases) {
+    const rows = Model.stackRows([found, ...entries], {}, query)
+    assert.deepEqual(rows.filter(r => r.kind === "message").map(r => r.entry.key), keys, query)
+    assert.equal(rows.find(r => r.id === "group:Chat").expanded, true, query)
+  }
+  // A stack is critical only when a row of the answer is: "message" did not find the critical card.
+  const answer = Model.stackRows([entries[1], entries[2]], {}, "message")
+  assert.deepEqual(answer.filter(r => r.kind === "message").map(r => r.entry.key), ["3-1", "2-1"])
+  assert.equal(answer.find(r => r.id === "group:Chat").group.critical, false)
+  // Without a search, stacks stay as the user left them.
+  assert.equal(Model.stackRows(entries, {}, "").find(r => r.id === "group:Chat").expanded, false)
+  assert.deepEqual(Model.stackRows([], {}, "missing"), [])
 })
 
 test("sender names cannot collide with object properties and duplicate keys are ignored", () => {
   const rows = [{ key: "4-1", app: "__proto__", timestamp: 400 }, null, ...entries, entries[0]]
-  assert.equal(Model.groupsFor(rows, "").length, 3)
-  assert.equal(Model.groupsFor(rows, "")[1].entries.length, 2)
+  assert.equal(Model.groupsFor(rows).length, 3)
+  assert.equal(Model.groupsFor(rows)[1].entries.length, 2)
 })
 

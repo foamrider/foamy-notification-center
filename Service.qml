@@ -37,6 +37,10 @@ Item {
   property bool hasMore: false
   property string searchQuery: ""
   onSearchQueryChanged: reloadArchive.restart()
+  // The search the running read was started with, and the one `entries`
+  // answer. Until a read for a new search ends, the rows answer the old one.
+  property string listQuery: ""
+  property string entriesQuery: ""
   // A list read is running. Paging waits for it: the panel checks again when
   // it ends, so one request never jumps two pages.
   readonly property bool listing: listProc.running
@@ -344,6 +348,22 @@ Item {
     return FoamyNative.command(root.pluginDir, root.helper, args)
   }
 
+  // A failed read keeps rows that answer the same search: they are only
+  // stale. Rows that answer another search, or none, would read as hits of
+  // this one, so they go, and with them the page they said was not the last
+  // (paging would otherwise repeat the failed read at once). A read for a
+  // search the user has left decides nothing about the rows on screen: the
+  // read for the present search is queued behind it (onSearchQueryChanged).
+  function listFailed(message) {
+    root.loadError = message
+    if (root.listQuery !== root.searchQuery || root.entriesQuery === root.listQuery)
+      return
+    root.hasMore = false
+    root.entries = []
+    root.entriesQuery = root.listQuery
+    root.entriesReset()
+  }
+
   function differsFrom(data) {
     return JSON.stringify(data) !== JSON.stringify(entries)
   }
@@ -357,9 +377,10 @@ Item {
     }
     loadPending = false
     listRevision = archiveRevision
+    listQuery = searchQuery
     listLoadCount++
     // One row past the page says whether there is more.
-    listProc.command = root.storeCommand(["list", String(root.listLimit + 1), root.searchQuery])
+    listProc.command = root.storeCommand(["list", String(root.listLimit + 1), root.listQuery])
     listProc.running = true
   }
 
@@ -588,7 +609,7 @@ Item {
         return
       try {
         var value = JSON.parse(snoozeProbeOutput.text)
-        root.snoozeAvailable = value !== null && typeof value === "object"
+        root.snoozeAvailable = value !== null && typeof value === "object" && !Array.isArray(value)
       } catch (e) { /* No timed snooze (stock 4.5-rc2); its DND control remains available. */ }
     }
   }
@@ -780,6 +801,12 @@ Item {
       if (JSON.stringify(entries[i]) === JSON.stringify(entry))
         return
       archiveRevision++
+      // Search rows are the store's matches, and only the store can say
+      // whether the changed row still matches: read the search again.
+      if (entriesQuery) {
+        reloadArchive.restart()
+        return
+      }
       var updated = entries.slice()
       updated[i] = entry
       entries = updated
@@ -910,7 +937,7 @@ Item {
       if (root.storeUnavailable(exitCode))
         return
       if (exitCode !== 0 || exitStatus !== 0)
-        root.loadError = "Could not refresh notification history. Reopen the center to retry."
+        root.listFailed("Could not refresh notification history. Reopen the center to retry.")
       if (root.loadPending)
         reloadArchive.restart()
     }
@@ -926,21 +953,23 @@ Item {
         try {
           data = JSON.parse(text)
         } catch (e) {
-          root.loadError = "Invalid notification history response."
+          root.listFailed("Invalid notification history response.")
           return
         }
         if (!Array.isArray(data)) {
-          root.loadError = "Invalid notification history response."
+          root.listFailed("Invalid notification history response.")
           return
         }
         root.loadError = ""
         root.hasMore = data.length > root.listLimit
         data = root.visibleEntries(data.slice(0, root.listLimit))
-        if (!root.searchQuery)
+        if (!root.listQuery)
           root.unreadSource = data
         var wasLoaded = root.loaded
+        var sameQuery = root.entriesQuery === root.listQuery
         root.loaded = true
-        if (wasLoaded && !root.differsFrom(data))
+        root.entriesQuery = root.listQuery
+        if (wasLoaded && sameQuery && !root.differsFrom(data))
           return
         root.entries = data
         root.entriesReset()

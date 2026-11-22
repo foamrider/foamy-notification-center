@@ -334,14 +334,10 @@ impl Store {
         entry.insert("fileAction", Value::Str(file_action));
         entry.insert("glyph", field(&value, "glyph").or(Value::str("")));
         entry.insert("urgency", field(&value, "urgency").or(Value::int(1)));
-        let timestamp = field(&value, "timestamp").or(Value::int(0));
-        let timestamp = if json::gt(&timestamp, &Value::int(0)) {
-            timestamp
-        } else {
-            let stamp = key.split('-').next().unwrap_or("");
-            json::tonumber(stamp).map_or(Value::int(0), Value::Num)
-        };
-        entry.insert("timestamp", timestamp);
+        entry.insert(
+            "timestamp",
+            store::archived_timestamp(field(&value, "timestamp"), key),
+        );
         let entry = json::jq(&Value::Obj(entry));
 
         if existing.is_some() {
