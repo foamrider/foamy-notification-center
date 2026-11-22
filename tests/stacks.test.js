@@ -45,6 +45,10 @@ test("a search shows every row the store found, with each stack open", () => {
     assert.deepEqual(rows.filter(r => r.kind === "message").map(r => r.entry.key), keys, query)
     assert.equal(rows.find(r => r.id === "group:Chat").expanded, true, query)
   }
+  // A stack is critical only when a row of the answer is: "message" did not find the critical card.
+  const answer = Model.stackRows([entries[1], entries[2]], {}, "message")
+  assert.deepEqual(answer.filter(r => r.kind === "message").map(r => r.entry.key), ["3-1", "2-1"])
+  assert.equal(answer.find(r => r.id === "group:Chat").group.critical, false)
   // Without a search, stacks stay as the user left them.
   assert.equal(Model.stackRows(entries, {}, "").find(r => r.id === "group:Chat").expanded, false)
   assert.deepEqual(Model.stackRows([], {}, "missing"), [])
