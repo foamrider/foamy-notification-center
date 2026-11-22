@@ -265,6 +265,12 @@ pub fn preview_path(text: &str) -> bool {
 fn grep_preview(text: &str) -> String {
     for line in text.split('\n') {
         let b = line.as_bytes();
+        // Every start inside one run of non-separators shares the run's end,
+        // so the run is scanned once, not once per start: a run of slashes
+        // made that quadratic, under the store lock. The run's last
+        // extension end also has its latest dot, so a start matches exactly
+        // when that dot lies after its slash.
+        let mut cached: Option<(usize, Option<(usize, usize)>)> = None;
         for start in 0..b.len() {
             let slash = if b[start] == b'/' {
                 start
@@ -276,14 +282,24 @@ fn grep_preview(text: &str) -> String {
             } else {
                 continue;
             };
-            let mut run = slash + 1;
-            while run < b.len() && !matches!(b[run], b'"' | b'\'' | b' ') {
-                run += 1;
-            }
-            // Longest: the last end within the run that closes on an extension.
-            if let Some(end) = (slash + 2..=run)
-                .rev()
-                .find(|&end| ends_with_extension(&b[slash + 1..end]).is_some())
+            let last = match cached {
+                Some((run, last)) if start < run => last,
+                _ => {
+                    let mut run = slash + 1;
+                    while run < b.len() && !matches!(b[run], b'"' | b'\'' | b' ') {
+                        run += 1;
+                    }
+                    // Longest: the last end within the run that closes on an
+                    // extension, with the index of its dot.
+                    let last = (start + 1..=run).rev().find_map(|end| {
+                        ends_with_extension(&b[start..end]).map(|n| (end, end - n))
+                    });
+                    cached = Some((run, last));
+                    last
+                }
+            };
+            if let Some((end, dot)) = last
+                && dot > slash
             {
                 return line[start..end].to_string();
             }
@@ -455,6 +471,21 @@ mod tests {
         assert_eq!(preview_source("a FILE:///x.GIF"), "FILE:///x.GIF");
         assert_eq!(preview_source("a\nb /c.JPG"), "/c.JPG");
         assert_eq!(preview_source("no image"), "");
+        // Leftmost start, longest end; the extension's dot must follow the slash.
+        for (action, found) in [
+            ("////a.png", "////a.png"),
+            ("x.png/y", ""),
+            ("a.png/.gif", "/.gif"),
+            ("file:///.png", "file:///.png"),
+            ("file://.png", "//.png"),
+            ("/a.png/b.jpeg/c", "/a.png/b.jpeg"),
+            ("/a.PNG.gif.x", "/a.PNG.gif"),
+            ("/x '/b.gif", "/b.gif"),
+            ("/a.png'/b.gif", "/a.png"),
+            ("x.png file:///y/a.webp\"z", "file:///y/a.webp"),
+        ] {
+            assert_eq!(preview_source(action), found, "{action}");
+        }
         assert_eq!(
             screenshot_action(r#"["omasnap","file:///s.png"]"#, "/s.png"),
             "edit-screenshot"
@@ -474,5 +505,23 @@ mod tests {
             json::jq_raw(&json::parse(br#"["omasnap","/s.png"]"#, json::Dialect::Jq).unwrap());
         assert_eq!(preview_source(&printed), "/s.png");
         assert_eq!(screenshot_action(&printed, "/s.png"), "edit-screenshot");
+    }
+
+    #[test]
+    fn a_source_sized_run_of_slashes_is_scanned_in_linear_time() {
+        // Ingest and backfill scan under the store lock, which list, remove
+        // and clear wait for. A per-slash rescan took minutes here.
+        let n = crate::ingest::MAX_SOURCE_BYTES;
+        let start = std::time::Instant::now();
+        assert_eq!(preview_source(&"/".repeat(n)), "");
+        let action = format!("{}.png", "/".repeat(n - 4));
+        assert_eq!(preview_source(&action), action);
+        let action = format!("x.png{}", "/".repeat(n - 5));
+        assert_eq!(preview_source(&action), "");
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            start.elapsed()
+        );
     }
 }

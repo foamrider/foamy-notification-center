@@ -99,6 +99,25 @@ test('an ingested row has a fixed key order, keeps number literals and hashes it
   assert.equal(fs.statSync(f.file('archive.jsonl'), {bigint: true}).mtimeNs, before)
 })
 
+test('a source timestamp that is not a positive number is archived as the key\'s stamp', t => {
+  const f = fixture(t)
+  const stamp = Date.now() - 1000
+  const values = ['"1730000000000"', '"x"', '[1]', '{"ms":1}', 'true', 'null', '0', '-5']
+  values.forEach((value, i) =>
+    fs.writeFileSync(path.join(f.source, `${stamp}-${i + 1}.json`), `{"timestamp":${value},"app":"A","summary":"S${i + 1}"}`))
+  f.out('sync')
+  const archived = f.read('archive.jsonl').trim().split('\n').map(line => JSON.parse(line))
+  assert.equal(archived.length, values.length)
+  for (const row of archived) assert.equal(row.timestamp, stamp, `${row.key}: ${JSON.stringify(row.timestamp)}`)
+  // The list, the unread count and Clear all read every row as that number.
+  assert.equal(JSON.parse(f.out('list')).length, values.length)
+  f.out('seen', String(stamp - 1))
+  assert.equal(f.out('unread'), `{"ok":true,"unread":${values.length}}\n`)
+  f.out('clear')
+  assert.equal(f.out('list'), '[]\n')
+  assert.equal(f.read('archive.jsonl'), '')
+})
+
 test('the assets hash covers each sender file as stat -L prints it', t => {
   const f = fixture(t)
   const stamp = Date.now() - 1000, key = `${stamp}-8`
