@@ -593,7 +593,7 @@ Item {
         return
       try {
         var value = JSON.parse(snoozeProbeOutput.text)
-        root.snoozeAvailable = value !== null && typeof value === "object"
+        root.snoozeAvailable = value !== null && typeof value === "object" && !Array.isArray(value)
       } catch (e) { /* No timed snooze (stock 4.5-rc2); its DND control remains available. */ }
     }
   }
