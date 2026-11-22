@@ -91,7 +91,7 @@ model_import = (
 )
 model_properties = (
     """  property string grouping:"hostname"
-  readonly property var groups:Model.groupsFor([entry,{key:"900-1",app:"Vivaldi",body:"mail.example.com\\nNew mail",timestamp:900}],"",grouping,BrowserIdentity)
+  readonly property var groups:Model.groupsFor([entry,{key:"900-1",app:"Vivaldi",body:"mail.example.com\\nNew mail",timestamp:900}],grouping,BrowserIdentity)
 """
     if center
     else ""

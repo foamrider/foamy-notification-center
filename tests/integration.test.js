@@ -46,11 +46,13 @@ test('watcher announces replacements, external clear and removal, and remains qu
 })
 test('queued archive refreshes and content comparisons do not drop updates',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../Service.qml'),'utf8')
- const state=vm.createContext({entries:[{key:'1-1',body:'old'}],listLoadCount:0,loadPending:false,archiveRevision:2,listRevision:1,listProc:{running:true},storeCommand:a=>a,pageSize:500})
+ const state=vm.createContext({entries:[{key:'1-1',body:'old'}],listLoadCount:0,loadPending:false,archiveRevision:2,listRevision:1,listProc:{running:true},storeCommand:a=>a,pageSize:500,listLimit:500,searchQuery:'needle',listQuery:''})
  state.root=state
  for(const name of ['load','differsFrom']) {const start=source.indexOf(`  function ${name}(`);vm.runInContext(source.slice(start,source.indexOf('\n  }',start)+4),state)}
  assert.equal(state.differsFrom([{key:'1-1',body:'new'}]),true)
  state.load();assert.equal(state.loadPending,true);state.listProc.running=false;state.load();assert.equal(state.listRevision,2);assert.equal(state.loadPending,false)
+ // The read remembers the search it was started with.
+ assert.equal(state.listQuery,'needle');assert.deepEqual(Array.from(state.listProc.command),['list','501','needle'])
 })
 
 test('a list read older than a watcher event is dropped and repeated; invalid or failed reads show an error',()=>{
@@ -63,7 +65,7 @@ test('a list read older than a watcher event is dropped and repeated; invalid or
  const FoamyNative=require('../kit/node-loader.cjs').load('FoamyNative')
  const service=()=>{
   const ctx=vm.createContext({FoamyNative,console:{warn(){}},JSON,helperUnavailable:false,entries:[{key:'1-1',body:'old'}],loadError:'',loadPending:false,
-   listRevision:1,archiveRevision:1,listLimit:2,hasMore:false,removedKeys:{},searchQuery:'',unreadSource:'untouched',loaded:false,resets:0,text:'',
+   listRevision:1,archiveRevision:1,listLimit:2,hasMore:false,removedKeys:{},searchQuery:'',listQuery:'',entriesQuery:'',unreadSource:'untouched',loaded:false,resets:0,text:'',
    reloadArchive:{restarts:0,restart(){this.restarts++}}})
   ctx.root=ctx;ctx.entriesReset=()=>{ctx.resets++}
   for(const name of ['visibleEntries','differsFrom','storeUnavailable']) vm.runInContext(take(name),ctx)
@@ -86,11 +88,17 @@ test('a list read older than a watcher event is dropped and repeated; invalid or
  ctx=service();ctx.loadError='old error';ctx.removedKeys={'2-1':true};finish(ctx,rows)
  assert.equal(ctx.hasMore,true);assert.deepEqual(keys(ctx),['3-1']);assert.deepEqual(Array.from(ctx.unreadSource,e=>e.key),['3-1'])
  assert.equal(ctx.loadError,'');assert.equal(ctx.loaded,true);assert.equal(ctx.resets,1)
- ctx=service();ctx.searchQuery='x';finish(ctx,JSON.stringify([{key:'3-1'}]))
- assert.equal(ctx.hasMore,false);assert.deepEqual(keys(ctx),['3-1']);assert.equal(ctx.unreadSource,'untouched')
- // An unchanged list does not reset the view; a changed one does.
+ // The rows answer the search the read was started with, even when the
+ // field changed while it ran; a search read never feeds the unread badge.
+ for(const now of ['x','']) {
+  ctx=service();ctx.listQuery='x';ctx.searchQuery=now;finish(ctx,JSON.stringify([{key:'3-1'}]))
+  assert.equal(ctx.hasMore,false);assert.deepEqual(keys(ctx),['3-1']);assert.equal(ctx.unreadSource,'untouched',now);assert.equal(ctx.entriesQuery,'x',now)
+ }
+ // An unchanged list for the same search does not reset the view; a changed
+ // one does, and so do the same rows found by another search.
  finish(ctx,JSON.stringify([{key:'3-1'}]));assert.equal(ctx.resets,1)
  finish(ctx,JSON.stringify([{key:'4-1'}]));assert.equal(ctx.resets,2);assert.deepEqual(keys(ctx),['4-1'])
+ ctx.listQuery='xy';finish(ctx,JSON.stringify([{key:'4-1'}]));assert.equal(ctx.resets,3);assert.equal(ctx.entriesQuery,'xy')
  // A failed read says so and runs a queued read; a missing helper shows its own text.
  ctx=service();ctx.loadPending=true;exit(ctx,1)
  assert.match(ctx.loadError,/Could not refresh notification history/);assert.equal(ctx.reloadArchive.restarts,1)

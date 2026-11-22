@@ -66,10 +66,9 @@ function relativeTime(timestamp, now) {
   return Math.floor(minutes / 1440) + "d ago"
 }
 
-function groupsFor(entries, filter, browserGrouping, identity) {
+function groupsFor(entries, browserGrouping, identity) {
   identity = identity || (typeof require === "function" ? require("./BrowserIdentity.js") : null)
   browserGrouping = ["browser", "hostname", "none"].indexOf(browserGrouping) >= 0 ? browserGrouping : "browser"
-  var needle = String(filter || "").toLowerCase()
   var byApp = Object.create(null)
   var seen = Object.create(null)
   var groups = []
@@ -83,7 +82,6 @@ function groupsFor(entries, filter, browserGrouping, identity) {
     if (!entry || !entry.key || seen[entry.key]) continue
     seen[entry.key] = true
     var app = String(entry.app || "Unknown app")
-    if (needle && [app, entry.summary || "", entry.body || ""].join(" ").toLowerCase().indexOf(needle) < 0) continue
     var browser = identity && identity.browser(entry)
     var host = identity ? identity.hostname(entry) : ""
     var key = app
@@ -107,8 +105,11 @@ function groupsFor(entries, filter, browserGrouping, identity) {
   return groups
 }
 
+// `filter` is the search that `entries` already answer: the store matched them
+// (with full Unicode case folding), so they are not matched again here. A
+// search shows its matches with every stack open.
 function stackRows(entries, expanded, filter, browserGrouping, identity) {
-  var groups = groupsFor(entries, filter, browserGrouping, identity)
+  var groups = groupsFor(entries, browserGrouping, identity)
   var rows = []
   for (var i = 0; i < groups.length; i++) {
     var group = groups[i]

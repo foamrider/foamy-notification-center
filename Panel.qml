@@ -455,7 +455,7 @@ Ui.Panel {
     }
     rowsDirty = false
     var focused = cursorIndex >= 0 && cursorIndex < rows.length ? rows[cursorIndex].id : ""
-    var next = Model.stackRows(entries, expandedGroups, filter, browserGrouping, BrowserIdentity)
+    var next = Model.stackRows(entries, expandedGroups, store ? store.entriesQuery : "", browserGrouping, BrowserIdentity)
     var index = next.findIndex(function (row) {
       return row.id === focused
     })
@@ -541,8 +541,6 @@ Ui.Panel {
     } else
       activate(row.entry)
   }
-
-  onFilterChanged: rebuild()
 
   // --------------------------------------------------------------- activating
 

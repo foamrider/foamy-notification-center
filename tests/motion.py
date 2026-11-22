@@ -188,11 +188,13 @@ ShellRoot {
     root.entries[1]=Object.assign({},root.entries[1],{timestamp:2000});root.rebuild()
     tryVerify(function(){return list.itemAtIndex(2)===first},5000,"a moved card keeps its delegate");compare(first.opacity,1)
     list.positionViewAtEnd();wait(40);var last=item(79);compare(last.opacity,1);compare(last.entranceOffset,0)
-    root.filter="no matches";root.rebuild();tryCompare(list,"count",0);wait(200)
-    root.filter="App 3";root.rebuild();tryVerify(function(){return list.count>0});wait(220)
+    // A search shows the store's answer: the rows it found, every stack open.
+    var all=root.entries
+    root.filter="no matches";root.entries=[];root.rebuild();tryCompare(list,"count",0);wait(200)
+    root.filter="App 3";root.entries=all.filter(function(e){return e.app.indexOf("App 3")===0});root.rebuild();tryVerify(function(){return list.count>0});wait(220)
     list.positionViewAtBeginning();root.compact=false;list.width=320;Commons.Color.background="#eff1f5";Commons.Color.foreground="#4c4f69";wait(100);capture("narrow-light-search")
     root.keyboardNavigation=true;root.cursorIndex=1;wait(40)
-    root.filter="";root.rebuild();tryCompare(list,"count",80)
+    root.filter="";root.entries=all;root.rebuild();tryCompare(list,"count",80)
    }catch(e){console.log("FAILED",e.message,e.stack);throw e}}
   }
  }
