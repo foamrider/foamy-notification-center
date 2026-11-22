@@ -149,6 +149,27 @@ test('an archived timestamp that readers cannot order is repaired to the key\'s 
   assert.equal(f.read('archive.jsonl'), '')
 })
 
+test('a key whose stamp is past the timestamp bound gives timestamp 0, so list does not rewrite the archive each time', t => {
+  const f = fixture(t)
+  const stamp = Date.now() - 1000
+  // A daemon other than Foamy that names its files in microseconds. With
+  // timestamp 0 the rows are past retention, so sync does not keep them.
+  fs.writeFileSync(path.join(f.source, `${stamp}000-1.json`), `{"timestamp":${stamp}000,"app":"A","summary":"S1"}`)
+  fs.writeFileSync(path.join(f.source, `${stamp}000-2.json`), '{"app":"A","summary":"S2"}')
+  f.out('sync')
+  assert.equal(f.read('archive.jsonl'), '')
+  // An older helper archived such a row with a timestamp readers cannot order.
+  fs.writeFileSync(f.file('archive.jsonl'), `{"key":"${stamp}000-3","app":"A","summary":"S3","timestamp":"x"}\n`)
+  assert.equal(f.out('list'), '[]\n')
+  assert.equal(JSON.parse(f.read('archive.jsonl')).timestamp, 0)
+  // Each rewrite wakes the watcher, whose storeChanged starts the next list.
+  const stat = () => { const s = fs.statSync(f.file('archive.jsonl'), {bigint: true}); return [s.ino, s.mtimeNs] }
+  const before = stat()
+  f.out('list')
+  f.out('list')
+  assert.deepEqual(stat(), before)
+})
+
 test('the assets hash covers each sender file as stat -L prints it', t => {
   const f = fixture(t)
   const stamp = Date.now() - 1000, key = `${stamp}-8`

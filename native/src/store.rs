@@ -1335,18 +1335,22 @@ impl Store {
 const TIMESTAMP_LIMIT: f64 = 1e14;
 
 /// The timestamp a row is archived with: the source's when it is a number in
-/// (0, [`TIMESTAMP_LIMIT`]), else the key's stamp, else 0. Readers (list,
-/// clear, unread, retention) order rows as numbers. In jq order a string,
-/// array or object ranks above every number, and a stamp in micro- or
-/// nanoseconds above every real one: such a row would sort first, stay unread
-/// and survive Clear all.
+/// (0, [`TIMESTAMP_LIMIT`]), else the key's stamp when it is in that range,
+/// else 0. Readers (list, clear, unread, retention) order rows as numbers. In
+/// jq order a string, array or object ranks above every number, and a stamp
+/// in micro- or nanoseconds above every real one: such a row would sort
+/// first, stay unread and survive Clear all. The result always passes
+/// [`orderable`], or `normalize_archive` would rewrite the row on every list.
 pub fn archived_timestamp(source: Value, key: &str) -> Value {
-    if matches!(&source, Value::Num(n) if n.f64() > 0.0 && n.f64() < TIMESTAMP_LIMIT) {
+    let in_range = |value: &Value| matches!(value, Value::Num(n) if n.f64() > 0.0 && n.f64() < TIMESTAMP_LIMIT);
+    if in_range(&source) {
         return source;
     }
     text::key_stamp(key)
         .and_then(|stamp| json::tonumber(stamp).ok())
-        .map_or(Value::int(0), Value::Num)
+        .map(Value::Num)
+        .filter(in_range)
+        .unwrap_or(Value::int(0))
 }
 
 /// Whether readers can order an archived row: its `.timestamp // 0` is a
