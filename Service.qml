@@ -351,10 +351,12 @@ Item {
   // A failed read keeps rows that answer the same search: they are only
   // stale. Rows that answer another search, or none, would read as hits of
   // this one, so they go, and with them the page they said was not the last
-  // (paging would otherwise repeat the failed read at once).
+  // (paging would otherwise repeat the failed read at once). A read for a
+  // search the user has left decides nothing about the rows on screen: the
+  // read for the present search is queued behind it (onSearchQueryChanged).
   function listFailed(message) {
     root.loadError = message
-    if (root.entriesQuery === root.listQuery)
+    if (root.listQuery !== root.searchQuery || root.entriesQuery === root.listQuery)
       return
     root.hasMore = false
     root.entries = []

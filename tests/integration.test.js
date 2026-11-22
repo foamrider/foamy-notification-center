@@ -110,8 +110,16 @@ test('a list read older than a watcher event is dropped and repeated; invalid or
  // one: a failed or invalid read drops them, once, and records the search.
  for(const [shown,asked,steps] of [['','zzz',c=>{finish(c,JSON.stringify({ok:false,error:'notification store is busy'}));exit(c,1)}],
   ['x','xy',c=>finish(c,'not json')],['x','',c=>exit(c,1)]]) {
-  ctx=service();ctx.entriesQuery=shown;ctx.listQuery=asked;ctx.hasMore=true;steps(ctx)
+  ctx=service();ctx.entriesQuery=shown;ctx.listQuery=asked;ctx.searchQuery=asked;ctx.hasMore=true;steps(ctx)
   assert.deepEqual(keys(ctx),[],asked);assert.equal(ctx.hasMore,false,asked);assert.equal(ctx.entriesQuery,asked,asked);assert.equal(ctx.resets,1,asked);assert.notEqual(ctx.loadError,'',asked)
+ }
+ // The user left the search before its read failed (closed it, or typed on):
+ // the rows on screen stay as they are, and the queued read for the present
+ // search decides. Only the error is told.
+ for(const [shown,asked,now] of [['','zzz',''],['x','xy','xyz'],['x','xy','x']]) {
+  ctx=service();ctx.entriesQuery=shown;ctx.listQuery=asked;ctx.searchQuery=now;ctx.hasMore=true;ctx.loadPending=true;exit(ctx,1)
+  assert.deepEqual(keys(ctx),['1-1'],asked+' left for '+now);assert.equal(ctx.hasMore,true,asked);assert.equal(ctx.entriesQuery,shown,asked);assert.equal(ctx.resets,0,asked)
+  assert.notEqual(ctx.loadError,'',asked);assert.equal(ctx.reloadArchive.restarts,1,asked)
  }
  ctx=service();exit(ctx,0);assert.equal(ctx.loadError,'');assert.equal(ctx.reloadArchive.restarts,0)
  ctx=service();ctx.loadPending=true;exit(ctx,127)
