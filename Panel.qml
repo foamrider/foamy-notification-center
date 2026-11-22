@@ -215,14 +215,14 @@ Ui.Panel {
   }
   // A failed save: the field shows the stored value again and accepts the same
   // number as a fresh attempt ("Try again" must be able to retry it).
-  signal preferenceFailed(string scope, string key)
+  signal preferenceFailed(string scope, string key, var value)
   function finishPreference(ok) {
     if (!preferenceActive)
       return
     if (!ok) {
       settingsError = tr("Could not save settings. Try again.")
       console.warn("Foamy Notification Center: settings save failed for", preferenceActive.scope, preferenceActive.key)
-      preferenceFailed(preferenceActive.scope, preferenceActive.key)
+      preferenceFailed(preferenceActive.scope, preferenceActive.key, preferenceActive.value)
     }
     preferenceActive = null
     awaitingPeerSave = false
@@ -1154,8 +1154,8 @@ Ui.Panel {
             }
             Connections {
               target: root
-              function onPreferenceFailed(scope, key) {
-                settingsFields.saveFailed(scope, key)
+              function onPreferenceFailed(scope, key, value) {
+                settingsFields.saveFailed(scope, key, value)
               }
             }
           }

@@ -1,5 +1,6 @@
 """Numeric settings use kit FoamyNumberField: an external change shows while Settings is open,
-and Escape restores the saved value without saving or leaving the page. Offscreen; the host shell is
+and Escape restores the saved value without saving or leaving the page. A choice whose save failed
+shows the stored value again. Offscreen; the host shell is
 hostenv.root() (the installed 4.5 unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick another)."""
 
 import os
@@ -71,13 +72,25 @@ ShellRoot {
     keyClick(Qt.Key_End); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_1); keyClick(Qt.Key_4)
     keyClick(Qt.Key_Return)
     compare(pane.saved, ["center:keepDays=14"])
-    pane.saveFailed("center", "keepDays")                    // Panel.finishPreference(false); value stays 30
+    pane.saveFailed("center", "keepDays", 14)                // Panel.finishPreference(false); value stays 30
     compare(f.field.text, "30")
     keyClick(Qt.Key_End); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_Backspace); keyClick(Qt.Key_1); keyClick(Qt.Key_4)
     keyClick(Qt.Key_Return)
     compare(pane.saved, ["center:keepDays=14", "center:keepDays=14"])
     f.field.focus = false
     compare(pane.saved.length, 2)                           // focus-out does not send it a third time
+   }
+   function test_a_failed_pick_shows_the_stored_choice_again() {
+    var g = findChild(pane, "center-browserGrouping"); verify(g !== null)
+    compare(g.shownValue, "browser")
+    g.select("hostname"); g.select("none")
+    compare(pane.saved, ["center:browserGrouping=hostname", "center:browserGrouping=none"])
+    // The panel saves one pick per key at a time: the older one failed and
+    // the newer one still waits, so it stays on show.
+    pane.saveFailed("center", "browserGrouping", "hostname")
+    compare(g.shownValue, "none")
+    pane.saveFailed("center", "browserGrouping", "none")      // value stays "browser"
+    compare(g.shownValue, "browser")
    }
    function test_short_values_are_rows() {
     // DESIGN.md "Short values use the row form": numbers and the grouping
@@ -135,5 +148,5 @@ print(
         if "NUMBER_SETTINGS" in line or "FAIL" in line or "Actual" in line or "Expected" in line or "Error" in line
     )
 )
-# Five test functions plus QtTest's own count: a function that stops running fails here.
-assert status == 0 and "NUMBER_SETTINGS 6 passed 0 failed" in output, output
+# Six test functions plus QtTest's own count: a function that stops running fails here.
+assert status == 0 and "NUMBER_SETTINGS 7 passed 0 failed" in output, output

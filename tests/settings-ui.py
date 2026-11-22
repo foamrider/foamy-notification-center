@@ -408,6 +408,8 @@ ShellRoot {
         tryCompare(grouping, "popupOpen", false, roundTrip)
         tryVerify(function() { return panel.settingsError !== "" && panel.preferenceActive === null && !panel.popupSettingsLoading }, roundTrip)
         compare(grouping.value, "hostname")
+        // The trigger shows the stored choice next to the error, not the unsaved pick.
+        compare(grouping.shownValue, "hostname")
         capture(control("notificationSettingsPane").parent.parent.parent.parent, "settings-save-error")
         root.failSave = false
         tryVerify(function() { return !panel.popupSettingsLoading && panel.preferenceActive === null }, roundTrip)

@@ -87,18 +87,18 @@ test('the manifest declares exactly the settings the panel reads, and its defaul
     for (const name of ['type', 'defaultValue', 'options', 'min', 'max']) assert.deepEqual(declared[name], f[name], `${f.key}.${name}`)
   }
 })
-test('a failed save is reported to the settings fields so the same number can be retried', () => {
+test('a failed save is reported to the settings fields with its value, so the same number can be retried', () => {
   const fs = require('node:fs'), vm = require('node:vm')
   const panel = fs.readFileSync(require('node:path').join(__dirname, '../Panel.qml'), 'utf8')
   const start = panel.indexOf('  function finishPreference(ok) {')
   const failed = []
-  const ctx = vm.createContext({ preferenceActive: { scope: 'center', key: 'keepDays' }, settingsError: '', awaitingPeerSave: true,
-    tr: s => s, console: { warn() {} }, Qt: { callLater() {} }, preferenceFailed: (scope, key) => failed.push(scope + ':' + key) })
+  const ctx = vm.createContext({ preferenceActive: { scope: 'center', key: 'keepDays', value: 14 }, settingsError: '', awaitingPeerSave: true,
+    tr: s => s, console: { warn() {} }, Qt: { callLater() {} }, preferenceFailed: (scope, key, value) => failed.push(scope + ':' + key + '=' + value) })
   ctx.root = ctx
   vm.runInContext(panel.slice(start, panel.indexOf('\n  }', start) + 4), ctx)
   ctx.finishPreference(false)
-  assert.deepEqual(failed, ['center:keepDays'])
-  ctx.preferenceActive = { scope: 'center', key: 'maxItems' }; ctx.finishPreference(true)
-  assert.deepEqual(failed, ['center:keepDays'])
+  assert.deepEqual(failed, ['center:keepDays=14'])
+  ctx.preferenceActive = { scope: 'center', key: 'maxItems', value: 500 }; ctx.finishPreference(true)
+  assert.deepEqual(failed, ['center:keepDays=14'])
   // The settings page passes it on to the field: tests/panel-ui.py.
 })
