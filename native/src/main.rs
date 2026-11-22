@@ -12,7 +12,9 @@
 //! Every subcommand prints JSON (one object or one array, one line),
 //! including failures: `{"ok":false,"error":"<message>"}`, exit 1. An
 //! unknown subcommand prints the usage on standard error and exits 64.
-//! Everything is created with umask 077.
+//! Everything is created with umask 077. A store directory that cannot be
+//! created fails every subcommand but `favicon` with "cannot create
+//! notification store" (the directory and the cause on standard error).
 //!
 //! - `sync` → `{"ok":true,"synced":true}`; errors "cannot normalize
 //!   notification archive", "cannot synchronize notification history"
@@ -83,7 +85,8 @@
 //! for each archive step). Hashes: `sourceHash` is the SHA-256 of the source
 //! file (trailing newlines removed) or stock row, `assetSources` of
 //! "appIcon\nimage\nfile\nNC_PREVIEWS\n", `assetsHash` of that plus `stat -L
-//! -c '%d:%i:%s:%y:%z'` of each sender path. Bounds: source files 128 KiB,
+//! -c '%d:%i:%s:%y:%z'` of each sender path (an image's `file://` URL
+//! percent-decoded, as Foamy writes it). Bounds: source files 128 KiB,
 //! stock arrays 8 MiB and 100 rows (rows 128 KiB), the handled journal's
 //! first 64 KiB, sender images 5 MiB (see `images`).
 //!

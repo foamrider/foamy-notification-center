@@ -167,18 +167,19 @@ impl Images<'_> {
             && size(dest).is_some_and(|n| n > 0 && n <= MAX_IMAGE_BYTES)
     }
 
-    /// `copy_image`: a normalized private copy of a sender file, as a
-    /// `file://` URL, or "" (with a note on standard error when the file
-    /// exists but cannot be used).
+    /// `copy_image`: a normalized private copy of a sender file (a path, or
+    /// a `file://` URL: [`text::sender_path`]), as a `file://` URL, or ""
+    /// (with a note on standard error when the file exists but cannot be
+    /// used).
     pub fn copy(&self, source: &str, key: &str, slot: &str) -> String {
-        let source = text::strip_file_url(source);
-        if !regular(source) {
+        let source = text::sender_path(source);
+        if !regular(&source) {
             return String::new();
         }
         let dest = format!("{}/{key}-{slot}.png", self.dir);
         let temp = format!("{dest}.tmp");
         let resized = format!("{dest}.resized");
-        let copied = read_sender(source, MAX_IMAGE_BYTES + 1)
+        let copied = read_sender(&source, MAX_IMAGE_BYTES + 1)
             .filter(|data| data.len() as u64 <= MAX_IMAGE_BYTES)
             .is_some_and(|data| write_private(&temp, &data).is_ok());
         if copied {

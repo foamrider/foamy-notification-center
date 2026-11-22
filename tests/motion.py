@@ -1,6 +1,7 @@
 """Exercise real Center list delegates with synthetic history and an isolated Qt surface."""
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -243,6 +244,7 @@ with (
     status = shell.wait(60)
 output = log.read_text()
 print(output)
-print("Captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert status == 0 and "CENTER_MOTION 7 passed 0 failed" in output
+assert status == 0 and "CENTER_MOTION 7 passed 0 failed" in output, f"motion failed; log and captures in {base}"
+# Keep the captures only when they are needed to see what failed.
+shutil.rmtree(base)

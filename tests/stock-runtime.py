@@ -291,8 +291,12 @@ try:
             + stock
             + "; Foamy Notifications absent; a missing omarchy-shell: focus fallback and DND error; watcher restart backoff and recovery"
         )
+except BaseException:
+    # A failed run keeps its files to see what failed.
+    print("Evidence:", base)
+    raise
 finally:
     proc.stop()
     log.close()
-    print("Evidence:", base)
     hostenv.check(env, (base / "log").read_text(), *hostenv.calls(base))
+shutil.rmtree(base)
