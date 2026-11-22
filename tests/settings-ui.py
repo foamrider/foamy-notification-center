@@ -232,6 +232,15 @@ ShellRoot {
         tryVerify(function() { return panel.view !== null && panel.view.Window.active }, roundTrip, "The panel never got keyboard focus")
       }
       function cleanup() { panel.close(); tryCompare(panel, "opened", false, roundTrip) }
+      // The panel's error line shows `english`, then `norwegian` under Norwegian.
+      function speaks(english, norwegian) {
+        var line = findChild(panel.view, "notificationError")
+        tryCompare(line, "text", english, roundTrip)
+        language.setText("no\n"); tryCompare(Kit.FoamyI18n, "language", "no", 10000)
+        tryVerify(function() { return line.text === norwegian }, roundTrip, "the error line reads " + line.text + " in Norwegian")
+        language.setText("en\n"); tryCompare(Kit.FoamyI18n, "language", "en", 10000)
+        tryCompare(line, "text", english, roundTrip)
+      }
       function test_00_direction() {
         try {
         for (var direction = 0; direction < 2; direction++) {
@@ -497,6 +506,8 @@ ShellRoot {
         search.pasteError = "Clipboard text is too large or contains invalid characters."
         wait(100)
         capture(search.parent.parent.parent, "search-paste-error")
+        // The error line speaks the desktop's language.
+        speaks("Clipboard text is too large or contains invalid characters.", "Teksten på utklippstavlen er for stor eller inneholder ugyldige tegn.")
         keyClick(Qt.Key_Escape)
         compare(panel.searching, false)
         compare(search.pasteError, "")
@@ -530,6 +541,7 @@ ShellRoot {
         panel.activate(row)
         tryVerify(function() { return store.focusError.indexOf("Could not open the image") === 0 }, roundTrip)
         tryVerify(function() { var line = findChild(panel.view, "notificationError"); return line !== null && line.visible && line.text.indexOf("Could not open the image") === 0 }, roundTrip, "the panel shows the error")
+        speaks("Could not open the image. Check that the file and its app are available, then try again.", "Kunne ikke åpne bildet. Sjekk at filen og appen den åpnes i er tilgjengelige, og prøv igjen.")
         compare(store.entries.length, 1)
         compare(panel.opened, true)
         capture(control("notificationSearch").parent.parent.parent, "screenshot-open-error")

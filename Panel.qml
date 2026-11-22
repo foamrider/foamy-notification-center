@@ -940,7 +940,7 @@ Ui.Panel {
             x: FoamyStyle.padding
             width: parent.width - FoamyStyle.padding * 2
             textFormat: Text.PlainText
-            text: search.pasteError || (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
+            text: search.pasteError ? root.tr(search.pasteError) : (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
             visible: text !== ""
             color: Commons.Color.urgent
             font.family: root.fontFamily
