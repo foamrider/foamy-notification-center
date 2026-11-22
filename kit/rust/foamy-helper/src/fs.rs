@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 2f17136d803e674f7a0576813750d8406680381102023f4669102bbceadc1555 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 3c91ccd1b3ba865468cbb8c5f2a056acea7782c22b73e3a1149e3912a201fa0c — do not edit; change foamy-kit and run sync
 //! Files: atomic writes with owner and type checks, private directories and
 //! bounded reads that refuse symlinks and special files.
 
@@ -14,9 +14,35 @@ use rustix::fs::{self as rfs, AtFlags, FileType, Mode, OFlags};
 use rustix::io::Errno;
 use rustix::process::{geteuid, getpid};
 
+/// An error message with the path, over the original error's payload.
+#[derive(Debug)]
+struct Context {
+    message: String,
+    payload: Box<dyn std::error::Error + Send + Sync>,
+}
+
+impl std::fmt::Display for Context {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for Context {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&*self.payload)
+    }
+}
+
 fn context(error: impl Into<io::Error>, what: &str, path: &Path) -> io::Error {
     let error = error.into();
-    io::Error::new(error.kind(), format!("{what} {}: {error}", path.display()))
+    let kind = error.kind();
+    let message = format!("{what} {}: {error}", path.display());
+    // Keep a payload such as `io::TooLarge` as the source, so that
+    // `io::is_over_limit` still recognizes the error.
+    match error.into_inner() {
+        Some(payload) => io::Error::new(kind, Context { message, payload }),
+        None => io::Error::new(kind, message),
+    }
 }
 
 fn refuse(kind: ErrorKind, path: &Path, why: &str) -> io::Error {
@@ -336,15 +362,21 @@ pub(crate) mod tests {
         let file = dir.0.join("file");
         fs::write(&file, b"12345").unwrap();
         assert_eq!(read_file_limited(&file, 5).unwrap(), b"12345");
-        assert!(crate::io::is_over_limit(&io::Error::other(
-            crate::io::TooLarge { limit: 1 }
-        )));
-        assert!(
-            read_file_limited(&file, 4)
-                .unwrap_err()
-                .to_string()
-                .contains("larger than 4 bytes")
+        // Helpers map an oversized file to their own "too large" reply.
+        let error = read_file_limited(&file, 4).unwrap_err();
+        assert!(crate::io::is_over_limit(&error), "{error:?}");
+        assert_eq!(error.kind(), ErrorKind::InvalidData);
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "cannot read {}: input is larger than 4 bytes",
+                file.display()
+            )
         );
+        // Other failures with a path are not over a limit.
+        let missing = read_file_limited(&dir.0.join("missing"), 64).unwrap_err();
+        assert_eq!(missing.kind(), ErrorKind::NotFound);
+        assert!(!crate::io::is_over_limit(&missing));
         let link = dir.0.join("link");
         symlink(&file, &link).unwrap();
         assert!(

@@ -1,10 +1,15 @@
-// foamy-kit 0.9.0 17d4cde5814661e1eedce8abdb7ea1e46ef8f9a588d3454920e5fdba99b83c0c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 111a50e13415ed5ca0fee6b226b655db8cf67ea266fcfd485e01cbe0c03f7b05 — do not edit; change foamy-kit and run sync
 //! Bounded reads: whole streams with a byte cap, and lines with a maximum
 //! length that skip (rather than buffer) an overlong line.
 
 use std::error::Error;
 use std::fmt;
 use std::io::{self, BufRead, ErrorKind, Read};
+use std::os::fd::{AsFd, BorrowedFd};
+use std::time::Instant;
+
+use rustix::event::{PollFd, PollFlags, Timespec, poll};
+use rustix::io::Errno;
 
 /// The error inside an [`io::Error`] when input is larger than its cap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,11 +41,18 @@ impl fmt::Display for LineTooLong {
 
 impl Error for LineTooLong {}
 
-/// Whether `error` reports input over a cap ([`TooLarge`] or [`LineTooLong`]).
+/// Whether `error` reports input over a cap ([`TooLarge`] or [`LineTooLong`]),
+/// also when the cap error is the source of the error inside it (as with
+/// [`crate::fs::read_file_limited`], which adds the path to the message).
 pub fn is_over_limit(error: &io::Error) -> bool {
-    error
-        .get_ref()
-        .is_some_and(|inner| inner.is::<TooLarge>() || inner.is::<LineTooLong>())
+    let mut next = error.get_ref().map(|inner| inner as &(dyn Error + 'static));
+    while let Some(inner) = next {
+        if inner.is::<TooLarge>() || inner.is::<LineTooLong>() {
+            return true;
+        }
+        next = inner.source();
+    }
+    false
 }
 
 /// Reads `reader` to its end, failing with [`TooLarge`] (kind
@@ -64,8 +76,55 @@ pub fn read_limited_string<R: Read>(reader: R, limit: u64) -> io::Result<String>
 }
 
 /// Reads all of standard input, at most `limit` bytes.
+///
+/// When the helper set a run budget ([`crate::process::set_run_budget`]),
+/// standard input must also end by then: a caller that writes its request
+/// but never closes the pipe would otherwise keep the helper waiting with no
+/// end. Past the deadline the read fails with kind `TimedOut`.
 pub fn read_stdin_limited(limit: u64) -> io::Result<Vec<u8>> {
-    read_limited(io::stdin().lock(), limit)
+    match crate::process::run_deadline() {
+        Some(deadline) => read_fd_until(io::stdin().as_fd(), limit, deadline),
+        None => read_limited(io::stdin().lock(), limit),
+    }
+}
+
+/// [`read_limited`] on a file descriptor that must reach its end before
+/// `deadline`: each read waits in `poll` for at most the time left.
+fn read_fd_until(fd: BorrowedFd<'_>, limit: u64, deadline: Instant) -> io::Result<Vec<u8>> {
+    let mut data = Vec::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(io::Error::new(
+                ErrorKind::TimedOut,
+                "input did not end before the deadline",
+            ));
+        }
+        let wait = Timespec {
+            tv_sec: left.as_secs() as _,
+            tv_nsec: left.subsec_nanos() as _,
+        };
+        let mut polled = [PollFd::new(&fd, PollFlags::IN)];
+        match poll(&mut polled, Some(&wait)) {
+            // Nothing yet: the next turn checks the deadline.
+            Ok(0) | Err(Errno::INTR) => continue,
+            Ok(_) => {}
+            Err(error) => return Err(error.into()),
+        }
+        let read = match rustix::io::read(fd, &mut buffer) {
+            Ok(read) => read,
+            Err(Errno::INTR | Errno::AGAIN) => continue,
+            Err(error) => return Err(error.into()),
+        };
+        if read == 0 {
+            return Ok(data);
+        }
+        data.extend_from_slice(&buffer[..read]);
+        if data.len() as u64 > limit {
+            return Err(io::Error::new(ErrorKind::InvalidData, TooLarge { limit }));
+        }
+    }
 }
 
 /// Reads `\n`-terminated lines of at most `limit` bytes each.
@@ -150,7 +209,42 @@ impl<R: BufRead> LineReader<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{BufReader, Cursor};
+    use std::io::{BufReader, Cursor, Write};
+    use std::time::Duration;
+
+    #[test]
+    fn a_pipe_left_open_ends_at_the_deadline() {
+        let (reader, writer) = rustix::pipe::pipe().unwrap();
+        let mut writer = std::fs::File::from(writer);
+        writer.write_all(b"{\"text\":\"x\"}").unwrap();
+        // The writer stays open: without a deadline this read never ends.
+        let started = Instant::now();
+        let deadline = started + Duration::from_millis(200);
+        let error = read_fd_until(reader.as_fd(), 1024, deadline).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::TimedOut);
+        assert!(started.elapsed() >= Duration::from_millis(200));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        drop(writer);
+    }
+
+    #[test]
+    fn a_closed_pipe_is_read_to_its_end_within_the_limit() {
+        let (reader, writer) = rustix::pipe::pipe().unwrap();
+        let mut writer = std::fs::File::from(writer);
+        writer.write_all(b"abcd").unwrap();
+        drop(writer);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        assert_eq!(read_fd_until(reader.as_fd(), 4, deadline).unwrap(), b"abcd");
+        let (reader, writer) = rustix::pipe::pipe().unwrap();
+        let mut writer = std::fs::File::from(writer);
+        writer.write_all(b"abcde").unwrap();
+        drop(writer);
+        let error = read_fd_until(reader.as_fd(), 4, deadline).unwrap_err();
+        assert!(is_over_limit(&error));
+        // A deadline already past fails before any read.
+        let error = read_fd_until(reader.as_fd(), 4, Instant::now()).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::TimedOut);
+    }
 
     #[test]
     fn read_limited_accepts_exactly_the_limit() {

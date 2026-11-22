@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 ebfadf5a33e10c001e6c9d83e0c02ea3f79003807fc4b0ecc655d7427bac54a2 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 ebfadf5a33e10c001e6c9d83e0c02ea3f79003807fc4b0ecc655d7427bac54a2 — do not edit; change foamy-kit and run sync
 //! `flock(2)` locks on lock files, including the per-plugin runtime
 //! directory `$XDG_RUNTIME_DIR/<plugin>`.
 //!

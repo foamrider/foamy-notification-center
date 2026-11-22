@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 ae76311ecab592565b50a170021c66b6512aa47d3499004b4dfed92a2977d797 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 b15ed41bafb7a0f25539b344004ed706131515547a38590fb4890b206cca1f98 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Normal wheel and touchpad scrolling for a Flickable (ListView, GridView…),
@@ -32,6 +32,14 @@ import QtQuick
 // FoamySettingsPage uses it; plugin Flickables add one line. `enabled: false`
 // hands the wheel back to the Flickable.
 //
+// Click-away: it also puts a FoamyClickAway under the Flickable's content,
+// so a click on the list's or page's empty space (below the last row,
+// between rows that don't take the press) takes the keys from a focused
+// text field; a drag there still flicks. `spaceClicked` fires on each
+// such click, field or not (a list that clears its selection).
+// `clickAway: false` leaves it out (a Flickable that is itself a text
+// field: SafeTextArea).
+//
 // ensureVisible(item[, margin]): scroll the least amount that shows `item`
 // (a descendant of the Flickable's content), top first when it is taller
 // than the view. For a section that expands with an animation call it when
@@ -46,6 +54,9 @@ QtObject {
   property real notch: Math.max(1, Qt.styleHints.wheelScrollLines) * FoamyStyle.rowHeight
   property real margin: FoamyStyle.gap
   property int followMs: 450
+  // A FoamyClickAway under the target's content (header: "Click-away").
+  property bool clickAway: true
+  signal spaceClicked
   // Where an animated scroll is going (NaN when idle). For tests.
   readonly property real destination: animation.running ? animation.to : NaN
   readonly property bool scrollable: !!target && maxY > minY + 0.5
@@ -141,6 +152,16 @@ QtObject {
     _place(item, margin)
   }
 
+  // The content grows only after the followed item has (a Column lays out
+  // later), so a place on the item's height alone stops short at the old
+  // end of the content.
+  property Connections _followContent: Connections {
+    target: root._following ? root.target : null
+    function onContentHeightChanged() {
+      root._refollow()
+    }
+  }
+
   property Timer _followTimer: Timer {
     id: followTimer
     interval: root.followMs
@@ -181,8 +202,38 @@ QtObject {
     }
     if (target)
       _handler = _handlerComponent.createObject(target)
+    _attachClickAway()
   }
   onTargetChanged: _attach()
   Component.onCompleted: if (target && !_handler)
     _attach()
+
+  // The click-away lies in the content item, under the content, and covers
+  // the view wherever it is scrolled (also below short content). In the
+  // content item the Flickable filters its presses as it does a row's, so a
+  // drag flicks; a direct child of the Flickable gets no press at all.
+  property FoamyClickAway _clickAwayItem: null
+  property Component _clickAwayComponent: Component {
+    FoamyClickAway {
+      property Flickable view: null
+      x: view ? view.contentX : 0
+      y: view ? view.contentY : 0
+      width: view ? view.width : 0
+      height: view ? view.height : 0
+      z: -1
+    }
+  }
+  function _attachClickAway() {
+    if (_clickAwayItem) {
+      _clickAwayItem.destroy()
+      _clickAwayItem = null
+    }
+    if (target && clickAway)
+      _clickAwayItem = _clickAwayComponent.createObject(target.contentItem, {
+        view: target
+      }) as FoamyClickAway
+    if (_clickAwayItem)
+      _clickAwayItem.clicked.connect(spaceClicked)
+  }
+  onClickAwayChanged: _attachClickAway()
 }

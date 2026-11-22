@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 456934303a8476a09fda54deacbc3e1034d5f84bb87c718394f5e6eb2819eb33 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 7d0b9afb3874ce7463c04cd3e87d3740d39be4b20c9a2befbe7a231719533a0f — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -23,6 +23,8 @@ import QtQuick.Layouts
 //
 // Settings pages use the compact form (FoamySettingsPage does it for you):
 //   FoamyHeroBand { compact: true; saving: …; onBack: … }
+// A sub-view built like it (an editor page) may add icon actions at the
+// trailing end: compactTrailing: [ FoamyAction { iconName: "external-link"; … } ]
 //
 // Centred variant (a panel about one big value: clock, weather):
 //   FoamyHeroBand {
@@ -47,6 +49,49 @@ import QtQuick.Layouts
 //   background: Component {…}   e.g. a sky; sized to the band, drawn under a
 //                               readability scrim; it must keep inside the
 //                               rounded top itself (`topRadius` is provided)
+// Field mode (search, quick add): a text field grows out of a header action
+// across the title row, in place of the title and the buttons.
+//
+//   FoamyHeroBand {
+//     id: band
+//     title: FoamyI18n.t("Todoist")
+//     trailing: [
+//       FoamyAction { id: addAction; iconName: "plus"; onClicked: root.startAdd() },
+//       FoamyAction { id: searchAction; iconName: "search"; onClicked: root.startSearch() }
+//     ]
+//     field: SafeTextField { id: input; … }    // the band places and sizes it
+//     fieldOrigin: root.adding ? addAction : searchAction
+//     fieldOpen: root.adding || root.searching
+//   }
+//
+// - Opening, the field grows from fieldOrigin's rectangle to the full width
+//   between the band's side paddings, in the title row's slot (controlHeight
+//   high, centred on the row), and fades in; the title row (icon, title,
+//   meta) and the buttons (trailing, ⋯, Settings) fade out. Closing plays
+//   the same in reverse. FoamyMotion.grow for the growth, fadeOut/fadeIn for
+//   the fades; instant under reduced motion. Mirrored in RTL (the origin is
+//   where the action is; the open field is symmetric).
+// - The band's height never changes: the field lies over the title row, and
+//   the hero stays where it is. Field mode is for bands with a title row:
+//   with no field, in the compact form or in the centred variant (its title
+//   is under the hero), the band has no field mode and ignores fieldOpen.
+//   An origin that is not in the row (moved into the ⋯ menu, hidden) grows
+//   from the row's trailing end.
+// - The band sets the field's text (and its placeholder) to
+//   FoamyStyle.font.title, the size of the title it covers.
+// - While fieldOpen, `buttonsActive` is false: the buttons take no pointer
+//   input or focus, settingsHasCursor/menuHasCursor light nothing, and the
+//   ⋯ menu closes and won't open. Drop the band's stops (Settings, ⋯,
+//   trailing) from your FoamyCursor while !buttonsActive.
+// - The keys are the caller's: open and close with fieldOpen, focus the
+//   field when it opens (field.focusInput()) and give the focus back when it
+//   closes; Esc, Enter and the rest are the field's keyPressed/accepted.
+//   `fieldShown` is true while the field shows (open, or still closing);
+//   `fieldProgress` runs 0 (closed) to 1 (open).
+// - The field takes pointer input and focus only while fieldOpen: closing,
+//   it is inert at once (a click on the fading field reaches nothing) and
+//   drops the active focus if it still has it, so no key edits hidden text.
+//
 // The base look is a Canvas (no MultiEffect), so it is the same under the
 // software renderer; it is static (no motion to reduce); it mirrors in RTL
 // (glow and row follow LayoutMirroring). The bottom edge is a hairline into
@@ -70,7 +115,7 @@ Item {
   // --- overflow menu (FoamyHeader) -------------------------------------------------
   property alias menuItems: header.menuItems
   property alias maxButtons: header.maxButtons
-  property alias menuHasCursor: header.menuHasCursor
+  property bool menuHasCursor: false
   property alias menuButton: header.menuButton
   readonly property alias menu: header.menu
   readonly property alias menuOpen: header.menuOpen
@@ -79,14 +124,86 @@ Item {
   readonly property alias shownTrailing: header.shownTrailing
   signal menuHovered(bool hovered)
   function openMenu(keyboard) {
-    header.openMenu(keyboard)
+    if (band.buttonsActive)
+      header.openMenu(keyboard)
   }
   function closeMenu() {
     header.closeMenu()
   }
   function toggleMenu(keyboard) {
-    header.toggleMenu(keyboard)
+    if (band.buttonsActive || header.menuOpen)
+      header.toggleMenu(keyboard)
   }
+
+  // --- field mode (header: "Field mode") --------------------------------------------
+  property Item field: null
+  property Item fieldOrigin: null
+  property bool fieldOpen: false
+  readonly property bool buttonsActive: !(_fieldMode && fieldOpen)
+  readonly property bool fieldShown: _fieldMode && (fieldOpen || _fieldProgress > 0)
+  readonly property real fieldProgress: _fieldProgress
+  readonly property bool _fieldMode: field !== null && !compact && !centered
+  // Eased 0 → 1 over FoamyMotion.grow; the fades are parts of it.
+  property real _fieldProgress: _fieldMode && fieldOpen ? 1 : 0
+  Behavior on _fieldProgress {
+    enabled: FoamyMotion.grow > 0
+    NumberAnimation {
+      duration: FoamyMotion.grow
+      easing.type: Easing.BezierSpline
+      easing.bezierCurve: FoamyMotion.easeOut
+    }
+  }
+  // How far into the growth each fade ends (1 when there is no motion).
+  readonly property real _headerFadeEnd: FoamyMotion.grow > 0 ? Math.min(1, FoamyMotion.fadeOut / FoamyMotion.grow) : 1
+  readonly property real _fieldFadeEnd: FoamyMotion.grow > 0 ? Math.min(1, FoamyMotion.fadeIn / FoamyMotion.grow) : 1
+  // The open field: the title row's slot between the side paddings.
+  readonly property rect _fieldTo: {
+    var h = Math.min(header.height, FoamyStyle.controlHeight)
+    return Qt.rect(FoamyStyle.padding, header.y + (header.height - h) / 2, Math.max(0, band.width - FoamyStyle.padding * 2), h)
+  }
+  // The closed field: the origin action's rectangle in the band, summed up
+  // the parent chain (each x, y and parent read is a binding input, so the
+  // rectangle follows the row's layout). An origin outside the row grows
+  // from the row's trailing end.
+  readonly property rect _fieldFrom: {
+    var to = band._fieldTo
+    var origin = band.fieldOrigin
+    if (origin && origin.visible && header.overflowTrailing.indexOf(origin) < 0) {
+      let x = 0
+      let y = 0
+      let item = origin
+      for (; item && item !== band; item = item.parent) {
+        x += item.x
+        y += item.y
+      }
+      if (item === band)
+        return Qt.rect(x, y, origin.width, origin.height)
+    }
+    return Qt.rect(band.mirrored ? to.x : to.x + to.width - to.height, to.y, to.height, to.height)
+  }
+  property Item _adoptedField: null
+  function _adoptField() {
+    var old = band._adoptedField
+    if (old && old !== band.field) {
+      old.anchors.fill = undefined
+      old.parent = null
+    }
+    band._adoptedField = band.field
+    if (!band.field)
+      return
+    band.field.parent = fieldSlot
+    band.field.anchors.fill = fieldSlot
+  }
+  onFieldChanged: _adoptField()
+  // Any item may be the field; a text field takes the title's size.
+  Binding {
+    target: band.field
+    property: "font.pixelSize"
+    value: FoamyStyle.font.title
+    when: band.field !== null && "font" in band.field
+  }
+  onFieldOpenChanged: if (fieldOpen)
+    header.closeMenu()
 
   // --- centred variant -------------------------------------------------------------
   // Hero first and centred, title/meta centred under it, no icon; buttons in
@@ -98,6 +215,9 @@ Item {
   property string compactTitle: FoamyI18n.t("Settings")
   property bool saving: false
   property alias backButton: settingsHeader.backButton
+  // Icon actions at the compact form's trailing end, after "Saving…" (a
+  // sub-view's "Open in …"): FoamySettingsHeader.trailing.
+  property alias compactTrailing: settingsHeader.trailing
   signal back
 
   // --- hero slot -------------------------------------------------------------------
@@ -155,6 +275,8 @@ Item {
         _card = item
         break
       }
+    if (field !== _adoptedField)
+      _adoptField()
   }
 
   implicitWidth: FoamyStyle.popupWidth
@@ -361,6 +483,9 @@ Item {
   FoamyHeader {
     id: header
     visible: !band.compact
+    // Field mode: faded out and inert while the field is open.
+    enabled: band.buttonsActive
+    opacity: 1 - Math.min(1, band._fieldProgress / band._headerFadeEnd)
     y: FoamyStyle.bandPaddingTop
     width: parent.width
     height: implicitHeight
@@ -373,7 +498,8 @@ Item {
     title: band.title
     meta: band.meta
     showSettings: band.showSettings
-    settingsHasCursor: band.settingsHasCursor
+    settingsHasCursor: band.settingsHasCursor && band.buttonsActive
+    menuHasCursor: band.menuHasCursor && band.buttonsActive
     onSettingsClicked: band.settingsClicked()
     onSettingsHovered: function (hovered) {
       band.settingsHovered(hovered)
@@ -381,6 +507,23 @@ Item {
     onMenuHovered: function (hovered) {
       band.menuHovered(hovered)
     }
+  }
+
+  // Field mode: the caller's field, over the title row, between its closed
+  // (the origin action) and open rectangles.
+  Item {
+    id: fieldSlot
+    objectName: "foamyHeroBandField"
+    visible: band.fieldShown
+    // Inert from the moment it starts closing: Qt drops the active focus of
+    // a disabled item, and a click can't hand it back while the field fades.
+    enabled: band._fieldMode && band.fieldOpen
+    opacity: Math.min(1, band._fieldProgress / band._fieldFadeEnd)
+    readonly property real t: band._fieldProgress
+    x: band._fieldFrom.x + (band._fieldTo.x - band._fieldFrom.x) * t
+    y: band._fieldFrom.y + (band._fieldTo.y - band._fieldFrom.y) * t
+    width: band._fieldFrom.width + (band._fieldTo.width - band._fieldFrom.width) * t
+    height: band._fieldFrom.height + (band._fieldTo.height - band._fieldFrom.height) * t
   }
 
   Rectangle {

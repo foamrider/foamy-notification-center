@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 f086c00ed761a46bea42c7ff4e69cb7a0558d6b5c8c26794f95bf0d96de2a316 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 73862c7252172ee54653b1b930230968453c70abe394aec1e1e3e8bde42b5c2d — do not edit; change foamy-kit and run sync
 //! JSON lines: one compact JSON value per `\n`-terminated line, and
 //! [`run`], the entry point that prints JSON for every outcome (success,
 //! failure and panic) so the QML side always gets a reply it can parse.
@@ -6,8 +6,7 @@
 use std::fmt;
 use std::io::{self, BufRead, ErrorKind, Write};
 use std::process::ExitCode;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -166,8 +165,22 @@ fn reply_for<T: Serialize>(
 }
 
 /// Set by whichever of [`run`] and its panic hook prints first: the other
-/// prints nothing.
-static REPLIED: AtomicBool = AtomicBool::new(false);
+/// prints nothing. Held while the reply is written, so a panic in another
+/// thread meanwhile waits for the whole line instead of exiting in the
+/// middle of it.
+static REPLIED: Mutex<bool> = Mutex::new(false);
+
+/// Prints `reply` unless a reply was printed already (then `None`).
+fn reply_once(reply: &Value) -> Option<io::Result<()>> {
+    // Only `print_line` runs under the lock, and it returns errors rather
+    // than panicking; a panic there would make the hook wait for itself.
+    let mut replied = REPLIED.lock().unwrap_or_else(PoisonError::into_inner);
+    if *replied {
+        return None;
+    }
+    *replied = true;
+    Some(print_line(reply))
+}
 
 /// Runs a one-shot helper and prints exactly one JSON reply on standard
 /// output: `main`'s value (exit 0) or `render(&failure)` (the failure's exit
@@ -175,7 +188,10 @@ static REPLIED: AtomicBool = AtomicBool::new(false);
 /// 101 straight from the panic hook (the panic message still goes to
 /// standard error), so a helper bug never ends in `SIGABRT` and a core dump
 /// under the kit's `panic = "abort"`. A panic in another thread after the
-/// reply exits 101 without a second one.
+/// reply prints no second one. One while the reply is written waits until
+/// the whole line is out, and `run` then returns 101 too, so the process
+/// ends in 101 whether the hook or `main` ends it. A panic after `run` has
+/// returned ends in 101 only if the hook exits before `main` returns.
 ///
 /// When the caller wraps the helper in `timeout`, call
 /// [`crate::process::set_run_budget`] with less than that first, so every
@@ -196,18 +212,17 @@ where
     let render = Arc::new(render);
     let on_panic = Arc::clone(&render);
     crate::process::exit_on_panic_after(101, move || {
-        if !REPLIED.swap(true, Ordering::SeqCst) {
-            let _ = print_line(&on_panic(&Failure::coded("INTERNAL", "internal error")));
-        }
+        let _ = reply_once(&on_panic(&Failure::coded("INTERNAL", "internal error")));
     });
     let (reply, exit) = reply_for(main(), &*render);
-    if REPLIED.swap(true, Ordering::SeqCst) {
+    match reply_once(&reply) {
         // Another thread panicked: the hook printed and is exiting.
-        return ExitCode::from(101);
-    }
-    match print_line(&reply) {
-        Ok(()) => ExitCode::from(exit),
-        Err(_) => ExitCode::from(if exit == 0 { 1 } else { exit }),
+        None => ExitCode::from(101),
+        // A panic began while the reply was written: its hook exits 101
+        // once the line is out, and `main` returning this ends it the same.
+        Some(_) if crate::process::panicking() => ExitCode::from(101),
+        Some(Ok(())) => ExitCode::from(exit),
+        Some(Err(_)) => ExitCode::from(if exit == 0 { 1 } else { exit }),
     }
 }
 
@@ -332,6 +347,107 @@ mod tests {
             .filter(|line| line.starts_with('{'))
             .collect();
         assert_eq!(replies, ["{\"ok\":true}"], "{output:?}");
+    }
+
+    /// [`a_panic_while_the_reply_is_written_waits_for_it`]'s child: a reply
+    /// four times the size of the stdout pipe, and a thread that panics
+    /// once `run` is in the middle of writing it. It then exits with
+    /// `run`'s code at once, as a helper whose `main` returns it does. Run
+    /// normally it does nothing.
+    #[test]
+    fn panic_during_reply_child() {
+        if std::env::var_os("FOAMY_JSON_TEST_DURING").is_none() {
+            return;
+        }
+        let pipe = rustix::pipe::fcntl_getpipe_size(io::stdout()).unwrap();
+        let exit = run(
+            || -> Result<Value, Failure> {
+                std::thread::spawn(move || {
+                    // The parent does not read yet, so more than half a
+                    // pipe of data means `run` is writing the reply.
+                    while (rustix::io::ioctl_fionread(io::stdout()).unwrap() as usize) <= pipe / 2 {
+                        std::thread::yield_now();
+                    }
+                    panic!("a bug in a worker thread");
+                });
+                Ok(json!({"text": "x".repeat(4 * pipe)}))
+            },
+            error_reply,
+        );
+        // The worker's panic hook exits 101 at the same time; an assertion
+        // here would end in that hook too, so the code tells the parent.
+        std::process::exit(if exit == ExitCode::from(101) { 101 } else { 7 });
+    }
+
+    #[test]
+    fn a_panic_while_the_reply_is_written_waits_for_it() {
+        // The child's own exit and the panic hook's race; three runs show
+        // that both end in 101.
+        for _ in 0..3 {
+            panic_during_reply_once();
+        }
+    }
+
+    fn panic_during_reply_once() {
+        use std::io::Read;
+        use std::sync::mpsc;
+        use std::time::Duration;
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "json::tests::panic_during_reply_child",
+                "--nocapture",
+                "--test-threads=1",
+                "-q",
+            ])
+            .env("FOAMY_JSON_TEST_DURING", "1")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdout = child.stdout.take().unwrap();
+        let pipe = rustix::pipe::fcntl_getpipe_size(&stdout).unwrap();
+        let stderr = child.stderr.take().unwrap();
+        let (panicked_tx, panicked) = mpsc::channel();
+        let errors = std::thread::spawn(move || {
+            let mut text = String::new();
+            for line in io::BufReader::new(stderr).lines().map_while(Result::ok) {
+                if line.contains("a bug in a worker thread") {
+                    let _ = panicked_tx.send(());
+                }
+                text.push_str(&line);
+                text.push('\n');
+            }
+            text
+        });
+        // Read standard output only after the panic: until then the full
+        // pipe keeps `run` inside its write.
+        let waited = panicked.recv_timeout(Duration::from_secs(30));
+        let (read_tx, read) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut data = Vec::new();
+            let _ = stdout.read_to_end(&mut data);
+            let _ = read_tx.send(data);
+        });
+        let output = read.recv_timeout(Duration::from_secs(30));
+        if output.is_err() {
+            let _ = child.kill();
+        }
+        let status = child.wait().unwrap();
+        let errors = errors.join().unwrap();
+        assert!(waited.is_ok(), "the worker did not panic: {errors}");
+        let output = output.unwrap_or_else(|_| panic!("the helper did not end: {errors}"));
+        let text = String::from_utf8_lossy(&output);
+        let replies: Vec<&str> = text.lines().filter(|line| line.starts_with('{')).collect();
+        let expected = json!({"text": "x".repeat(4 * pipe)});
+        assert!(
+            replies.len() == 1 && serde_json::from_str::<Value>(replies[0]).ok() == Some(expected),
+            "one whole reply line expected; got {} bytes of output, {} reply lines; {errors}",
+            output.len(),
+            replies.len()
+        );
+        assert_eq!(status.code(), Some(101), "{errors}");
     }
 
     #[test]

@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 e36d5c1859cf1adf55ced6033755d84241b2abad16a46cbaeecaaf0066179988 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 75e59dabe525bb2cc526b8042c12843a0b1c4134a1bbeb311f398a0845c08087 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
@@ -40,6 +40,12 @@ import qs.Ui
 //   menuReserve                  height an open FoamyMenu needs (the default
 //                                contentHeight grows to it while the menu is open)
 //   focusTarget                  defaults to the body; point it at a PanelKeyCatcher
+//
+// Click-away: a click on the body's empty space (where nothing takes the
+// press) takes the keys from a focused text field and gives them back to
+// `focusTarget` (to the body item while focusTarget is the default), or to
+// a nearer `foamyKeyHome` (FoamyClickAway). Flickables get the same through
+// FoamyWheelScroll.
 //
 // Usage:
 //   FoamyPopup {
@@ -86,9 +92,16 @@ KeyboardPanel {
   onOpenChanged: if (open && body)
     bodyRequested = true
 
+  // Under the body: only a press nothing in it takes reaches it.
+  FoamyClickAway {
+    anchors.fill: parent
+  }
+
   Loader {
     id: bodyLoader
     property real foamyMenuReserve: 0
+    // Where a click-away gives the keys back (FoamyClickAway).
+    readonly property Item foamyKeyHome: root.focusTarget === bodyLoader ? root.bodyItem : root.focusTarget
     anchors.fill: parent
     focus: true
     active: !!root.body && (root.open || root.bodyRequested)

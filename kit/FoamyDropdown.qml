@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 97a4a7966d219cd634cfb99398e155cc5aebf69e1d948911de44fa2fb8a3d936 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 a7640e8ccdeed85af3fe6b7f0f6fab20cdc251888ece9242f9ca501aea30d971 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls
 import qs.Commons
@@ -15,8 +15,11 @@ import qs.Ui
 // destroys the caller's binding, and since popup bodies are kept between
 // opens, later changes to the setting would stop showing). Until the
 // caller's binding catches up, the pick is shown (`shownValue`); it gives way
-// as soon as `value` changes, the list is reopened, or after pickHoldMs. A
-// caller that wants an uncontrolled dropdown handles changed() itself.
+// as soon as `value` changes, the list is reopened, saveFailed() is called,
+// or after pickHoldMs. When the save fails without changing `value` (a
+// FoamyPrefsQueue rollback changes it), call saveFailed() so the saved value
+// shows again at once. A caller that wants an uncontrolled dropdown handles
+// changed() itself.
 //
 // Compact form (`compact: true`), for short choices in settings (enums,
 // intervals; DESIGN.md "Short values use the row form"): one row like a
@@ -111,6 +114,11 @@ Item {
       pickHold.restart()
     }
     changed(v)
+  }
+  // Tell the dropdown its last pick was not saved: it shows `value` again.
+  function saveFailed() {
+    pickHold.stop()
+    pickHeld = false
   }
   function close() {
     popup.close()
