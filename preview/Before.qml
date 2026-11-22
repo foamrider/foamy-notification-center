@@ -7,7 +7,7 @@ Item {
   id: preview
   required property QtObject bar
   required property Item anchorItem
-  property var previewStates: ["default", "menu", "snooze", "empty-menu", "settings"]
+  property var previewStates: ["default", "menu", "snooze", "empty-menu", "settings", "search"]
   property string previewState: "default"
   property int settleMs: 900
   property var popupRef: null
@@ -86,7 +86,8 @@ Item {
     signal browserIconsUpdated
     signal peerPreferencesChanged
     signal focusCompleted
-    property var entries: preview.previewState === "empty-menu" ? [] : preview.sample
+    // "search": the store's answer to "Ada", the two Signal messages.
+    property var entries: preview.previewState === "empty-menu" ? [] : preview.previewState === "search" ? preview.sample.slice(0, 2) : preview.sample
     property int unread: preview.previewState === "empty-menu" ? 0 : 2
     property bool unreadCapped: false
     property bool hasCriticalUnread: false
@@ -103,7 +104,7 @@ Item {
     property string removalError: ""
     property double lastSeen: preview.now - 120000
     property string searchQuery: ""
-    property string entriesQuery: ""
+    property string entriesQuery: preview.previewState === "search" ? "Ada" : ""
     property int keepDays: 30
     property int maxItems: 1000
     property bool showPreview: true
@@ -183,6 +184,12 @@ Item {
       panel.openSettings()
     else if (panel.editingSettings)
       panel.closeSettings()
+    // The search field open, with the query the store's entries answer.
+    if (previewState === "search") {
+      panel.startSearch()
+      panel.search.text = store.entriesQuery
+    } else if (panel.searching)
+      panel.endSearch()
     // The header's ⋯ menu (kit FoamyMenu), opened as from the keyboard; "snooze"
     // shows its submenu. "empty-menu": a short card grows to fit the menu.
     store.entriesReset()
