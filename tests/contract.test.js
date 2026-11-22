@@ -99,10 +99,11 @@ test('an ingested row has a fixed key order, keeps number literals and hashes it
   assert.equal(fs.statSync(f.file('archive.jsonl'), {bigint: true}).mtimeNs, before)
 })
 
-test('a source timestamp that is not a positive number is archived as the key\'s stamp', t => {
+test('a source timestamp that is not a positive millisecond number is archived as the key\'s stamp', t => {
   const f = fixture(t)
   const stamp = Date.now() - 1000
-  const values = ['"1730000000000"', '"x"', '[1]', '{"ms":1}', 'true', 'null', '0', '-5']
+  // Microseconds, nanoseconds and 1e14 itself are past the bound stock rows have (below 1e11 s).
+  const values = ['"1730000000000"', '"x"', '[1]', '{"ms":1}', 'true', 'null', '0', '-5', `${stamp}000`, `${stamp}000000`, '1e14']
   values.forEach((value, i) =>
     fs.writeFileSync(path.join(f.source, `${stamp}-${i + 1}.json`), `{"timestamp":${value},"app":"A","summary":"S${i + 1}"}`))
   f.out('sync')
@@ -111,6 +112,36 @@ test('a source timestamp that is not a positive number is archived as the key\'s
   for (const row of archived) assert.equal(row.timestamp, stamp, `${row.key}: ${JSON.stringify(row.timestamp)}`)
   // The list, the unread count and Clear all read every row as that number.
   assert.equal(JSON.parse(f.out('list')).length, values.length)
+  f.out('seen', String(stamp - 1))
+  assert.equal(f.out('unread'), `{"ok":true,"unread":${values.length}}\n`)
+  f.out('clear')
+  assert.equal(f.out('list'), '[]\n')
+  assert.equal(f.read('archive.jsonl'), '')
+})
+
+test('an archived timestamp that readers cannot order is repaired to the key\'s stamp', t => {
+  const f = fixture(t)
+  const stamp = Date.now() - 1000
+  // What an older helper archived from a daemon other than Foamy. The source
+  // files stay unchanged, so sync does not ingest them again.
+  const values = ['"1730000000000"', '[1]', '{"ms":1}', 'true', `${stamp}000`]
+  values.forEach((_, i) =>
+    fs.writeFileSync(path.join(f.source, `${stamp}-${i + 1}.json`), `{"timestamp":${stamp},"app":"A","summary":"S${i + 1}"}`))
+  const kept = `${stamp}-9`
+  fs.writeFileSync(path.join(f.source, `${kept}.json`), `{"timestamp":${stamp - 5},"app":"A","summary":"kept"}`)
+  f.out('sync')
+  const lines = f.read('archive.jsonl').trim().split('\n')
+  assert.equal(lines.length, values.length + 1)
+  const old = lines.map(line => {
+    const key = JSON.parse(line).key
+    return key === kept ? line : line.replace(`"timestamp":${stamp}}`, `"timestamp":${values[Number(key.split('-')[1]) - 1]}}`)
+  })
+  assert.equal(old.filter((line, i) => line !== lines[i]).length, values.length)
+  fs.writeFileSync(f.file('archive.jsonl'), old.join('\n') + '\n')
+  const listed = JSON.parse(f.out('list'))
+  assert.equal(listed.length, values.length + 1)
+  for (const row of listed) assert.equal(row.timestamp, row.key === kept ? stamp - 5 : stamp, row.key)
+  assert.deepEqual(f.read('archive.jsonl').trim().split('\n'), lines)
   f.out('seen', String(stamp - 1))
   assert.equal(f.out('unread'), `{"ok":true,"unread":${values.length}}\n`)
   f.out('clear')

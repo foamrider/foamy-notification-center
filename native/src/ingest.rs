@@ -334,17 +334,10 @@ impl Store {
         entry.insert("fileAction", Value::Str(file_action));
         entry.insert("glyph", field(&value, "glyph").or(Value::str("")));
         entry.insert("urgency", field(&value, "urgency").or(Value::int(1)));
-        // Only a positive number: in jq order a string, array or object is
-        // above every number, and readers (list, clear, unread) need numbers.
-        let timestamp = field(&value, "timestamp");
-        let positive = matches!(timestamp, Value::Num(_)) && json::gt(&timestamp, &Value::int(0));
-        let timestamp = if positive {
-            timestamp
-        } else {
-            let stamp = key.split('-').next().unwrap_or("");
-            json::tonumber(stamp).map_or(Value::int(0), Value::Num)
-        };
-        entry.insert("timestamp", timestamp);
+        entry.insert(
+            "timestamp",
+            store::archived_timestamp(field(&value, "timestamp"), key),
+        );
         let entry = json::jq(&Value::Obj(entry));
 
         if existing.is_some() {

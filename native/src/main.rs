@@ -73,8 +73,10 @@
 //! appends): `archive.jsonl` (one row per line: key, imageFormat 1,
 //! sourceHash, stockHash, assetsHash, assetSources, desktopEntry, app,
 //! appIcon, summary, body, image, preview, file, fileAction, glyph, urgency,
-//! timestamp, in that order, numbers as written), `images/` (normalized PNG
-//! copies), `dismissed` (tombstones "KEY TS REMOVED_AT SOURCE", SOURCE the
+//! timestamp, in that order, numbers as written; a source timestamp that is
+//! not a number of milliseconds in (0, 1e14) is archived as the key's stamp,
+//! and `sync` and `list` repair such a row an older helper archived),
+//! `images/` (normalized PNG copies), `dismissed` (tombstones "KEY TS REMOVED_AT SOURCE", SOURCE the
 //! POSIX `cksum` of the source directory), `cleared_at` ("MS"; only rises),
 //! `pruned_through` ("TS KEY"; only rises), `seen`, and `lock` (`flock`, held
 //! for each archive step). Hashes: `sourceHash` is the SHA-256 of the source

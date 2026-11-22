@@ -266,10 +266,10 @@ fn grep_preview(text: &str) -> String {
     for line in text.split('\n') {
         let b = line.as_bytes();
         // Every start inside one run of non-separators shares the run's end,
-        // so the run is scanned once, not once per start: a run of slashes
-        // made that quadratic, under the store lock. The run's last
-        // extension end also has its latest dot, so a start matches exactly
-        // when that dot lies after its slash.
+        // so each run is scanned once and a long action costs linear time
+        // under the store lock. The run's last extension end also has its
+        // latest dot, so a start matches exactly when that dot lies after
+        // its slash.
         let mut cached: Option<(usize, Option<(usize, usize)>)> = None;
         for start in 0..b.len() {
             let slash = if b[start] == b'/' {
@@ -510,7 +510,7 @@ mod tests {
     #[test]
     fn a_source_sized_run_of_slashes_is_scanned_in_linear_time() {
         // Ingest and backfill scan under the store lock, which list, remove
-        // and clear wait for. A per-slash rescan took minutes here.
+        // and clear wait for, so the scan must stay linear in the action.
         let n = crate::ingest::MAX_SOURCE_BYTES;
         let start = std::time::Instant::now();
         assert_eq!(preview_source(&"/".repeat(n)), "");
