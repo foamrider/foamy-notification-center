@@ -46,9 +46,9 @@ ListView {
     }
   }
 
-  // The delegate runs its own entrance (its enter()): Qt stops a view
-  // transition where it is when the row is moved or displaced before the
-  // transition ends, which left rows half transparent.
+  // A row model delegate needs enter(distance), which runs its own entrance:
+  // Qt stops a view transition where it is when the row is moved or displaced
+  // before the transition ends, so the row would stay half transparent.
   add: Transition {
     id: addTransition
     enabled: root.model === rowModel && root.animateChanges
