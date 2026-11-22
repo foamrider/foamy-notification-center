@@ -348,6 +348,20 @@ Item {
     return FoamyNative.command(root.pluginDir, root.helper, args)
   }
 
+  // A failed read keeps rows that answer the same search: they are only
+  // stale. Rows that answer another search, or none, would read as hits of
+  // this one, so they go, and with them the page they said was not the last
+  // (paging would otherwise repeat the failed read at once).
+  function listFailed(message) {
+    root.loadError = message
+    if (root.entriesQuery === root.listQuery)
+      return
+    root.hasMore = false
+    root.entries = []
+    root.entriesQuery = root.listQuery
+    root.entriesReset()
+  }
+
   function differsFrom(data) {
     return JSON.stringify(data) !== JSON.stringify(entries)
   }
@@ -915,7 +929,7 @@ Item {
       if (root.storeUnavailable(exitCode))
         return
       if (exitCode !== 0 || exitStatus !== 0)
-        root.loadError = "Could not refresh notification history. Reopen the center to retry."
+        root.listFailed("Could not refresh notification history. Reopen the center to retry.")
       if (root.loadPending)
         reloadArchive.restart()
     }
@@ -931,11 +945,11 @@ Item {
         try {
           data = JSON.parse(text)
         } catch (e) {
-          root.loadError = "Invalid notification history response."
+          root.listFailed("Invalid notification history response.")
           return
         }
         if (!Array.isArray(data)) {
-          root.loadError = "Invalid notification history response."
+          root.listFailed("Invalid notification history response.")
           return
         }
         root.loadError = ""

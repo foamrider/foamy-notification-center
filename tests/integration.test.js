@@ -68,7 +68,7 @@ test('a list read older than a watcher event is dropped and repeated; invalid or
    listRevision:1,archiveRevision:1,listLimit:2,hasMore:false,removedKeys:{},searchQuery:'',listQuery:'',entriesQuery:'',unreadSource:'untouched',loaded:false,resets:0,text:'',
    reloadArchive:{restarts:0,restart(){this.restarts++}}})
   ctx.root=ctx;ctx.entriesReset=()=>{ctx.resets++}
-  for(const name of ['visibleEntries','differsFrom','storeUnavailable']) vm.runInContext(take(name),ctx)
+  for(const name of ['visibleEntries','differsFrom','storeUnavailable','listFailed']) vm.runInContext(take(name),ctx)
   return ctx
  }
  const finish=(ctx,text)=>{ctx.text=text;vm.runInContext('(function(){'+finished+'})()',ctx)}
@@ -106,6 +106,13 @@ test('a list read older than a watcher event is dropped and repeated; invalid or
  // names the failure: the refresh error stays, the rows are kept.
  ctx=service();finish(ctx,JSON.stringify({ok:false,error:'cannot read notification archive'}));exit(ctx,1)
  assert.match(ctx.loadError,/Could not refresh notification history/);assert.deepEqual(keys(ctx),['1-1'])
+ // Rows that answer another search (or none) would read as hits of this
+ // one: a failed or invalid read drops them, once, and records the search.
+ for(const [shown,asked,steps] of [['','zzz',c=>{finish(c,JSON.stringify({ok:false,error:'notification store is busy'}));exit(c,1)}],
+  ['x','xy',c=>finish(c,'not json')],['x','',c=>exit(c,1)]]) {
+  ctx=service();ctx.entriesQuery=shown;ctx.listQuery=asked;ctx.hasMore=true;steps(ctx)
+  assert.deepEqual(keys(ctx),[],asked);assert.equal(ctx.hasMore,false,asked);assert.equal(ctx.entriesQuery,asked,asked);assert.equal(ctx.resets,1,asked);assert.notEqual(ctx.loadError,'',asked)
+ }
  ctx=service();exit(ctx,0);assert.equal(ctx.loadError,'');assert.equal(ctx.reloadArchive.restarts,0)
  ctx=service();ctx.loadPending=true;exit(ctx,127)
  assert.equal(ctx.loadError,FoamyNative.UNAVAILABLE_TEXT);assert.equal(ctx.reloadArchive.restarts,0)

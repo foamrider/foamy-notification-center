@@ -1114,7 +1114,9 @@ Ui.Panel {
             textFormat: Text.PlainText
             x: FoamyStyle.padding
             width: parent.width - FoamyStyle.padding * 2
-            visible: root.rows.length === 0 && (!listLoader.item || listLoader.item.contentHeight <= 0)
+            // A read error above says the list is not known, so this line
+            // must not also call it empty.
+            visible: root.rows.length === 0 && (!root.list || root.list.contentHeight <= 0) && !(root.store && root.store.loadError)
             horizontalAlignment: Text.AlignHCenter
             topPadding: Style.space(22)
             bottomPadding: Style.space(22)

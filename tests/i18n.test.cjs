@@ -53,7 +53,7 @@ test('every error the panel shows from the service or a text field has a catalog
       for (const match of line.matchAll(/"((?:[^"\\]|\\.)*)"/g)) if (match[1].includes(' ')) errors.set(match[1], file);
     }
   };
-  scan('Service.qml', /\b(focus|load|removal|dnd|snooze)Error = /);
+  scan('Service.qml', /\b(focus|load|removal|dnd|snooze)Error = |\blistFailed\("/);
   const service = errors.size;
   assert.ok(service >= 12, `found only ${service} service errors`);
   // The search field's paste errors (kit SafeTextField), shown on the same line.

@@ -283,6 +283,14 @@ ShellRoot {
         store.loadError = "Invalid notification history response."
         var error = findChild(panel.view, "notificationError")
         waitUntil(function() { return error.visible && error.text === "Invalid notification history response." }, "a failed read shows its error")
+        check(!shows("Nothing has come in yet"), "a failed read does not also say the archive is empty")
+        panel.filter = "zzz"
+        store.entriesQuery = "zzz"
+        store.show([])
+        check(!shows("Nothing matches “zzz”"), "a failed search read does not say nothing matches")
+        panel.filter = ""
+        store.entriesQuery = ""
+        store.show([])
         store.loadError = ""
         check(!error.visible, "the error line goes once the read works")
         store.show(shell.entries(2, true))
