@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -106,6 +107,7 @@ with (
     status = shell.wait(60)
 output = log.read_text()
 print(output)
-print("Row captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert status == 0 and "RTL_ROWS 3 passed 0 failed" in output, output
+assert status == 0 and "RTL_ROWS 3 passed 0 failed" in output, f"rtl-rows failed; log and captures in {base}"
+# Keep the captures only when they are needed to see what failed.
+shutil.rmtree(base)

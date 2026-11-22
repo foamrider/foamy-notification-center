@@ -5,6 +5,7 @@ hostenv.root() (the installed 4.5 unless OMARCHY_TEST_ROOT / FOAMY_HOST_45 pick 
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -162,4 +163,6 @@ print(
     )
 )
 # Six test functions plus QtTest's own count: a function that stops running fails here.
-assert status == 0 and "NUMBER_SETTINGS 7 passed 0 failed" in output, output
+assert status == 0 and "NUMBER_SETTINGS 7 passed 0 failed" in output, f"{output}\nsettings-number failed; log in {base}"
+# Keep the log only when it is needed to see what failed.
+shutil.rmtree(base)

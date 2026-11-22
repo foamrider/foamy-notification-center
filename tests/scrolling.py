@@ -8,6 +8,7 @@ notches add up, pixel deltas and the bounds.
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -106,4 +107,6 @@ with (
 output = log.read_text()
 print(output)
 hostenv.check(env, output, *hostenv.calls(base))
-assert status == 0 and "SCROLLING 4 passed 0 failed" in output, output
+assert status == 0 and "SCROLLING 4 passed 0 failed" in output, f"scrolling failed; log in {base}"
+# Keep the log only when it is needed to see what failed.
+shutil.rmtree(base)
