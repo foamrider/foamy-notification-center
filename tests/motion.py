@@ -181,6 +181,17 @@ ShellRoot {
     var returned=item(1);verify(returned!==departing);verify(!returned.retired);tryCompare(returned,"opacity",1,5000);tryCompare(returned,"entranceOffset",0,5000)
     root.entries=[];root.rebuild();tryVerify(function(){return list.contentHeight===0})
    }
+   function test_move_during_entrance_finishes_it(){try{
+    // A move that displaces rows still fading in cuts their entrance short;
+    // they must still end fully shown, in place.
+    root.entries=[row("3-1","Chat",300),row("2-1","Files",200),row("1-1","Mail",100)];root.rebuild();tryCompare(list,"count",6)
+    // The delegates exist once the add transitions have started.
+    tryVerify(function(){return list.itemAtIndex(5)!==null},5000,"the rows are created")
+    root.entries=[row("4-1","Mail",400)].concat(root.entries.slice(0,2));root.rebuild();tryCompare(list,"count",6)
+    settle()
+    for(var k=0;k<list.count;k++){var it=item(k);compare(it.opacity,1,"opacity of row "+k);compare(it.entranceOffset,0,"entrance offset of row "+k)}
+    capture("moved-during-entrance")
+   }catch(e){console.log("FAILED move-during-entrance",e.message,e.stack);throw e}}
    function test_search_reorder_and_virtualization(){try{
     var rows=[];for(var i=0;i<40;i++)rows.push(row(String(i+1)+"-1","App "+i,1000-i))
     root.entries=rows;root.rebuild();tryCompare(list,"count",80)
@@ -234,4 +245,4 @@ output = log.read_text()
 print(output)
 print("Captures:", app)
 hostenv.check(env, output, *hostenv.calls(base))
-assert status == 0 and "CENTER_MOTION 6 passed 0 failed" in output
+assert status == 0 and "CENTER_MOTION 7 passed 0 failed" in output

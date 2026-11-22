@@ -1002,7 +1002,32 @@ Ui.Panel {
                     // Freeze departing content until Qt finishes its removal transition.
                     modelData = modelData
                     retired = true
+                    entranceMotion.stop()
                     exitMotion.start()
+                  }
+                  // Called by the list's add transition: a 180 ms fade with a lift.
+                  function enter(distance) {
+                    entranceLift.from = distance
+                    entranceMotion.restart()
+                  }
+                  ParallelAnimation {
+                    id: entranceMotion
+                    NumberAnimation {
+                      target: delegateRoot
+                      property: "opacity"
+                      from: 0
+                      to: 1
+                      duration: FoamyMotion.duration(180)
+                      easing.type: Easing.OutCubic
+                    }
+                    NumberAnimation {
+                      id: entranceLift
+                      target: delegateRoot
+                      property: "entranceOffset"
+                      to: 0
+                      duration: FoamyMotion.duration(180)
+                      easing.type: Easing.OutCubic
+                    }
                   }
                   SequentialAnimation {
                     id: exitMotion
