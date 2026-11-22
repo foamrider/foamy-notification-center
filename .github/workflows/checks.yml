@@ -1,4 +1,4 @@
-# foamy-kit 0.9.0 5079c3e4ecd2ca5399dff48f64327729d8e84916a4c73fbcb9e0491b16014990 — do not edit; change foamy-kit and run sync
+# foamy-kit 0.13.1 5079c3e4ecd2ca5399dff48f64327729d8e84916a4c73fbcb9e0491b16014990 — do not edit; change foamy-kit and run sync
 # Runs this repository's validation command, `tests/validate.sh --ci`, on a
 # GitHub-hosted runner: kit-check, the foamy-kit design lint, Oxlint, Ruff
 # (lint and format), Vulture, ShellCheck, shfmt and the repository's own

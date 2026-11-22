@@ -18,8 +18,9 @@ Column {
   // The enclosing FoamySettingsPage, to keep focused fields visible.
   property Item page: null
   signal save(string scope, string key, var value)
-  // The panel reports a save that failed (Panel.finishPreference(false)).
-  signal saveFailed(string scope, string key)
+  // The panel reports a save that failed (Panel.finishPreference(false)),
+  // with the value it could not save.
+  signal saveFailed(string scope, string key, var value)
   spacing: FoamyStyle.sectionGap
 
   function current(scope, key) {
@@ -89,6 +90,7 @@ Column {
             id: choiceField
             // Short choices: the settings row form (label on the start, dropdown on the end).
             FoamyDropdown {
+              id: choiceEditor
               objectName: field.scope + "-" + field.modelData.key
               width: field.width
               compact: true
@@ -102,6 +104,17 @@ Column {
               })
               onChanged: function (next) {
                 root.save(field.scope, field.modelData.key, next)
+              }
+              // A failed save leaves `value` as it was: saveFailed() shows it
+              // again instead of the pick. Only for the pick that failed: the
+              // panel saves one value per key at a time, so a newer pick can
+              // still be waiting behind it.
+              Connections {
+                target: root
+                function onSaveFailed(scope, key, failed) {
+                  if (scope === field.scope && key === field.modelData.key && String(failed) === choiceEditor.pickedValue)
+                    choiceEditor.saveFailed()
+                }
               }
             }
           }

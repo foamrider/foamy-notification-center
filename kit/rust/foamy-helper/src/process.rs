@@ -1,10 +1,11 @@
-// foamy-kit 0.9.0 98d34cf58f2c49607244bb200a6f94063edff42bab835770440619f510f56870 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 f33c8ff3e6f096dfbeb42f3bf5ddadd2834b7359f021da210ad8f0bea9c30cf3 — do not edit; change foamy-kit and run sync
 //! This process: exiting on a panic, dying with the parent, a new session,
 //! resource limits, the umask and a deadline for the whole run. Child
 //! processes get the same through [`crate::child::Bounded`].
 
 use std::io;
 use std::panic::{self, PanicHookInfo};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -20,6 +21,16 @@ type Hook = Box<dyn Fn(&PanicHookInfo<'_>) + Sync + Send + 'static>;
 /// default, which reports the panic on standard error).
 static REPORT: OnceLock<Hook> = OnceLock::new();
 
+/// Set first thing by the kit's panic hook, before it reports the panic, so
+/// [`crate::json::run`] can tell that a panic began while it wrote its
+/// reply.
+static PANICKING: AtomicBool = AtomicBool::new(false);
+
+/// Whether the kit's panic hook has started in any thread.
+pub(crate) fn panicking() -> bool {
+    PANICKING.load(Ordering::SeqCst)
+}
+
 /// Installs the kit's panic hook: report the panic as before (std's message
 /// on standard error, nothing on standard output), run `after`, then exit
 /// with `code`. Replaces an earlier kit hook instead of chaining it, so
@@ -27,6 +38,7 @@ static REPORT: OnceLock<Hook> = OnceLock::new();
 pub(crate) fn exit_on_panic_after(code: i32, after: impl Fn() + Send + Sync + 'static) {
     let report = REPORT.get_or_init(panic::take_hook);
     panic::set_hook(Box::new(move |info| {
+        PANICKING.store(true, Ordering::SeqCst);
         report(info);
         // No unwinding follows (the release profile aborts on panic), so
         // the children's drops never run: end their process groups here.

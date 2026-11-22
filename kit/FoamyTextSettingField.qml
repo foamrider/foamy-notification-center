@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 df904e4eab84389a21f83863d38c046e5d2e830541ec604f55d63d4b1b4f38cb — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 82d09f4fb198f2c57814e065667272f0e81fc6dd92c76d4d80f5feadae5f2156 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // A free-text settings field that never fights the setting it shows: the
@@ -15,8 +15,9 @@ import QtQuick
 // Not editing: shows `value`, following external changes. Editing: keeps a
 // draft. Enter or focus-out: commits a valid, changed draft once (trimmed
 // unless `trim: false`); invalid → `validate`'s message, Enter keeps the
-// draft, focus-out restores `value`. Escape restores `value` and is
-// consumed (the page stays).
+// draft, focus-out restores `value`. Hiding the field is a focus-out; shown
+// again, it has no error. Escape restores `value` and is consumed (the page
+// stays).
 Item {
   id: root
 
@@ -109,6 +110,11 @@ Item {
     if (!dirty)
       show()
   }
+  // Hiding the field ends its edit (SafeTextField drops the focus), which
+  // puts an invalid draft back. Its error was about text that is gone: a
+  // field shown again (a settings page opened again) starts without it.
+  onVisibleChanged: if (visible)
+    errorText = ""
   Component.onCompleted: show()
 
   Column {

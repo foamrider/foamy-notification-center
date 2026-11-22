@@ -268,6 +268,14 @@ Use the rows that apply; a QML-only plugin needs no Rust toolchain.
   Quickshell buffers the whole line or stream before QML sees it, and a
   chunk-mode parser can split a UTF-8 character. Bound the producer instead
   (a fixed `head -c` wrapper, or a helper that reads with a limit).
+- Qt reads the whole clipboard text on the UI thread, with no byte cap or
+  total deadline, for its own paste and also when the clipboard changes: an
+  editable `TextInput`, or a `TextField` built on it, reads the text on every
+  change to update `canPaste`, with no paste gesture. Never ship an editable
+  one. Use `SafeTextField` for text fields, or a read-only `TextInput` that
+  the plugin edits itself (foamy-lock's password field). In either case,
+  paste through `FoamyClipboard`. Intercepting the paste keys does not remove
+  the read on change.
 - Validate URL schemes, origins and redirects for the intended operation.
   Do not forward credentials across origins. Bound delivered and decompressed
   bytes and decoded image dimensions; a remote `Image.source` or an inline
@@ -293,14 +301,33 @@ Use the rows that apply; a QML-only plugin needs no Rust toolchain.
 
 ## 6. Test the behavior
 
+- A test earns its place when it fails if something a user or another
+  component relies on breaks: the behavior of a real flow, parsing and
+  validation of external data, data safety, process and async lifecycle,
+  security at the real sink, a contract another party depends on, the
+  regression of a real past bug, a stated performance or resource bound, or
+  complete translation catalogs. Know which one before you write it.
 - Cover the agreed acceptance criteria and important production branches
   with meaningful assertions: unit tests for parsing and policy, integration
   tests for component and helper contracts, end-to-end tests for critical
   user flows. A passing unit suite alone does not prove a cross-component
   feature.
 - For a fix, add a regression test that reproduces the old failure and fails
-  when the fix is removed, where practical. Verify through the real boundary;
-  avoid tests that assert implementation text or mirror the same algorithm.
+  when the fix is removed, where practical. Verify through the real boundary.
+- Prove that a new or changed test can fail: break the behavior with one
+  temporary edit of the production code, see the test fail with a message
+  that names the problem, and take the edit back. Say in the commit message
+  what you broke. A test never seen failing is not evidence.
+- Do not add a test that asserts source text as a stand-in for behavior (fine
+  only when the file is the thing checked: catalogs, the manifest, hashes of
+  vendored or generated files), mirrors the implementation, pins a detail no
+  user or component can observe, repeats another test without crossing a new
+  boundary, cannot fail, tests the platform or a dependency, guards a state
+  production cannot reach, or is never run. When only a production seam would
+  allow a real test, add the seam or record the gap; do not read the source
+  instead.
+- Test a behavior once, at the boundary that owns it. foamy-kit tests its
+  components; a plugin tests its own wiring to them, not the component again.
 - Exercise success and a relevant unhappy path: failed launch, malformed or
   oversized input, hung producer, cancellation, stale reply, duplicate event,
   lost lock, changed file ownership or unavailable service. Lifecycle changes
@@ -315,7 +342,10 @@ Use the rows that apply; a QML-only plugin needs no Rust toolchain.
   Do not lower thresholds, widen exclusions or add assertion-free tests to
   improve a number; coverage supplements behavioral evidence.
 - Keep tests for requested behavior unless the user agreed to change that
-  behavior.
+  behavior. Remove a test when the behavior it protects is removed; do not
+  keep a test because it passes.
+- A new test file runs in `tests/suite.sh` in the same change, in the right
+  mode: `--ci` runs only what needs neither Quickshell nor the Omarchy host.
 - Use temporary homes, fake commands and buses, and local fixture servers.
   Never suspend or lock the real desktop, alter real accounts, touch real
   Syncthing data, send notifications or open user dialogs from tests.
@@ -374,8 +404,10 @@ remove the row when its rule is retired.
 | [HANCORE: Media provenance](https://github.com/omacom/omarchy-plugin-marketplace/issues/14501#issuecomment-6755462397) | Pins and an author's local rebuild do not replace independently verifiable build evidence. |
 | [HANCORE: Media tooltip](https://github.com/omacom/omarchy-plugin-marketplace/issues/14501#issuecomment-6765150976) and [Notifications tooltip](https://github.com/omacom/omarchy-plugin-marketplace/issues/13972#issuecomment-6710458899) | Follow metadata to the host's AutoText sink; safe primary labels do not protect a tooltip. |
 | [HANCORE: Menu response size](https://github.com/omacom/omarchy-plugin-marketplace/issues/14144#issuecomment-6705753414) and [GitHub clipboard](https://github.com/omacom/omarchy-plugin-marketplace/issues/10938#issuecomment-6100592043) | Bound the transport before the shell buffers the body, not only the parsed value. |
+| [HANCORE: Lock clipboard change](https://github.com/omacom/omarchy-plugin-marketplace/issues/13968#issuecomment-6912287557) | An editable Qt text input reads the clipboard on every change, so a bounded paste alone does not protect the shell. |
 | [HANCORE: Zendesk sign-out race](https://github.com/omacom/omarchy-plugin-marketplace/issues/14297#issuecomment-6765056811) and [lock-error follow-up](https://github.com/omacom/omarchy-plugin-marketplace/issues/14297#issuecomment-6766306405) | Auth mutations need shared synchronization; a failed lock must not become a successful logout. |
 | [HANCORE: Syncthing ownership follow-up](https://github.com/omacom/omarchy-plugin-marketplace/issues/8971#issuecomment-5856630260) | Creation markers do not authorize deletion of later user edits. |
+| [foamy-kit test rework](https://github.com/foamrider/foamy-kit/commit/3b3cf5e8431f752f6e144d434849e1dd4a94897c) and the same merge in each plugin, November 2026 | About 600 tests in 21 repositories were removed: they asserted source text, mirrored the code, repeated a kit test or could not fail. Ask for the proof that a test fails when the test is written. |
 | [Google engineering practices](https://google.github.io/eng-practices/review/reviewer/looking-for.html) | Review overall design, concurrency and unnecessary complexity before style; avoid speculative generality. |
 | [OWASP input validation](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html) | Validate external data early and distinguish syntactic from semantic validity. |
 | [Qt qmllint](https://doc.qt.io/qt-6/qtqml-tooling-qmllint.html) and [qmlformat](https://doc.qt.io/qt-6/qtqml-tooling-qmlformat.html) | Use native QML analysis with correct type information and explicit warning and format settings. |

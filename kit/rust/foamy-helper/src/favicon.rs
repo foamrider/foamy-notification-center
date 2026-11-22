@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 f13ac89b575cec786e8e5a1daf8f4d9a52265ca928b89653e689f0f103aba62b — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 cf0b20d80e1ca52f5fef9b2474c3e9d7b7ddf43dafcd3535e9561c686ecfc7bc — do not edit; change foamy-kit and run sync
 //! Website favicons from the local caches of Chromium-family browsers,
 //! **without any web request** (cargo feature `favicon`). A port of
 //! foamy-notifications' and foamy-notification-center's
@@ -584,15 +584,20 @@ fn unsafe_zeroed_passwd() -> libc::passwd {
 
 impl Dirs {
     /// From `XDG_CONFIG_HOME`, `XDG_CACHE_HOME` and `HOME` (or the passwd
-    /// entry), as the Python helper: a variable that is set is used as is,
-    /// even when empty or relative.
+    /// entry). An empty or relative XDG variable counts as unset, as the
+    /// XDG Base Directory spec says.
     pub fn from_env() -> Result<Dirs, Failure> {
-        let config = match std::env::var_os("XDG_CONFIG_HOME") {
-            Some(dir) => PathBuf::from(dir),
+        let xdg = |name: &str| {
+            std::env::var_os(name)
+                .map(PathBuf::from)
+                .filter(|dir| dir.is_absolute())
+        };
+        let config = match xdg("XDG_CONFIG_HOME") {
+            Some(dir) => dir,
             None => home()?.join(".config"),
         };
-        let cache = match std::env::var_os("XDG_CACHE_HOME") {
-            Some(dir) => PathBuf::from(dir),
+        let cache = match xdg("XDG_CACHE_HOME") {
+            Some(dir) => dir,
             None => home()?.join(".cache"),
         };
         Ok(Dirs {
@@ -655,31 +660,44 @@ fn os_failure(error: io::Error) -> Failure {
 }
 
 /// A fresh cached icon at `target`: a regular file (not a symlink) younger
-/// than [`CACHE_MAX_AGE`] that is a [`valid_png`].
+/// than [`CACHE_MAX_AGE`] that is a [`valid_png`]. A file modified in the
+/// future (the clock was set back) is not fresh: its age is unknown.
 fn cached(target: &Path) -> bool {
     let fresh = fs::symlink_metadata(target).is_ok_and(|meta| {
         let modified = meta.mtime() as f64 + meta.mtime_nsec() as f64 / 1e9;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0.0, |d| d.as_secs_f64());
-        meta.file_type().is_file() && now - modified < CACHE_MAX_AGE.as_secs_f64()
+        let age = now - modified;
+        meta.file_type().is_file() && (0.0..CACHE_MAX_AGE.as_secs_f64()).contains(&age)
     });
     fresh
         && crate::fs::read_file_limited(target, MAX_ICON_BYTES as u64 + 1)
             .is_ok_and(|data| valid_png(&data))
 }
 
-/// Keeps the [`CACHE_ENTRIES`] newest `*.png` files in `cache`.
-fn prune(cache: &Path) {
+/// Keeps `keep` (the icon just written) and the [`CACHE_ENTRIES`] - 1
+/// newest other `*.png` files in `cache`. A file modified in the future
+/// (the clock was set back) counts as the oldest: its age is unknown.
+fn prune(cache: &Path, keep: &Path) {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0.0, |d| d.as_secs_f64());
     let mut files: Vec<(f64, PathBuf)> = fs::read_dir(cache)
         .into_iter()
         .flatten()
         .flatten()
         .filter(|entry| entry.file_name().as_bytes().ends_with(b".png"))
+        .filter(|entry| entry.path() != keep)
         .filter_map(|entry| {
             let meta = fs::metadata(entry.path()).ok()?;
+            let modified = meta.mtime() as f64 + meta.mtime_nsec() as f64 / 1e9;
             Some((
-                meta.mtime() as f64 + meta.mtime_nsec() as f64 / 1e9,
+                if modified > now {
+                    f64::NEG_INFINITY
+                } else {
+                    modified
+                },
                 entry.path(),
             ))
         })
@@ -688,7 +706,7 @@ fn prune(cache: &Path) {
         b.0.total_cmp(&a.0)
             .then_with(|| b.1.as_os_str().as_bytes().cmp(a.1.as_os_str().as_bytes()))
     });
-    for (_, path) in files.iter().skip(CACHE_ENTRIES) {
+    for (_, path) in files.iter().skip(CACHE_ENTRIES - 1) {
         let _ = fs::remove_file(path);
     }
 }
@@ -722,9 +740,19 @@ fn resolve_with(
     let digest = crate::hash::sha256(format!("{browser}\n{host}").as_bytes());
     let name: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     let target = dirs.cache.join(format!("{name}.png"));
+    // A relative cache (from a relative HOME) has no URI, and a relative
+    // HOME also makes the browser profiles relative: refuse both before
+    // anything is read or written relative to the working directory.
+    let source = file_uri(&target)?;
+    if !dirs.config.is_absolute() {
+        return Err(Failure::coded(
+            "ValueError",
+            "the browser profile directory is relative",
+        ));
+    }
     if cached(&target) {
         return Ok(Reply {
-            source: file_uri(&target)?,
+            source,
             status: "cached",
         });
     }
@@ -748,9 +776,9 @@ fn resolve_with(
     crate::fs::write_atomic(&target, &found.data, 0o600).map_err(os_failure)?;
     // Bound the shared cache; each plugin falls back if an older displayed
     // file expires.
-    prune(&dirs.cache);
+    prune(&dirs.cache, &target);
     Ok(Reply {
-        source: file_uri(&target)?,
+        source,
         status: "found",
     })
 }

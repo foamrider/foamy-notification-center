@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# foamy-kit 0.9.0 d5377f7e0337828bc9950e0e651403e128e8216bb4673b2ec173fde63f24be1b — do not edit; change foamy-kit and run sync
+# foamy-kit 0.13.1 824921f5001a1e69101a6dd998f21bee83fe155c3d1ad82aa376aef6d6fbebb4 — do not edit; change foamy-kit and run sync
 """The one validation command of foamy-kit and every Foamy plugin.
 
 Run it as `tests/validate.sh` (sync.sh writes that wrapper and this file into
@@ -27,6 +27,9 @@ flags below. Repository-owned additions, never synced, all optional:
   tests/lint/exclude.txt        `<glob> [checks]  # reason`: paths no check (or only the
                                 named checks) reads, such as test inputs
   tests/lint/vulture-ignore.txt `<name>  # reason`: dynamic entry points Vulture can't see
+  tests/lint/qmllint-links.txt  `<link> <target>  # reason`: links qmllint's staged copy
+                                adds, for QML that runs from a root assembled at run time
+                                (<target>: a path in the repository, or @shell/<path>)
   tests/lint/<check>-baseline.txt   reviewed findings at adoption (qmllint, oxlint,
                                     ruff, vulture, shellcheck); only new ones fail
   tests/suite.sh                the repository's own tests, run last with the
@@ -453,10 +456,16 @@ def check_qmllint(repo):
         (imports / "qs").symlink_to(shell)
         report = Path(tmp) / "report.json"
         cwd = repo.root
+        links = qmllint_links(repo, shell)
         if repo.kit_mode:
             # foamy-kit's kit/qmldir is generated at sync: lint a copy that has it.
             cwd = Path(tmp) / "repo"
             stage_kit(repo, cwd)
+        elif links:
+            # QML that runs from an assembled root imports what that root
+            # links in: lint a copy with the same links.
+            cwd = Path(tmp) / "repo"
+            stage_links(repo, cwd, links)
         cmd = [
             qmllint,
             *QMLLINT_FLAGS,
@@ -471,9 +480,9 @@ def check_qmllint(repo):
         result = subprocess.run(cmd, cwd=cwd, env=repo.env(), capture_output=True, text=True, timeout=900)
         try:
             data = json.loads(report.read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
             show(result.stdout + result.stderr)
-            raise Failure("qmllint wrote no JSON report") from None
+            raise Failure(f"qmllint wrote no JSON report (exit {result.returncode}): {error}") from None
     entries = []
     for item in data.get("files", []):
         rel = os.path.relpath(item["filename"], cwd) if os.path.isabs(item["filename"]) else item["filename"]
@@ -491,6 +500,65 @@ def check_qmllint(repo):
                 )
     print(f"    {qmllint} {version_of([qmllint, '--version'])}: {len(files)} files, {len(entries)} findings")
     compare("qmllint", entries, repo)
+
+
+def qmllint_links(repo, shell):
+    """[(link, target)] from tests/lint/qmllint-links.txt: the links an
+    assembled run-time root has (Lock Studio's root links the plugin's kit
+    beside its own QML), checked: `link` a new relative path in the
+    repository, `target` an existing path in it or in the Omarchy shell."""
+    name = f"{LINT_DIR}/qmllint-links.txt"
+    links = []
+    for entry, _ in read_reasoned(repo.root / name, "link and target"):
+        parts = entry.split()
+        if len(parts) != 2:
+            raise Failure(f"{name}: {entry}: expected `<link> <target>  # reason`")
+        link, target = parts
+        rel = Path(link)
+        if rel.is_absolute() or ".." in rel.parts or rel.as_posix() != link or SKIP_DIRS & set(rel.parts):
+            raise Failure(f"{name}: {link}: the link must be a plain relative path inside the repository")
+        if os.path.lexists(repo.root / link):
+            raise Failure(f"{name}: {link} already exists in the repository")
+        if target.startswith("@shell/"):
+            source = shell / target[len("@shell/") :]
+            inside = shell
+        else:
+            source = repo.root / target
+            inside = repo.root
+        if ".." in Path(target).parts or not source.exists() or not source.resolve().is_relative_to(inside.resolve()):
+            raise Failure(f"{name}: {link}: {target} does not exist (or is outside its root)")
+        # One link inside another would be created through the outer link,
+        # into its target (the repository itself when that has no QML).
+        for other, _ in links:
+            if rel == Path(other) or Path(other) in rel.parents or rel in Path(other).parents:
+                raise Failure(f"{name}: {link} and {other} overlap; give each link its own path")
+        links.append((link, source))
+    return links
+
+
+def stage_links(repo, target, links):
+    """Copy the plugin's QML, JavaScript and qmldir files (kit/ included) to
+    `target`, then add `links` (each pointing into the copy, or at the
+    Omarchy shell), so relative imports resolve as in the assembled root."""
+    for path in sorted(repo.root.rglob("*")):
+        rel = path.relative_to(repo.root)
+        if SKIP_DIRS & set(rel.parts) or path.is_symlink() or not path.is_file():
+            continue
+        if path.suffix in (".qml", ".js", ".mjs") or path.name == "qmldir":
+            (target / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target / rel)
+    for link, source in links:
+        staged = target / link
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        # Never through an earlier link: everything is created inside the copy.
+        if not staged.parent.resolve().is_relative_to(target.resolve()):
+            raise Failure(f"{LINT_DIR}/qmllint-links.txt: {link} would be created outside the staged copy")
+        if source.is_relative_to(repo.root):
+            source = target / source.relative_to(repo.root)
+            if not source.exists():
+                # A target with no QML or JavaScript (i18n/): link the original.
+                source = repo.root / source.relative_to(target)
+        staged.symlink_to(source)
 
 
 def stage_kit(repo, target):
@@ -538,6 +606,18 @@ def check_qmlformat(repo):
         )
 
 
+JSON_STRING = r'"(?:[^"\\\n]|\\.)*"'
+JSONC_COMMENT = re.compile(rf"({JSON_STRING})|//[^\n]*|/\*.*?\*/", re.S)
+JSONC_TRAILING_COMMA = re.compile(rf"({JSON_STRING})|,(?=\s*[}}\]])")
+
+
+def read_jsonc(path):
+    """A JSON file that may hold comments and trailing commas, as oxlint
+    reads its config. Strings are matched first, so a // or , in one stays."""
+    text = JSONC_COMMENT.sub(lambda match: match[1] or " ", path.read_text())
+    return json.loads(JSONC_TRAILING_COMMA.sub(lambda match: match[1] or "", text))
+
+
 def check_oxlint(repo):
     files = repo.by_suffix("oxlint", ".js", ".cjs", ".mjs")
     if not files:
@@ -548,7 +628,12 @@ def check_oxlint(repo):
         raise Failure(".oxlintrc.json is missing (foamy-kit sync.sh writes it)")
     local = repo.root / LINT_DIR / "oxlintrc.json"
     if local.is_file():
-        if "../../.oxlintrc.json" not in local.read_text():
+        try:
+            settings = read_jsonc(local)
+        except ValueError as error:
+            raise Failure(f"{LINT_DIR}/oxlintrc.json is not JSON ({error})") from None
+        extends = settings.get("extends") if isinstance(settings, dict) else None
+        if not isinstance(extends, list) or "../../.oxlintrc.json" not in extends:
             raise Failure(
                 f'{LINT_DIR}/oxlintrc.json must extend the kit\'s config: "extends": ["../../.oxlintrc.json"]'
             )
@@ -579,7 +664,7 @@ def check_oxlint(repo):
         data = json.loads(result.stdout[start:])
     except ValueError:
         show(result.stdout + result.stderr)
-        raise Failure("oxlint produced no JSON report") from None
+        raise Failure(f"oxlint produced no JSON report (exit {result.returncode})") from None
     loaded = qml_loaded(repo, files)
     entries, api = [], 0
     for item in data.get("diagnostics", []):
@@ -646,7 +731,7 @@ def check_ruff(repo):
         data = json.loads(result.stdout)
     except ValueError:
         show(result.stdout + result.stderr)
-        raise Failure("ruff check produced no JSON report") from None
+        raise Failure(f"ruff check produced no JSON report (exit {result.returncode})") from None
     entries = [
         finding(
             os.path.relpath(item["filename"], repo.root),
@@ -716,7 +801,7 @@ def check_shellcheck(repo):
         data = json.loads(result.stdout)
     except ValueError:
         show(result.stdout + result.stderr)
-        raise Failure("shellcheck produced no JSON report") from None
+        raise Failure(f"shellcheck produced no JSON report (exit {result.returncode})") from None
     entries = [
         finding(item["file"], f"SC{item['code']}", item["message"], repo, item.get("line"))
         for item in data.get("comments", [])

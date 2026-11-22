@@ -1,4 +1,4 @@
-// foamy-kit 0.9.0 23adc6c9c393c6f29eab5dcbabc13a27a38abdee1cf78c07efb69879dc28f6f7 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 23adc6c9c393c6f29eab5dcbabc13a27a38abdee1cf78c07efb69879dc28f6f7 — do not edit; change foamy-kit and run sync
 // Oxlint configuration for foamy-kit and every Foamy plugin (synced; edit it in
 // foamy-kit). tests/validate.sh lints every JavaScript file with it, QML-loaded
 // ones included (their `.pragma`/`.import` lines are read as comments). A
