@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 c51983d2dc14615f924827b93814df5eb138ea2783ec7b70047ff31c26deb3f4 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 1bcae83a998b521a0e9119e0638eeca9fcfd9108354448f3870613c795b9a7d1 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls
 import qs.Commons
@@ -106,11 +106,16 @@ Item {
   // popupOpen + open()/close()/toggle() let a parent panel know when the
   // dropdown owns keys (its embedded ListView is active) and suspend its
   // own keyCatcher so j/k inside the popup don't double-drive the panel
-  // cursor.
+  // cursor. A disabled dropdown (its own `enabled` or a parent's) closes its
+  // list and open() opens none: the list lives in the window's overlay, out
+  // of the disabled tree, and would still take keys and clicks.
   readonly property bool popupOpen: popup.opened
   function open() {
-    popup.open()
+    if (enabled)
+      popup.open()
   }
+  onEnabledChanged: if (!enabled)
+    popup.close()
   // Pick an option as the list does: show it and emit changed(), without
   // touching `value`.
   function select(v) {
@@ -131,7 +136,7 @@ Item {
     popup.close()
   }
   function toggle() {
-    popup.opened ? popup.close() : popup.open()
+    popup.opened ? popup.close() : open()
   }
 
   signal changed(string value)

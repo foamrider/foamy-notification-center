@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 ebfadf5a33e10c001e6c9d83e0c02ea3f79003807fc4b0ecc655d7427bac54a2 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 387ef6393870794e0ec529e45f91dc207ae9d38fb517ba711658df7298cb8e7f — do not edit; change foamy-kit and run sync
 //! `flock(2)` locks on lock files, including the per-plugin runtime
 //! directory `$XDG_RUNTIME_DIR/<plugin>`.
 //!
@@ -137,6 +137,16 @@ fn runtime_dir_in(base: Option<OsString>, plugin: &str) -> io::Result<PathBuf> {
             format!("XDG_RUNTIME_DIR {} is not a directory", base.display()),
         ));
     }
+    // The XDG Base Directory spec requires the user's own directory, closed
+    // to everyone else. In a shared one (/tmp, no pam_systemd session)
+    // another user could create <plugin> first and block every lock, so it
+    // counts as unset. The base exists, so ensure_private_dir only checks it.
+    crate::fs::ensure_private_dir(&base).map_err(|error| {
+        io::Error::new(
+            ErrorKind::NotFound,
+            format!("XDG_RUNTIME_DIR is not private to this user: {error}"),
+        )
+    })?;
     let dir = base.join(plugin);
     crate::fs::ensure_private_dir(&dir)?;
     Ok(dir)
@@ -144,7 +154,9 @@ fn runtime_dir_in(base: Option<OsString>, plugin: &str) -> io::Result<PathBuf> {
 
 /// `$XDG_RUNTIME_DIR/<plugin>` (e.g. `foamy-power`), created with mode 0700
 /// and checked like [`crate::fs::ensure_private_dir`]. `NotFound` when
-/// `XDG_RUNTIME_DIR` is unset or not a directory, so a caller can fall back.
+/// `XDG_RUNTIME_DIR` is unset, not a directory, or not one the XDG Base
+/// Directory spec allows (a symlink, another user's, or open to others, as
+/// /tmp is), so a caller can fall back.
 pub fn runtime_dir(plugin: &str) -> io::Result<PathBuf> {
     runtime_dir_in(std::env::var_os("XDG_RUNTIME_DIR"), plugin)
 }
@@ -270,5 +282,41 @@ mod tests {
             ErrorKind::NotFound
         );
         assert!(check_component("lock", "a/b").is_err());
+    }
+
+    #[test]
+    fn a_shared_runtime_base_counts_as_unset() {
+        // In a base other users can write (/tmp, no pam_systemd session)
+        // another user could create <plugin> first and block every lock.
+        let dir = TempDir::new("runtime-shared");
+        let base = Some(dir.0.clone().into_os_string());
+        for mode in [0o755, 0o750, 0o1777] {
+            fs::set_permissions(&dir.0, fs::Permissions::from_mode(mode)).unwrap();
+            let error = runtime_dir_in(base.clone(), "foamy-test").unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::NotFound, "mode {mode:o}: {error}");
+            assert!(
+                !dir.0.join("foamy-test").exists(),
+                "mode {mode:o}: nothing is created in a shared base"
+            );
+        }
+        fs::set_permissions(&dir.0, fs::Permissions::from_mode(0o700)).unwrap();
+        let links = TempDir::new("runtime-link");
+        let link = links.0.join("runtime");
+        symlink(&dir.0, &link).unwrap();
+        assert_eq!(
+            runtime_dir_in(Some(link.into_os_string()), "foamy-test")
+                .unwrap_err()
+                .kind(),
+            ErrorKind::NotFound,
+            "a symlinked base"
+        );
+        assert_eq!(
+            runtime_dir_in(Some("/".into()), "foamy-test")
+                .unwrap_err()
+                .kind(),
+            ErrorKind::NotFound,
+            "another user's base"
+        );
+        assert!(runtime_dir_in(base, "foamy-test").is_ok());
     }
 }
