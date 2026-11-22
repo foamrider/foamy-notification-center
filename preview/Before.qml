@@ -103,6 +103,7 @@ Item {
     property string removalError: ""
     property double lastSeen: preview.now - 120000
     property string searchQuery: ""
+    property string entriesQuery: ""
     property int keepDays: 30
     property int maxItems: 1000
     property bool showPreview: true
