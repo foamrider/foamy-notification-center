@@ -27,7 +27,7 @@ import harness  # foamy-kit's preview/harness.py
 
 PLUGIN = Path(__file__).resolve().parents[1]
 # Test functions in SHELL; QtTest's count at completion includes one entry of its own.
-CASES = 8
+CASES = 9
 
 SHELL = r"""
 import QtQuick
@@ -74,6 +74,8 @@ ShellRoot {
     property string removalError: ""
     property double lastSeen: 0
     property string searchQuery: ""
+    // The search the current entries answer (Service.qml).
+    property string entriesQuery: ""
     property int keepDays: 30
     property int maxItems: 1000
     property bool showPreview: true
@@ -199,6 +201,7 @@ ShellRoot {
         store.unread = 0; store.unreadCapped = false; store.hasCriticalUnread = false
         store.doNotDisturb = false; store.loaded = true; store.loadError = ""
         store.hasMore = false; store.listing = false; store.pages = 0; store.dndToggles = 0
+        store.entriesQuery = ""; store.searchQuery = ""
         panel.settings = ({badge: "Dot"})
       }
       // Each case starts from a closed panel whose list was released (the
@@ -284,9 +287,33 @@ ShellRoot {
         check(!error.visible, "the error line goes once the read works")
         store.show(shell.entries(2, true))
         panel.filter = "zzz"
+        store.entriesQuery = "zzz"
+        store.show([])
         waitUntil(function() { return panel.rows.length === 0 && shows("Nothing matches “zzz”") }, "a search without hits names the query")
         panel.filter = ""
+        store.entriesQuery = ""
+        store.show(shell.entries(2, true))
         waitUntil(function() { return panel.rows.length > 0 && !shows("Nothing has come in yet") }, "rows replace the empty line")
+      }
+
+      function test_search_shows_what_the_store_found() {
+        store.show(shell.entries(2, true))
+        openPanel()
+        panel.startSearch()
+        var search = findChild(panel.view, "notificationSearch")
+        waitUntil(function() { return search !== null && search.visible }, "the search field opens")
+        // The store gets the trimmed query; its matcher folds case fully, so
+        // "strasse" finds "Straße". The panel shows that answer as it is.
+        search.text = "strasse "
+        same(store.searchQuery, "strasse", "the store searches the trimmed text")
+        var found = [{key: "3000000-1", timestamp: 1793350800000, app: "Maps", appIcon: "", summary: "Straße closed", body: "Detour", urgency: 1},
+                     {key: "2999999-1", timestamp: 1793350700000, app: "Maps", appIcon: "", summary: "Hauptstrasse", body: "Open again", urgency: 1}]
+        store.entriesQuery = "strasse"
+        store.show(found)
+        waitUntil(function() { return panel.rows.length === 3 }, "both found rows are listed under their header")
+        check(panel.rows[0].kind === "header" && panel.rows[0].expanded, "a search opens the stack")
+        check(!shows("Nothing matches “strasse ”"), "no empty line while rows are found")
+        panel.endSearch()
       }
 
       function test_next_page_loads_when_the_list_ends_in_view() {

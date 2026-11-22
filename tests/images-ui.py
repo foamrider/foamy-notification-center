@@ -90,7 +90,7 @@ ShellRoot {
   id: root
   property int activations: 0
   readonly property var entry: store.entries[0] || ({app:"Image test",summary:"Loading",body:"",timestamp:0})
-  readonly property var groups: Model.groupsFor(store.entries,"","none")
+  readonly property var groups: Model.groupsFor(store.entries,"none")
   Plugin.Service { id: store }
   FileView { id: input; path: INPUT_PATH }
   FloatingWindow {

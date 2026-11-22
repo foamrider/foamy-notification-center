@@ -455,7 +455,7 @@ Ui.Panel {
     }
     rowsDirty = false
     var focused = cursorIndex >= 0 && cursorIndex < rows.length ? rows[cursorIndex].id : ""
-    var next = Model.stackRows(entries, expandedGroups, filter, browserGrouping, BrowserIdentity)
+    var next = Model.stackRows(entries, expandedGroups, store ? store.entriesQuery : "", browserGrouping, BrowserIdentity)
     var index = next.findIndex(function (row) {
       return row.id === focused
     })
@@ -541,8 +541,6 @@ Ui.Panel {
     } else
       activate(row.entry)
   }
-
-  onFilterChanged: rebuild()
 
   // --------------------------------------------------------------- activating
 
@@ -942,7 +940,7 @@ Ui.Panel {
             x: FoamyStyle.padding
             width: parent.width - FoamyStyle.padding * 2
             textFormat: Text.PlainText
-            text: search.pasteError || (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
+            text: search.pasteError ? root.tr(search.pasteError) : (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
             visible: text !== ""
             color: Commons.Color.urgent
             font.family: root.fontFamily
@@ -1004,7 +1002,32 @@ Ui.Panel {
                     // Freeze departing content until Qt finishes its removal transition.
                     modelData = modelData
                     retired = true
+                    entranceMotion.stop()
                     exitMotion.start()
+                  }
+                  // Called by the list's add transition: a 180 ms fade with a lift.
+                  function enter(distance) {
+                    entranceLift.from = distance
+                    entranceMotion.restart()
+                  }
+                  ParallelAnimation {
+                    id: entranceMotion
+                    NumberAnimation {
+                      target: delegateRoot
+                      property: "opacity"
+                      from: 0
+                      to: 1
+                      duration: FoamyMotion.duration(180)
+                      easing.type: Easing.OutCubic
+                    }
+                    NumberAnimation {
+                      id: entranceLift
+                      target: delegateRoot
+                      property: "entranceOffset"
+                      to: 0
+                      duration: FoamyMotion.duration(180)
+                      easing.type: Easing.OutCubic
+                    }
                   }
                   SequentialAnimation {
                     id: exitMotion
