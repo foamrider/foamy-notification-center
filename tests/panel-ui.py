@@ -11,8 +11,9 @@ right click silences without opening; the panel's open/close IPC target;
 the loading, empty, no-match and error lines; the next page loads when the
 list ends inside the viewport, after a read, when more turns up and when the
 list is scrolled to its end; rows are not rebuilt while the panel is closed
-and are current when it opens again; a number setting whose save failed can
-be saved again with the same number.
+and are current when it opens again; the keys come back to the panel after
+Esc in the search field and after a click beside it; a number setting whose
+save failed can be saved again with the same number.
 
 Runs through foamy-kit's preview/harness.py (isolated HOME, private bus, no
 host commands, offscreen screen) against the Omarchy 4.5 shell host."""
@@ -27,7 +28,7 @@ import harness  # foamy-kit's preview/harness.py
 
 PLUGIN = Path(__file__).resolve().parents[1]
 # Test functions in SHELL; QtTest's count at completion includes one entry of its own.
-CASES = 9
+CASES = 10
 
 SHELL = r"""
 import QtQuick
@@ -322,6 +323,41 @@ ShellRoot {
         check(panel.rows[0].kind === "header" && panel.rows[0].expanded, "a search opens the stack")
         check(!shows("Nothing matches “strasse ”"), "no empty line while rows are found")
         panel.endSearch()
+      }
+
+      function test_keys_return_to_the_panel_when_the_search_field_lets_go() {
+        // The hidden search field drops its focus to the popup body, not to
+        // the key catcher, so the panel itself must hand the keys back.
+        store.show(shell.entries(3, true))
+        openPanel()
+        waitUntil(function() { return panel.view.Window.active }, "the panel window is active")
+        var search = findChild(panel.view, "notificationSearch")
+        var row = findChild(panel.view, "notificationSearchRow")
+        panel.startSearch()
+        waitUntil(function() { return search.inputActiveFocus }, "the search field has the keys")
+        keyClick(Qt.Key_M)
+        keyClick(Qt.Key_Escape)
+        waitUntil(function() { return !panel.searching && panel.view.activeFocus }, "Esc in the search field gives the keys to the panel")
+        keyClick(Qt.Key_Down)
+        check(panel.keyboardNavigation && panel.cursorIndex === 0, "Down after Esc moves the cursor to the first row")
+
+        // A click on the empty margin left of the search row keeps the query.
+        panel.startSearch()
+        waitUntil(function() { return search.inputActiveFocus }, "the search field has the keys again")
+        keyClick(Qt.Key_M)
+        store.entriesQuery = "m"
+        store.show(shell.entries(3, true))
+        mouseClick(row, -row.x / 2, row.height / 2)
+        waitUntil(function() { return !search.inputActiveFocus && panel.view.activeFocus }, "a click beside the field gives the keys to the panel")
+        check(panel.searching, "the search stays open after the click")
+        same(search.text, "m", "the query after the click")
+        var cursor = panel.cursorIndex
+        keyClick(Qt.Key_Down)
+        same(panel.cursorIndex, cursor + 1, "Down after the click moves the cursor")
+        keyClick(Qt.Key_Escape)
+        waitUntil(function() { return !panel.searching }, "Esc on the panel ends the search")
+        check(panel.opened, "Esc that ends the search leaves the panel open")
+        same(search.text, "", "the query after the search ends")
       }
 
       function test_next_page_loads_when_the_list_ends_in_view() {
