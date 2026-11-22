@@ -222,7 +222,7 @@ impl Store {
         let mut assets = sources.clone();
         for asset in [&app_icon, &image_src, &file_src] {
             if text::is_path(asset)
-                && let Some(line) = text::stat_line(text::strip_file_url(asset))
+                && let Some(line) = text::stat_line(&text::sender_path(asset))
             {
                 assets.push_str(&line);
             }
@@ -300,10 +300,10 @@ impl Store {
                 // Sender cleanup is not an image change: keep copies when the same original disappears.
                 if existing.is_some() && ex_format == "1" && *ex_sources == sources_hash {
                     let gone = |path: &str| fs::metadata(path).is_err();
-                    if text::is_path(&app_icon) && gone(text::strip_file_url(&app_icon)) {
+                    if text::is_path(&app_icon) && gone(&text::sender_path(&app_icon)) {
                         icon = ex_icon.clone();
                     }
-                    if text::is_path(&image_src) && gone(text::strip_file_url(&image_src)) {
+                    if text::is_path(&image_src) && gone(&text::sender_path(&image_src)) {
                         image = ex_image.clone();
                     }
                     if !file_src.is_empty() && gone(&file_src) {

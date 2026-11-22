@@ -220,6 +220,34 @@ pub fn strip_file_url(text: &str) -> &str {
     text.strip_prefix("file://").unwrap_or(text)
 }
 
+/// The file a sender image (`appIcon`, `image`) names: a `file://` URL's path
+/// percent-decoded, as foamy-notifications writes it (`as_uri`: a space is
+/// `%20`, other letters their UTF-8 bytes) and reads it (`local_image`); a
+/// plain path as it is. A `%` without two hex digits stays; invalid UTF-8 is
+/// replaced.
+pub fn sender_path(text: &str) -> String {
+    let Some(path) = text.strip_prefix("file://") else {
+        return text.to_string();
+    };
+    let bytes = path.as_bytes();
+    let hex = |at: usize| bytes.get(at).and_then(|&b| (b as char).to_digit(16));
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match (bytes[i], hex(i + 1), hex(i + 2)) {
+            (b'%', Some(high), Some(low)) => {
+                out.push((high * 16 + low) as u8);
+                i += 3;
+            }
+            (byte, ..) => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 /// `^[[:alnum:]_.-]+$` (C locale): a theme icon name.
 pub fn theme_name(text: &str) -> bool {
     !text.is_empty()
@@ -505,6 +533,20 @@ mod tests {
             json::jq_raw(&json::parse(br#"["omasnap","/s.png"]"#, json::Dialect::Jq).unwrap());
         assert_eq!(preview_source(&printed), "/s.png");
         assert_eq!(screenshot_action(&printed, "/s.png"), "edit-screenshot");
+    }
+
+    #[test]
+    fn sender_paths_decode_only_file_urls() {
+        for (text, path) in [
+            ("file:///a%20b/%C3%bc.png", "/a b/ü.png"),
+            ("/a%20b.png", "/a%20b.png"),
+            ("file:///100%.png", "/100%.png"),
+            ("file:///a%zz%4", "/a%zz%4"),
+            ("file:///a%C3.png", "/a\u{fffd}.png"),
+            ("slack", "slack"),
+        ] {
+            assert_eq!(sender_path(text), path, "{text}");
+        }
     }
 
     #[test]

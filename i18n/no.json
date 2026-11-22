@@ -61,6 +61,7 @@
   "cannot synchronize notification history": "Kunne ikke synkronisere varselhistorikken.",
   "cannot update notification archive": "Kunne ikke oppdatere varselarkivet.",
   "cannot apply notification retention": "Kunne ikke rydde i varselarkivet.",
+  "cannot create notification store": "Kunne ikke opprette mappen for varselarkivet.",
   "Clipboard paste timed out. Copy the text again.": "Innliming fra utklippstavlen tok for lang tid. Kopier teksten på nytt.",
   "Clipboard text is too large or contains invalid characters.": "Teksten på utklippstavlen er for stor eller inneholder ugyldige tegn.",
   "Could not paste clipboard text. Copy plain text and try again.": "Kunne ikke lime inn fra utklippstavlen. Kopier ren tekst og prøv igjen.",

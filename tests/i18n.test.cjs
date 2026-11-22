@@ -64,7 +64,11 @@ test('every error the panel shows from the service or a text field has a catalog
   scan('native/src/watch.rs', /\b(fail|die)\("/);
   const sync = read('native/src/main.rs').split('\npub fn sync(')[1].split('\n}\n')[0];
   for (const match of sync.matchAll(/"((?:[^"\\]|\\.)*)"/g)) errors.set(match[1], 'native/src/main.rs');
-  assert.ok(errors.size >= before + 8, `found only ${errors.size - before} watcher errors`);
+  // The watcher first creates the store; its standard-error line is not shown.
+  const ensure = read('native/src/store.rs').split('\n    pub fn ensure(')[1].split('\n    }\n')[0];
+  for (const line of ensure.split('\n').filter(line => !line.trim().startsWith('//') && !line.includes('eprintln!')))
+    for (const match of line.matchAll(/"((?:[^"\\]|\\.)*)"/g)) if (match[1].includes(' ')) errors.set(match[1], 'native/src/store.rs');
+  assert.ok(errors.size >= before + 9, `found only ${errors.size - before} watcher errors`);
   for (const [error, file] of errors) {
     assert.ok(Object.hasOwn(I.en, error), `${file}: "${error}" is not in en.json`);
     assert.ok(Object.hasOwn(I.no, error), `${file}: "${error}" is not in no.json`);
@@ -90,8 +94,8 @@ test('every catalog entry is a text the plugin, its kit copy or its manifest nam
   // A key no source names as a string literal is never shown: drop it from
   // the catalogs. Keys are looked up literally, never built from parts.
   const root = path.join(__dirname, '..');
-  // The helper's watcher and sync errors reach the panel's error line too.
-  const files = ['manifest.json', 'native/src/watch.rs', 'native/src/main.rs'];
+  // The helper's watcher, sync and store errors reach the panel's error line too.
+  const files = ['manifest.json', 'native/src/watch.rs', 'native/src/main.rs', 'native/src/store.rs'];
   for (const dir of ['.', 'components', 'kit']) {
     for (const name of fs.readdirSync(path.join(root, dir))) if (/\.(qml|js)$/.test(name)) files.push(path.join(dir, name));
   }

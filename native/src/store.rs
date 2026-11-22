@@ -331,13 +331,18 @@ impl Store {
     }
 
     /// `ensure_store`: the private store, its archive and tombstone files.
+    /// The panel shows the error through its catalog, so it is one fixed
+    /// text; the directory and the cause go to standard error.
     pub fn ensure(&self) -> Result<(), String> {
         for dir in [&self.dir, &self.images] {
             fs::DirBuilder::new()
                 .recursive(true)
                 .mode(0o700)
                 .create(dir)
-                .map_err(|_| format!("cannot create {}", self.dir))?;
+                .map_err(|error| {
+                    eprintln!("notification-center: cannot create {dir}: {error}");
+                    "cannot create notification store".to_string()
+                })?;
         }
         for file in [&self.archive, &self.dismissed] {
             if !fs::metadata(file).is_ok_and(|m| m.is_file()) {

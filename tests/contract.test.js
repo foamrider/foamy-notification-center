@@ -72,11 +72,17 @@ test('failures print {"ok":false,"error":…} and exit 1; unknown commands exit 
     assert.equal(r.stdout, '')
     assert.match(r.stderr, /the store behind the Omarchy notification center/)
   }
-  // The store cannot be created: still JSON.
+  // The store cannot be created: still JSON, and one fixed text, which the
+  // panel shows through its catalog (the watcher's error line). The path goes
+  // to standard error.
   fs.writeFileSync(path.join(f.dir, 'blocker'), '')
-  const blocked = f.exec(['list'], {NC_STORE: path.join(f.dir, 'blocker', 'store')})
-  assert.equal(blocked.status, 1)
-  assert.equal(blocked.stdout, JSON.stringify({ok: false, error: `cannot create ${path.join(f.dir, 'blocker', 'store')}`}) + '\n')
+  const store = path.join(f.dir, 'blocker', 'store')
+  for (const command of ['list', 'watch']) {
+    const blocked = f.exec([command], {NC_STORE: store})
+    assert.equal(blocked.status, 1, command)
+    assert.equal(blocked.stdout, JSON.stringify({ok: false, error: 'cannot create notification store'}) + '\n', command)
+    assert.ok(blocked.stderr.includes(store), `${command}: ${blocked.stderr}`)
+  }
 })
 
 test('an ingested row has a fixed key order, keeps number literals and hashes its source text', t => {
@@ -184,6 +190,45 @@ test('the assets hash covers each sender file as stat -L prints it', t => {
   assert.equal(row.assetSources, sha(`\n${note}\n\n0\n`))
   assert.equal(row.assetsHash, sha(`\n${note}\n\n0\n` + stat))
   assert.equal(row.image, '')
+})
+
+test('an image Foamy names by a percent-encoded file URL is copied from the file it names', t => {
+  const f = fixture(t)
+  // foamy-notifications writes file:// and the path with each byte outside
+  // A-Za-z0-9_.-~!'()*/ percent-encoded: encodeURIComponent of each part.
+  const url = file => 'file://' + file.split('/').map(encodeURIComponent).join('/')
+  const dir = path.join(f.dir, 'a b', 'ü'), literal = path.join(f.dir, 'x%20y')
+  const icon = path.join(dir, 'icon.png'), picture = path.join(dir, 'picture.png'), plain = path.join(literal, 'picture.png')
+  for (const file of [icon, picture, plain]) {
+    fs.mkdirSync(path.dirname(file), {recursive: true})
+    const made = spawnSync('magick', ['-size', '1x1', 'xc:red', file], {encoding: 'utf8'})
+    assert.equal(made.status, 0, made.stderr)
+  }
+  const stamp = Date.now() - 1000, foamy = `${stamp}-1`, other = `${stamp}-2`
+  const row = {timestamp: stamp, app: 'A', summary: 'S', appIcon: url(icon), image: url(picture)}
+  fs.writeFileSync(path.join(f.source, `${foamy}.json`), JSON.stringify(row))
+  // A plain path is the file's own name: its "%20" is not a space.
+  fs.writeFileSync(path.join(f.source, `${other}.json`), JSON.stringify({timestamp: stamp, app: 'A', summary: 'T', image: plain}))
+  f.out('sync')
+  const rows = Object.fromEntries(f.read('archive.jsonl').trim().split('\n').map(line => [JSON.parse(line).key, JSON.parse(line)]))
+  const copy = (key, slot) => `file://${f.store}/images/${key}-${slot}.png`
+  assert.equal(rows[foamy].appIcon, copy(foamy, 'appIcon'))
+  assert.equal(rows[foamy].image, copy(foamy, 'image'))
+  assert.equal(rows[other].image, copy(other, 'image'))
+  for (const [key, slot] of [[foamy, 'appIcon'], [foamy, 'image'], [other, 'image']])
+    assert.ok(fs.statSync(f.file(`images/${key}-${slot}.png`)).size > 0, `${key}-${slot}`)
+  // The assets hash takes the stat of the files the URLs name.
+  const stat = file => spawnSync('stat', ['-Lc', '%d:%i:%s:%y:%z', '--', file], {encoding: 'utf8'}).stdout
+  const sources = `${row.appIcon}\n${row.image}\n\n0\n`
+  assert.equal(rows[foamy].assetsHash, sha(sources + stat(icon) + stat(picture)))
+  // A sender file that is still there but no longer an image is a changed
+  // image, not a cleanup: its old copy is not kept.
+  fs.writeFileSync(icon, 'not an image')
+  fs.writeFileSync(path.join(f.source, `${foamy}.json`), JSON.stringify({...row, body: 'changed'}))
+  const changed = f.exec(['sync'])
+  assert.equal(changed.status, 0, changed.stderr)
+  const after = f.read('archive.jsonl').trim().split('\n').map(line => JSON.parse(line)).find(entry => entry.key === foamy)
+  assert.deepEqual([after.body, after.appIcon, after.image], ['changed', '', copy(foamy, 'image')])
 })
 
 test('tombstones, the clear line and the retention watermark keep their formats', t => {
