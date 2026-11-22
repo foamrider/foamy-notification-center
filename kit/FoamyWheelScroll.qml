@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 b15ed41bafb7a0f25539b344004ed706131515547a38590fb4890b206cca1f98 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 edd03f728467480de6d505bebdc099e6a9c9bae4d1ce830f3db6adf717bf8219 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Normal wheel and touchpad scrolling for a Flickable (ListView, GridView…),
@@ -67,6 +67,17 @@ QtObject {
   function clamp(y) {
     return Math.max(minY, Math.min(maxY, y))
   }
+
+  // A glide's end is clamped when it starts. The bounds can shrink while it
+  // runs (a popup body that grows to fit its content does so after the
+  // content grew), and the animation would then write a place past the new
+  // end over the view's own clamp: aim it inside the bounds again.
+  function _keepInBounds() {
+    if (animation.running && Math.abs(clamp(animation.to) - animation.to) > 0.01)
+      scrollTo(animation.to, true)
+  }
+  onMinYChanged: _keepInBounds()
+  onMaxYChanged: _keepInBounds()
 
   // Scroll by `dy` content px. animate: glide there (wheel notches).
   function scrollBy(dy, animate) {

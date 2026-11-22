@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 9e5bd4a934de4279686019163e44ddc3d3f4a7e6f3635f7bb64703a24c1931a6 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.13.1 5326a85dcb518d7a3a78bd1818e63e09bd0ac785566d509f9244bb62a5ab4f41 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -20,7 +20,8 @@ import QtQuick.Layouts
 // - Enter or focus-out: commits only a valid, changed number (emits
 //   committed(v) once); an unchanged draft just goes back to showing `value`.
 //   An invalid draft shows `invalidText`; Enter keeps the draft to fix,
-//   focus-out restores `value`.
+//   focus-out restores `value`. Hiding the field is a focus-out; shown
+//   again, it has no error.
 // - Escape: restores `value` and stays on the page (the key is consumed, so
 //   FoamySettingsPage doesn't go back). Up/Down step the
 //   draft by stepSize within from..to.
@@ -191,6 +192,11 @@ Item {
     if (!dirty)
       show()
   }
+  // Hiding the field ends its edit (SafeTextField drops the focus), which
+  // puts an invalid draft back. Its error was about text that is gone: a
+  // field shown again (a settings page opened again) starts without it.
+  onVisibleChanged: if (visible)
+    errorText = ""
   Component.onCompleted: show()
 
   Column {
