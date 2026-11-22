@@ -15,7 +15,7 @@ function service() {
     entriesReset() {}, entryAdded() {}, storeCommand(args) { return args }, storeUnavailable() { return false },
     Quickshell: { execDetached() {} },
     quietRemovalKeys: {}, foamySource: true, peer: { call() {} },
-    searchQuery: "", listLimit: 500, hasMore: false, unreadSource: [], reloadArchive: { restart() {} }
+    searchQuery: "", entriesQuery: "", listLimit: 500, hasMore: false, unreadSource: [], reloadArchive: { restart() {} }
   })
   context.root = context
   for (const name of ["remove", "removeMany", "startRemoval", "absorb", "absorbUnread", "visibleEntries"]) {
@@ -211,6 +211,25 @@ test("the unread badge stays current while a search filters the list", () => {
  assert.deepEqual(Array.from(state.unreadSource,r=>r.key),["2-2","1-1"])
  state.removeMany(["1-1"])
  assert.deepEqual(Array.from(state.unreadSource,r=>r.key),["2-2"])
+})
+
+test("a changed row of search results is read again from the store instead of replaced in place", () => {
+ const state=service()
+ let reloads=0
+ state.reloadArchive={restart(){reloads++}}
+ const hit={key:"1-1",timestamp:1,body:"needle"},changed={key:"1-1",timestamp:1,body:"complete"}
+ // The rows answer the search "needle": only the store can say whether the changed row still matches it.
+ state.searchQuery="needle";state.entriesQuery="needle";state.entries=[hit];state.unreadSource=[hit]
+ state.absorb(JSON.stringify(changed))
+ assert.deepEqual(Array.from(state.entries,r=>r.body),["needle"])
+ assert.equal(reloads,1)
+ assert.equal(state.archiveRevision,1,"a read already running is read again")
+ assert.deepEqual(Array.from(state.unreadSource,r=>r.body),["complete"])
+ // Without a search the row is replaced where it is, with no read.
+ state.searchQuery="";state.entriesQuery=""
+ state.absorb(JSON.stringify(changed))
+ assert.deepEqual(Array.from(state.entries,r=>r.body),["complete"])
+ assert.equal(reloads,1)
 })
 
 test("Clear all's release to Foamy is retried while Foamy answers busy", () => {

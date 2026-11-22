@@ -799,6 +799,12 @@ Item {
       if (JSON.stringify(entries[i]) === JSON.stringify(entry))
         return
       archiveRevision++
+      // Search rows are the store's matches, and only the store can say
+      // whether the changed row still matches: read the search again.
+      if (entriesQuery) {
+        reloadArchive.restart()
+        return
+      }
       var updated = entries.slice()
       updated[i] = entry
       entries = updated
