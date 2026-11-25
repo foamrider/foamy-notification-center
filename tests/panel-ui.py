@@ -13,8 +13,9 @@ list ends inside the viewport, after a read, when more turns up and when the
 list is scrolled to its end; rows are not rebuilt while the panel is closed
 and are current when it opens again; the search field opens over the band's
 title row and the list stays where it is; the keys come back to the panel
-after Esc in the search field and after a click beside it, Up then stops at
-the first row, and an empty search field closes when it lets the keys go
+after Esc in the search field and after a click beside it, opening search
+takes the cursor off More options, Up then stops at the first row, and an
+empty search field closes when it lets the keys go
 (not for its own right-click menu); a number setting whose save failed can
 be saved again with the same number.
 
@@ -371,8 +372,12 @@ ShellRoot {
         keyClick(Qt.Key_Down)
         check(panel.keyboardNavigation && panel.cursorIndex === 0, "Down after Esc moves the cursor to the first row")
 
-        // A click beside the field keeps the query.
-        openSearch("the search field has the keys again")
+        // More options selected, then "/" opens the field over it. A click
+        // beside the field keeps the query, and the cursor is off that button.
+        keyClick(Qt.Key_Up)
+        check(panel.cursorOnSettings, "Up from the first row selects More options")
+        keyClick("/")
+        waitUntil(function() { return search.inputActiveFocus && panel.header.fieldProgress === 1 }, "\"/\" opens the search field with the keys")
         keyClick(Qt.Key_M)
         store.entriesQuery = "m"
         store.show(shell.entries(3, true))
@@ -380,6 +385,8 @@ ShellRoot {
         waitUntil(function() { return !search.inputActiveFocus && panel.view.activeFocus }, "a click beside the field gives the keys to the panel")
         check(panel.searching, "the search stays open after the click")
         same(search.text, "m", "the query after the click")
+        keyClick(Qt.Key_Up)
+        check(panel.cursorIndex === 0 && !panel.cursorOnSettings, "Up after the click selects the first row, not the covered More options")
         var cursor = panel.cursorIndex
         keyClick(Qt.Key_Down)
         same(panel.cursorIndex, cursor + 1, "Down after the click moves the cursor")

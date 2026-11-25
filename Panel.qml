@@ -372,6 +372,9 @@ Ui.Panel {
 
   function startSearch() {
     searching = true
+    // The field covers the ⋯ button: a cursor there would sit on a control
+    // that is hidden and takes no keys.
+    cursorOnSettings = false
     Qt.callLater(function () {
       if (root.opened && root.searching && search)
         search.forceActiveFocus()
