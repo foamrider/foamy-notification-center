@@ -1,11 +1,7 @@
 # qmllint findings accepted when the check was adopted. tests/validate.sh fails on any
 # finding not listed here. Regenerate with `tests/validate.sh --update-baseline qmllint`
 # only to drop fixed entries or after reviewing every added one; never to pass a check.
-Panel.qml: id-shadows-member: Id for object FoamyHeroBand shadows property "header". Rename one or the other. | readonly property real chromeHeight: header.height + (searchRow.visible ? searchRow.height + content.spacing : 0) + (errorLine.visible ? errorLine.implicitHeigh
 Panel.qml: id-shadows-member: Id for object FoamySettingsPage shadows property "settingsPane". Rename one or the other. | implicitHeight: root.editingSettings ? settingsPane.implicitHeight : content.implicitHeight + Style.space(10)
-Panel.qml: id-shadows-member: Id for object SafeTextField shadows property "search". Rename one or the other. | blocked: search.inputActiveFocus || root.editingSettings || header.menuOpen
-Panel.qml: id-shadows-member: Note: Id defined here | id: header
-Panel.qml: id-shadows-member: Note: Id defined here | id: search
 Panel.qml: id-shadows-member: Note: Id defined here | id: settingsPane
 Panel.qml: missing-property: Member "chromeHeight" not found on type "QQuickItem" | readonly property real listAvailableHeight: Math.max(Style.space(100), popup.usableCardHeight - popup.verticalContentInset - (view ? view.chromeHeight : Style.s
 Panel.qml: missing-property: Member "contentHeight" not found on type "QObject" | visible: (root.rows.length > 0 || (item && item.contentHeight > 0))

@@ -37,9 +37,13 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
 - Click a notification body to open its picture or focus the sending app,
   including the visible card in a collapsed stack.
 - Hover to dismiss a stack or individual notification. The trash clears the panel.
-- Click search or press `/` to filter. Press Escape to close search.
+- Click search or press `/` to filter. The search field opens over the
+  header's title and buttons, and the list stays where it is. Press Escape to
+  close search. An empty search also closes when you click elsewhere or press
+  Down or Enter.
 - Arrow keys (or `h`/`j`/`k`/`l`) move a selection through the list; Up from
-  the first row selects **More options**. Enter or Space opens the selected
+  the first row selects **More options** (not while search is open: the
+  search field covers it). Enter or Space opens the selected
   notification or expands its stack, Right (Left in right-to-left languages)
   selects its X, and Delete or `x` dismisses it. Escape closes the panel.
 - Open **More options (⋯)** to silence/allow notifications, snooze them, or open
@@ -51,8 +55,9 @@ omarchy plugin add https://github.com/foamrider/foamy-notification-center.git --
   timed snooze, so the item is hidden there.
 - Scrolling to the end loads the next 500 notifications; search covers the
   whole archive, not just the loaded part.
-- Clear all stays next to search. Stack dismissal uses the X icon,
-  shown on hover or keyboard selection.
+- Clear all stays next to search in the header and is hidden while the search
+  field is open. Stack dismissal uses the X icon, shown on hover or keyboard
+  selection.
 
 Settings use the same controls as Foamy Bolt and Audio. The **Notification
 center** section changes this list's browser grouping, favicons, compact view,

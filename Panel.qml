@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -373,6 +372,9 @@ Ui.Panel {
 
   function startSearch() {
     searching = true
+    // The field covers the ⋯ button: a cursor there would sit on a control
+    // that is hidden and takes no keys.
+    cursorOnSettings = false
     Qt.callLater(function () {
       if (root.opened && root.searching && search)
         search.forceActiveFocus()
@@ -442,7 +444,8 @@ Ui.Panel {
   property var expandedGroups: ({})
   property int cursorIndex: -1
   // The single cursor: list rows, or the header's ⋯ button (Settings is in its
-  // menu) above row 0.
+  // menu) above row 0. While searching, the search field covers that button
+  // and the cursor stays on the rows.
   property bool cursorOnSettings: false
   property bool cursorDismiss: false
   property bool keyboardNavigation: false
@@ -489,7 +492,7 @@ Ui.Panel {
 
   function moveCursor(dx, dy) {
     keyboardNavigation = true
-    if (dy < 0 && cursorIndex <= 0) {
+    if (dy < 0 && cursorIndex <= 0 && !searching) {
       cursorOnSettings = true
       cursorIndex = -1
       return
@@ -501,7 +504,7 @@ Ui.Panel {
       } else
         return
     } else if (rows.length === 0) {
-      cursorOnSettings = true
+      cursorOnSettings = !searching
       return
     } else if (dy) {
       cursorIndex = Math.max(0, Math.min(rows.length - 1, cursorIndex + dy))
@@ -772,10 +775,12 @@ Ui.Panel {
         property alias search: search
         property alias header: header
         property alias settingsPane: settingsPane
-        readonly property real chromeHeight: header.height + (searchRow.visible ? searchRow.height + content.spacing : 0) + (errorLine.visible ? errorLine.implicitHeight + content.spacing : 0) + content.spacing + Style.space(10)
+        // keyCatcher.header and keyCatcher.search, not the bare ids: each id
+        // shadows the alias property of its name, and qmllint flags a bare use.
+        readonly property real chromeHeight: keyCatcher.header.height + (errorLine.visible ? errorLine.implicitHeight + content.spacing : 0) + content.spacing + Style.space(10)
         implicitHeight: root.editingSettings ? settingsPane.implicitHeight : content.implicitHeight + Style.space(10)
         // While the search field or a menu has the keys, or Settings is open, this stands aside.
-        blocked: search.inputActiveFocus || root.editingSettings || header.menuOpen
+        blocked: keyCatcher.search.inputActiveFocus || root.editingSettings || keyCatcher.header.menuOpen
         onCloseRequested: root.searching ? root.endSearch() : root.close()
         onMoveRequested: function (dx, dy) {
           root.moveCursor(dx, dy)
@@ -807,6 +812,8 @@ Ui.Panel {
           // The foamy hero band, title only: bell, "Notifications", total, then
           // search and clear all; silence, snooze and Settings (last) are in
           // the kit's ⋯ overflow menu (at most three buttons on the top right).
+          // Search opens the band's field over the title row and the buttons,
+          // so the list under the band stays where it is.
           FoamyHeroBand {
             id: header
             objectName: "notificationCenterHeader"
@@ -814,6 +821,44 @@ Ui.Panel {
             iconName: root.dnd ? "bell-off" : "bell"
             title: root.tr("Notifications")
             meta: root.entries.length ? FoamyI18n.tn("%1 notifications", root.entries.length) : ""
+            // The band places and sizes the field, and keeps it inert while closed.
+            field: SafeTextField {
+              id: search
+              objectName: "notificationSearch"
+              placeholderText: root.tr("Search")
+              translate: root.tr
+              onTextChanged: {
+                root.filter = text
+                if (root.store)
+                  root.store.searchQuery = text.trim().slice(0, 256)
+              }
+              // An empty search closes when the field loses the keys (a click
+              // elsewhere, Down or Enter). The field covers the search button,
+              // so a click elsewhere is how the pointer closes it. The edit's
+              // end, not the focus change: the field's own context menu takes
+              // the focus too, and its Paste needs the field open.
+              onEditingFinished: if (!inputActiveFocus && root.searching && text === "")
+                root.endSearch()
+              onKeyPressed: function (event) {
+                if (event.key === Qt.Key_Escape) {
+                  event.accepted = true
+                  root.endSearch()
+                } else if (event.key === Qt.Key_Down) {
+                  event.accepted = true
+                  keyCatcher.forceActiveFocus()
+                  root.cursorIndex = -1
+                  root.moveCursor(0, 1)
+                }
+              }
+              // Keep the query while handing keyboard navigation to its results.
+              onAccepted: {
+                keyCatcher.forceActiveFocus()
+                root.cursorIndex = -1
+                root.moveCursor(0, 1)
+              }
+            }
+            fieldOrigin: searchAction
+            fieldOpen: root.searching
             // The ⋯ button is the cursor stop above row 0 (Settings is in its menu).
             menuHasCursor: root.keyboardNavigation && root.cursorOnSettings
             settingsHasCursor: root.keyboardNavigation && root.cursorOnSettings
@@ -828,11 +873,12 @@ Ui.Panel {
             }
             trailing: [
               FoamyAction {
+                id: searchAction
                 objectName: "notificationSearchButton"
                 iconName: "search"
                 tooltipText: root.tr("Search notifications  ( / )")
-                foreground: root.searching ? Commons.Color.accent : FoamyPalette.secondaryText
-                onClicked: root.searching ? root.endSearch() : root.startSearch()
+                foreground: FoamyPalette.secondaryText
+                onClicked: root.startSearch()
               },
               FoamyAction {
                 objectName: "clearAllNotifications"
@@ -887,60 +933,13 @@ Ui.Panel {
             ]
           }
 
-          // ------------------------------------------------------ search
-          RowLayout {
-            id: searchRow
-            objectName: "notificationSearchRow"
-            visible: root.searching
-            x: FoamyStyle.padding
-            width: parent.width - FoamyStyle.padding * 2
-            spacing: FoamyStyle.gap
-            SafeTextField {
-              id: search
-              objectName: "notificationSearch"
-              Layout.fillWidth: true
-              implicitHeight: FoamyStyle.controlHeight
-              enabled: root.searching
-              placeholderText: root.tr("Search")
-              translate: root.tr
-              onTextChanged: {
-                root.filter = text
-                if (root.store)
-                  root.store.searchQuery = text.trim().slice(0, 256)
-              }
-              onKeyPressed: function (event) {
-                if (event.key === Qt.Key_Escape) {
-                  event.accepted = true
-                  root.endSearch()
-                } else if (event.key === Qt.Key_Down) {
-                  event.accepted = true
-                  keyCatcher.forceActiveFocus()
-                  root.cursorIndex = -1
-                  root.moveCursor(0, 1)
-                }
-              }
-              // Keep the query while handing keyboard navigation to its results.
-              onAccepted: {
-                keyCatcher.forceActiveFocus()
-                root.cursorIndex = -1
-                root.moveCursor(0, 1)
-              }
-            }
-            FoamyAction {
-              iconName: "x"
-              tooltipText: root.tr("Close search  ( Esc )")
-              foreground: FoamyPalette.secondaryText
-              onClicked: root.endSearch()
-            }
-          }
-
           Text {
             id: errorLine
             objectName: "notificationError"
             x: FoamyStyle.padding
             width: parent.width - FoamyStyle.padding * 2
             textFormat: Text.PlainText
-            text: search.pasteError ? root.tr(search.pasteError) : (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
+            text: keyCatcher.search.pasteError ? root.tr(keyCatcher.search.pasteError) : (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
             visible: text !== ""
             color: Commons.Color.urgent
             font.family: root.fontFamily
