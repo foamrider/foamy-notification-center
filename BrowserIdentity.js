@@ -11,8 +11,11 @@ function browser(row) {
   return ""
 }
 
+// Chromium-family browsers put the site's origin on the first body line.
+// Firefox sends the page's own body, with no origin, so its site is unknown.
 function hostname(row) {
-  if (!browser(row)) return ""
+  var name = browser(row)
+  if (!name || name === "firefox") return ""
   var text = String(row.body || "").trim()
   var first = text.split(/\r?\n/, 1)[0].trim()
   var label = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
