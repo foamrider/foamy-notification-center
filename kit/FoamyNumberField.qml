@@ -1,4 +1,4 @@
-// foamy-kit 0.14.0 eaa330ce1d81df825b970795a7eafd7b2d4d1faf35a61e2ab70a54023e39005c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.1 78a78dba44e93b9e3e757749603f6ca3ec758020181811f1ba1ddce378618944 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -129,6 +129,8 @@ Item {
   // (unless a newer draft is being edited) and the same input can be
   // committed again. Wire it to the save's failure, e.g.
   // FoamyPrefsQueue.onFailed: if (key === "x") field.saveFailed()
+  // A call inside committed() works too (FoamyPrefsQueue reports a save it
+  // refuses at once there), so it needs no Qt.callLater.
   function saveFailed() {
     lastCommitted = ""
     hasCommitted = false
@@ -154,14 +156,18 @@ Item {
     }
     errorText = ""
     var text = format(v)
-    if (v !== Number(Number(value).toFixed(decimals)) && !(hasCommitted && text === lastCommitted)) {
+    var send = v !== Number(Number(value).toFixed(decimals)) && !(hasCommitted && text === lastCommitted)
+    if (send) {
       lastCommitted = text
       hasCommitted = true
-      committed(v)
     }
+    // Settled before committed(): a saveFailed() inside it (a save that
+    // FoamyPrefsQueue refuses at once) then shows `value` again.
     dirty = false
     // shows the commit until `value` catches up
     field.text = text
+    if (send)
+      committed(v)
     return true
   }
 

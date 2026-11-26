@@ -1,4 +1,4 @@
-// foamy-kit 0.14.0 096fc47b95eb6b6196f9965ed351b53bbbe4d8029dfabcfa002606ac188c2055 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.1 aebba3e5bd75c3aafcefe16a6ac48ac3712571e56a10c355b875ed11d8041cb4 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls as Controls
 
@@ -19,7 +19,11 @@ import QtQuick.Controls as Controls
 // Esc goes back. Tab walks the form controls (focusable: true); the page
 // scrolls to keep the focused control visible (a SafeTextArea's box, not
 // its whole text). RTL mirrors the whole page.
-// Focus `backTarget` when the page opens.
+// Focus `backTarget` when the page opens: focusBack() does, called at once
+// or deferred. Called while the page does not show yet, it tries once more
+// after the current event-loop turn; a page still hidden then takes no
+// keys, so a Qt.callLater(page.focusBack) from when Settings showed is safe
+// after Settings hid again.
 //
 // Scrolling: a wheel notch moves ~3 rows and touchpad deltas map 1:1
 // (FoamyWheelScroll; Qt's own wheel handling loses most of a high-resolution
@@ -50,8 +54,20 @@ FocusScope {
   LayoutMirroring.childrenInherit: true
   implicitHeight: header.implicitHeight + column.implicitHeight
 
+  // A call deferred when Settings showed (Qt.callLater) can run after the
+  // page hid again in the same event-loop turn: a hidden page takes no keys.
+  // A call made before the page shows (a handler of the settings state that
+  // runs before the page's `visible` binding) tries once more after the
+  // current turn, and gives the keys only if the page shows then.
   function focusBack() {
-    header.backButton.forceActiveFocus()
+    if (visible)
+      header.backButton.forceActiveFocus()
+    else
+      Qt.callLater(root._focusBackIfShown)
+  }
+  function _focusBackIfShown() {
+    if (visible)
+      header.backButton.forceActiveFocus()
   }
   function resetScroll() {
     scroll.contentY = 0

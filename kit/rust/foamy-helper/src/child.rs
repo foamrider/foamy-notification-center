@@ -1,4 +1,4 @@
-// foamy-kit 0.14.0 b572966db8ecb2f77c2abdd130281b643cd4c81b8878e2cab6f300eb4cd87270 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.1 5592404e3c4e7163e2f415b7a176ff06d9638d3fd2a0080079905c703395e9d1 — do not edit; change foamy-kit and run sync
 //! Bounded child processes: a deadline, a cap on captured output, a kill on
 //! either, and control over the environment, standard input, the process
 //! group or session, resource limits, CPU and I/O priority and death with
@@ -1119,6 +1119,12 @@ mod tests {
         Bounded::new("/bin/sh").arg("-c").arg(script)
     }
 
+    // A redirect from a descriptor above 9 (`cat <&12`) is bash syntax:
+    // dash, /bin/sh on Debian and Ubuntu, refuses it ("Bad fd number").
+    fn bash(script: &str) -> Bounded {
+        Bounded::new("/bin/bash").arg("-c").arg(script)
+    }
+
     #[test]
     fn captures_output_and_status() {
         let output = sh("printf out; printf err >&2; exit 3").run().unwrap();
@@ -1262,9 +1268,9 @@ mod tests {
         write.write_all(b"through fd").unwrap();
         drop(write);
         let script = format!("cat <&{}", read.as_raw_fd());
-        let output = sh(&script).inherit_fd(&read).run().unwrap();
+        let output = bash(&script).inherit_fd(&read).run().unwrap();
         assert_eq!(output.stdout, b"through fd");
-        let closed = sh(&script).run().unwrap();
+        let closed = bash(&script).run().unwrap();
         assert!(
             !closed.success(),
             "without inherit_fd the fd stays close-on-exec"
@@ -1275,7 +1281,7 @@ mod tests {
         write.write_all(b"the pipe").unwrap();
         drop(write);
         let script = format!("cat <&{}", read.as_raw_fd());
-        let command = sh(&script).inherit_fd(read);
+        let command = bash(&script).inherit_fd(read);
         let (_reused, _keep) = io::pipe().unwrap();
         let output = command.run().unwrap();
         assert_eq!(output.stdout, b"the pipe", "{output:?}");

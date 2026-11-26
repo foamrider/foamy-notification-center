@@ -1,4 +1,4 @@
-// foamy-kit 0.14.0 f33c8ff3e6f096dfbeb42f3bf5ddadd2834b7359f021da210ad8f0bea9c30cf3 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.1 f33c8ff3e6f096dfbeb42f3bf5ddadd2834b7359f021da210ad8f0bea9c30cf3 — do not edit; change foamy-kit and run sync
 //! This process: exiting on a panic, dying with the parent, a new session,
 //! resource limits, the umask and a deadline for the whole run. Child
 //! processes get the same through [`crate::child::Bounded`].
