@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 1bb18fb7d0ff321fc90f800e64f87c4e03ee3713a5e958f6363144fe24984b49 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.0 dd3f3138f410fe1292c8a428aa594a618d41951892c811c2329791c45fcfb5f1 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Whether a panel shows its settings page, with the one safe ordering.
@@ -14,7 +14,9 @@ import QtQuick
 // synchronously, so an `onOpenedChanged: if (opened) editingSettings = false`
 // runs after show() set it and the settings IPC lands on the overview.
 // holdOnClose keeps the page across a close (e.g. a folder picker or browser
-// sign-in that closes the popup and reopens it).
+// sign-in that closes the popup and reopens it). When the page hides (Back,
+// or the reset on close), FoamyPopup gives the keys it had back to the
+// popup body's key home: a plugin needs no onHidden refocus.
 QtObject {
   id: state
 

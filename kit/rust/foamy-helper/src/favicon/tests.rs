@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 29106198e4e32ad104afd41aee715722027f0fc51e1b4678219130d842f5a8b2 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.0 09ec5f0307887c7c36715b9ed0410b5eb793c72e182ac53995a9de1680b17a58 — do not edit; change foamy-kit and run sync
 //! The favicon lookup against real SQLite files. The databases are written
 //! (and browsers holding them simulated) with Python's `sqlite3` module, the
 //! same library the Python helper used; without `python3` these tests are
@@ -690,12 +690,15 @@ fn only_a_cached_icon_younger_than_a_day_is_reused() {
     let minute = Duration::from_secs(60);
     let now = SystemTime::now();
     // (modification time, reply). No browser data, so a stale copy gives
-    // "not-found". A time in the future (the clock was set back) is stale.
+    // "not-found". A time a second ahead (a file system whose clock runs a
+    // little ahead) is fresh; a time two minutes ahead (the clock was set
+    // back) is stale.
     for (modified, status) in [
         (now - minute, "cached"),
         (now - CACHE_MAX_AGE + minute, "cached"),
         (now - CACHE_MAX_AGE - minute, "not-found"),
-        (now + minute, "not-found"),
+        (now + Duration::from_secs(1), "cached"),
+        (now + minute * 2, "not-found"),
         (now + CACHE_MAX_AGE * 2, "not-found"),
     ] {
         fs::write(&target, png(32, 100)).unwrap();

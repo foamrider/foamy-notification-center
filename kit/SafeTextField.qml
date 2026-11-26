@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 f1d0a4c97a28774046b1be960ecba6a79b1be1dd03917666b6124cee30075b06 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.0 a486adf34e8569034bd7500f3cc4826b6c46195b76f7c255c61a2d18468e792d — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls as Controls
 import Quickshell.Io
@@ -29,7 +29,10 @@ import qs.Ui
 // usual field under the pointer or the cursor and with the focus. clipboardScript resolves relative to this
 // file (kit/clipboard.sh by default) unless absolute. A field that hides
 // gives up the focus (keys never edit hidden text), which ends the edit:
-// editingFinished.
+// editingFinished. If it had the keys, they go to the nearest key home that
+// shows (FoamyClickAway's `foamyKeyHome`: a popup's key catcher, a settings
+// page), so the panel's keys work at once; without one, to the nearest
+// focus scope.
 //
 // Secrets (API tokens, passwords): `masked: true`, set at creation.
 //
@@ -869,8 +872,25 @@ Flickable {
     // Qt keeps the active focus on a hidden item, so keys would still edit
     // text the user cannot see. Losing it ends the edit (editingFinished).
     // An open menu would give the focus back on Esc or Paste: close it first.
+    var hadKeys = editor.activeFocus || editMenu.visible
     editMenu.close()
     editor.focus = false
+    // The keys go where a click-away gives them, so the panel's keys (Esc,
+    // arrows) work at once; without a key home they stay with the nearest
+    // focus scope.
+    var home = hadKeys ? _keyHome(root.parent) : null
+    if (home)
+      home.forceActiveFocus()
+  }
+  // The nearest `foamyKeyHome` above the field that shows (FoamyClickAway's
+  // key home), or null. A hidden one, such as a settings page that hides
+  // with the field, passes the search on.
+  function _keyHome(item) {
+    for (let at = item; at; at = at.parent) {
+      if ("foamyKeyHome" in at && at.foamyKeyHome && at.foamyKeyHome.visible)
+        return at.foamyKeyHome
+    }
+    return null
   }
 
   // Private: the masked value, and whether the field itself is writing the mask.

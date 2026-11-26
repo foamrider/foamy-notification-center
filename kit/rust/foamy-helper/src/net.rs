@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 8cc6c7d05a7d5fc2795b19a3d3f2765f574272ea3ee097027293c3d5f5cccf5a — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.0 8cc6c7d05a7d5fc2795b19a3d3f2765f574272ea3ee097027293c3d5f5cccf5a — do not edit; change foamy-kit and run sync
 //! Network streams with an absolute deadline.
 //!
 //! A socket timeout (`set_read_timeout`) bounds each blocking call, not an

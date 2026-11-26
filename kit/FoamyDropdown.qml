@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 1bcae83a998b521a0e9119e0638eeca9fcfd9108354448f3870613c795b9a7d1 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.0 7e14c15db1598c21b3053eb3e03e86de23bd50a54eeadbfe87adfa03a8d1dce5 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls
 import qs.Commons
@@ -11,22 +11,30 @@ import qs.Ui
 // panel's mirroring), and an optional label delegate.
 //
 // `value` belongs to the caller: bind it to the setting. Selecting an option
-// emits changed(value) and never assigns `value` (upstream does, which
-// destroys the caller's binding, and since popup bodies are kept between
-// opens, later changes to the setting would stop showing). Until the
+// emits changed(value, serial) and never assigns `value` (upstream does,
+// which destroys the caller's binding, and since popup bodies are kept
+// between opens, later changes to the setting would stop showing). Each
+// pick gets a new `serial` (a handler may take `value` only). Until the
 // caller's binding catches up, the pick is shown (`shownValue`); it gives way
 // as soon as `value` changes, the list is reopened, saveFailed() is called,
 // or after pickHoldMs. When the save fails without changing `value`, call
-// saveFailed() so the saved value shows again at once. With a
-// FoamyPrefsQueue that is a save it refuses before any value is pending (a
-// value the schema rejects, a kept invalid stored array, a widget with no
-// bar entry): save() returns false.
+// saveFailed() so the saved value shows again at once. A caller whose saves
+// end one by one (quick picks, each its own save) passes the pick's serial,
+// saveFailed(serial): only that pick gives way, so a newer pick, even of
+// the same value, stays on show while its own save runs.
+//   onChanged: function (v, serial) { service.setMode(v, function (ok) { if (!ok) modeDropdown.saveFailed(serial) }) }
+// With a FoamyPrefsQueue, link the dropdown to the queue and its key:
+//   FoamyDropdown { value: prefs.value("mode"); queue: prefs; queueKey: "mode"; onChanged: function (v) { prefs.save("mode", v) } }
+// It then ends its pick by itself when the queue refuses that key: at once
+// when save() refuses the pick before any value is pending (it returns
+// false: a value the schema rejects, a kept invalid stored array, a widget
+// with no bar entry), and when a pick that waited behind a running save is
+// refused as it runs (the bar entry, the schema or the stored list changed
+// meanwhile), which only failed() reports. A refusal of another key leaves
+// it. A CLI save that fails later rolls `value` back, which ends the hold by
+// itself. Without the link, call saveFailed() when save() returns false:
 //   onChanged: function (v) { if (!prefs.save("mode", v)) modeDropdown.saveFailed() }
-// A queued save is checked again when it runs, and a refusal then comes only
-// through failed() (the bar entry, the schema or the stored list changed
-// while it waited). A CLI save that fails later rolls `value` back, which ends the
-// hold by itself. A caller that wants an uncontrolled dropdown handles
-// changed() itself.
+// A caller that wants an uncontrolled dropdown handles changed() itself.
 //
 // Compact form (`compact: true`), for short choices in settings (enums,
 // intervals; DESIGN.md "Short values use the row form"): one row like a
@@ -117,20 +125,55 @@ Item {
   onEnabledChanged: if (!enabled)
     popup.close()
   // Pick an option as the list does: show it and emit changed(), without
-  // touching `value`.
+  // touching `value`. Each pick gets the next serial.
   function select(v) {
     v = String(v)
+    var serial = ++_pickCount
     if (v !== value) {
       pickedValue = v
       pickHeld = true
+      _heldSerial = serial
       pickHold.restart()
     }
-    changed(v)
+    _savingSerial = serial
+    changed(v, serial)
+    _savingSerial = 0
   }
-  // Tell the dropdown its last pick was not saved: it shows `value` again.
-  function saveFailed() {
+  // Tell the dropdown a pick was not saved: it shows `value` again. With the
+  // serial changed() passed, only while that pick is on show (a newer pick,
+  // perhaps of the same value, waits on its own save); without one, the
+  // pick on show goes, whichever it is.
+  function saveFailed(serial) {
+    if (serial !== undefined && serial !== _heldSerial)
+      return
     pickHold.stop()
     pickHeld = false
+  }
+  // The serial of the newest pick, and of the pick on show.
+  property int _pickCount: 0
+  property int _heldSerial: 0
+  // The pick whose changed() is running, else 0.
+  property int _savingSerial: 0
+
+  // Optional link to the FoamyPrefsQueue the caller saves through (or any
+  // object with its failed(key, value, error) signal) and the key it saves:
+  // a refusal of that key ends the pick's hold by itself (see the header).
+  property QtObject queue: null
+  property string queueKey: ""
+  Connections {
+    target: root.queue
+    ignoreUnknownSignals: true
+    function onFailed(key, failedValue) {
+      if (root.queueKey === "" || key !== root.queueKey)
+        return
+      // During changed() it is that pick, which save() refuses (it returns
+      // false): whatever the caller made of the value. Later (a queued
+      // save refused when it ran) it names its value, the newest pick's.
+      if (root._savingSerial !== 0)
+        root.saveFailed(root._savingSerial)
+      else if (root.pickHeld && String(failedValue) === root.pickedValue)
+        root.saveFailed(root._heldSerial)
+    }
   }
   function close() {
     popup.close()
@@ -139,7 +182,7 @@ Item {
     popup.opened ? popup.close() : open()
   }
 
-  signal changed(string value)
+  signal changed(string value, int serial)
   signal hovered(bool isHovered)
 
   function optionValue(o) {

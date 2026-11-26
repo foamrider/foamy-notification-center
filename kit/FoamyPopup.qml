@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 75e59dabe525bb2cc526b8042c12843a0b1c4134a1bbeb311f398a0845c08087 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.0 42e75cfaca08b0d2dc58d0e761e4aa169c2157a9372f0bbd25286feb55847ce3 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
@@ -46,6 +46,14 @@ import qs.Ui
 // `focusTarget` (to the body item while focusTarget is the default), or to
 // a nearer `foamyKeyHome` (FoamyClickAway). Flickables get the same through
 // FoamyWheelScroll.
+//
+// Keys of an item that hides: when the item in the body that has the keys
+// hides (a settings page left with Back, or reset when the popup closes on
+// it: FoamySettingsState), they go to the nearest key home that shows: a
+// settings page that still shows (its Retry hid as the retry started),
+// else the same key home as a click-away. So Esc and the panel's keys work
+// at once and on the next open. A plugin needs no onHidden refocus; one it
+// keeps (an item of its own, at once or later) still wins.
 //
 // Usage:
 //   FoamyPopup {
@@ -106,6 +114,60 @@ KeyboardPanel {
     focus: true
     active: !!root.body && (root.open || root.bodyRequested)
     sourceComponent: root.body
+  }
+
+  // Qt keeps the keys on an item that hides, and the host's focus on the
+  // next open goes back to it: a settings page left with Back, or closed
+  // with the popup, kept Esc and the arrows while the panel showed its list.
+  // When the item in the body that has the keys hides, it lets go and the
+  // nearest key home that shows takes them (a settings page that still
+  // shows, else the body's). A plugin's own refocus, at once or later,
+  // still wins: it moves the keys to an item that shows.
+  property Item _keysAt: null
+  property Connections _keysWatch: Connections {
+    target: bodyLoader.Window
+    function onActiveFocusItemChanged() {
+      var item = bodyLoader.Window.activeFocusItem
+      if (item && root._inBody(item))
+        root._keysAt = item
+    }
+  }
+  property Connections _keysHide: Connections {
+    target: root._keysAt
+    function onVisibleChanged() {
+      if (root._keysAt && !root._keysAt.visible)
+        Qt.callLater(root._reclaimKeys)
+    }
+  }
+  function _inBody(item) {
+    for (let at = item; at; at = at.parent)
+      if (at === bodyLoader)
+        return true
+    return false
+  }
+  // The nearest key home above `item` that shows, up to the body's: a
+  // settings page that still shows keeps the keys of a Retry that hid on it.
+  function _keyHome(item) {
+    for (let at = item; at; at = at.parent) {
+      if ("foamyKeyHome" in at && at.foamyKeyHome && at.foamyKeyHome.visible)
+        return at.foamyKeyHome
+      if (at === bodyLoader)
+        break
+    }
+    return null
+  }
+  function _reclaimKeys() {
+    var held = _keysAt
+    if (!held || held.visible || !_inBody(held))
+      return
+    var home = _keyHome(held)
+    if (!home)
+      return
+    // The hidden items let go first: a home that is a focus scope (the
+    // settings page) would hand the keys straight back to the hidden item.
+    for (let at = held; at && !at.visible; at = at.parent)
+      at.focus = false
+    home.forceActiveFocus()
   }
 
   // KeyboardPanel draws the card with Style.cornerRadius and the popup

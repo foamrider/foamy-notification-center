@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 31371ef41d02ff56eb60557ef113a98f1f10dd6fd3881d2e0b8f9de55649dbf1 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.0 31371ef41d02ff56eb60557ef113a98f1f10dd6fd3881d2e0b8f9de55649dbf1 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // The panel's single cursor over a flat list of stops (rows, then buttons),
