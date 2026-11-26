@@ -1,4 +1,4 @@
-// foamy-kit 0.14.0 42e75cfaca08b0d2dc58d0e761e4aa169c2157a9372f0bbd25286feb55847ce3 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.1 16d82ed7113fdb973317a19874ad7d0358f287b2fe8c8e566eec69e01474bd4f — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
@@ -53,7 +53,13 @@ import qs.Ui
 // settings page that still shows (its Retry hid as the retry started),
 // else the same key home as a click-away. So Esc and the panel's keys work
 // at once and on the next open. A plugin needs no onHidden refocus; one it
-// keeps (an item of its own, at once or later) still wins.
+// keeps (an item of its own, at once or later) still wins. The popup learns
+// the item with the keys from its window's activeFocusItem, which Qt keeps
+// only in the active window: on the desktop the popup's window is active
+// (the host's KeyboardPanel takes the keyboard on every open). A test that
+// runs the popup in a window that is not active, or in none, puts it in a
+// window and activates it first (window.requestActivate(), then wait until
+// window.active).
 //
 // Usage:
 //   FoamyPopup {

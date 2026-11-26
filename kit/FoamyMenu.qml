@@ -1,5 +1,5 @@
 pragma ComponentBehavior: Bound
-// foamy-kit 0.14.0 d74ee65b3df0ace94e2b809f6d37099719307eae51642ca1741bc02ce2ad4268 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.1 d74ee65b3df0ace94e2b809f6d37099719307eae51642ca1741bc02ce2ad4268 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 

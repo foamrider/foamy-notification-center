@@ -1,4 +1,4 @@
-// foamy-kit 0.14.0 1a2c0ee03f00634a416b9b4f405fd763ec6a3ceb3ccc1ed8577819927905f3da — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.1 2c02a0d042dec810c1d9fa65e9e9d9a7ac4efcc613f1bfbd018056bf8f9a41e5 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // A free-text settings field that never fights the setting it shows: the
@@ -59,6 +59,8 @@ Item {
   // (unless a newer draft is being edited) and the same input can be
   // committed again. Wire it to the save's failure, e.g.
   // FoamyPrefsQueue.onFailed: if (key === "x") field.saveFailed()
+  // A call inside committed() works too (FoamyPrefsQueue reports a save it
+  // refuses at once there), so it needs no Qt.callLater.
   function saveFailed() {
     lastCommitted = ""
     hasCommitted = false
@@ -90,13 +92,17 @@ Item {
       return revertInvalid === true
     }
     errorText = ""
-    if (next !== value && !(hasCommitted && next === lastCommitted)) {
+    var send = next !== value && !(hasCommitted && next === lastCommitted)
+    if (send) {
       lastCommitted = next
       hasCommitted = true
-      committed(next)
     }
+    // Settled before committed(): a saveFailed() inside it (a save that
+    // FoamyPrefsQueue refuses at once) then shows `value` again.
     dirty = false
     field.text = next
+    if (send)
+      committed(next)
     return true
   }
 
