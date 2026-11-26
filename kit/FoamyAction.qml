@@ -1,4 +1,4 @@
-// foamy-kit 0.14.1 6c74e32394a14bc04278c919cde64fe0e696005c6180624527265a7d452c25cd — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 d7f1aa2f6b43aa170f5792de7e7648cdf75b7f8adf654e96d10558769bed6a43 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
@@ -29,6 +29,8 @@ Rectangle {
   property bool spinning: false
   property bool actionEnabled: true
   property bool hasCursor: false
+  // The keys moved the cursor here (FoamyCursor.byKeys): an accent border.
+  property bool cursorByKeys: false
   property bool focusable: false
   property bool settings: false
   property bool destructive: false
@@ -47,7 +49,7 @@ Rectangle {
   radius: FoamyStyle.radius
   opacity: enabled ? (actionEnabled ? 1 : 0.7) : FoamyStyle.disabledOpacity
   color: active && (hasCursor || mouse.containsMouse || activeFocus) ? (destructive ? Qt.alpha(Commons.Color.urgent, 0.14) : FoamyPalette.hoverFill) : "transparent"
-  border.width: activeFocus && focusable ? 1 : 0
+  border.width: (activeFocus && focusable) || (active && hasCursor && cursorByKeys) ? 1 : 0
   border.color: Commons.Color.accent
   activeFocusOnTab: focusable && active
 
@@ -78,7 +80,10 @@ Rectangle {
       visible: root.iconName !== ""
       width: root.iconSize
       height: width
-      color: root.destructive && (root.hasCursor || mouse.containsMouse) ? Commons.Color.urgent : root.foreground
+      // Readable on the destructive tint it sits on under the cursor, with
+      // the popup surface under the tint. (In a band or on a selected row
+      // the fill under it differs: it is measured as on the popup surface.)
+      color: root.destructive && (root.hasCursor || mouse.containsMouse) ? FoamyPalette.onSurface(Commons.Color.urgent, Qt.tint(FoamyPalette.background, Qt.alpha(Commons.Color.urgent, 0.14))) : root.foreground
       name: root.iconName
       anchors.verticalCenter: parent.verticalCenter
       // Only the glyph turns; the surface stays put. Off under reduced motion.

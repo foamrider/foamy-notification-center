@@ -1,7 +1,6 @@
-// foamy-kit 0.14.1 5ac3d10d8ee34c6a4fa810d12b0f5855faf70bda6b6a225aab3687bd2a16af52 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 4b03f2d9e8fff85a29ab30909dc4bef9c3c0e84a138bd804f804fd7758daf8bc — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
-import qs.Commons as Commons
 
 // A save or load error, announced to screen readers, with an optional Retry.
 //
@@ -30,7 +29,9 @@ Item {
       textFormat: Text.PlainText
       horizontalAlignment: Text.AlignLeft
       wrapMode: Text.WordWrap
-      color: Commons.Color.urgent
+      // The field errors' red (FoamyTextSettingField, FoamyNumberField), so
+      // a page shows one red, readable on the popup surface.
+      color: FoamyPalette.onSurface(FoamyPalette.error)
       font.family: FoamyStyle.fontFamily
       font.pixelSize: FoamyStyle.font.bodySmall
       Accessible.role: Accessible.AlertMessage

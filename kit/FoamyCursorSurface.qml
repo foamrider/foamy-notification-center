@@ -1,5 +1,6 @@
-// foamy-kit 0.14.1 7729ead2825fe4300b9756b8be28debb9767b042500cacbd46e73249195e1c5c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 4a5d21c5eb5cf6c398dc3b36b083b47f8febddfd98fc98b900cf21fafb39a1db — do not edit; change foamy-kit and run sync
 import QtQuick
+import qs.Commons as Commons
 import qs.Ui
 
 // A row or tile in the panel's single keyboard cursor model: the stock
@@ -15,6 +16,15 @@ import qs.Ui
 //
 // The pointer shows a hand over the row; set cursorShape (e.g.
 // Qt.ArrowCursor) for rows that do nothing on click.
+//
+// Three looks, told apart by more than a shade of grey:
+// - the cursor under the pointer: the soft hover fill and border;
+// - the cursor the keys moved (`byKeys: cursor.byKeys`): the same fill
+//   with a 1 px accent border, so the keys' place reads at a glance;
+// - `current` (the selected row, the open view): FoamyPalette.selectedFill
+//   (the accent, faint), kept under the cursor too; `currentBar: true`
+//   adds a 3 px accent bar at the reading start, for a row whose details
+//   show elsewhere (a pane).
 CursorSurface {
   id: root
 
@@ -22,8 +32,28 @@ CursorSurface {
   signal clicked
 
   property int cursorShape: Qt.PointingHandCursor
+  property bool byKeys: false
+  property bool currentBar: false
 
   radius: FoamyStyle.radius
+  currentFill: FoamyPalette.selectedFill
+  // Selected under the cursor: the selected tint, as much stronger as the
+  // hover fill is strong (both are translucent, so Qt.tint wouldn't show).
+  color: current ? (hasCursor ? Qt.alpha(currentFill, Math.min(1, currentFill.a + fill.a)) : currentFill) : hasCursor ? fill : "transparent"
+  borderSpec: hasCursor ? (byKeys ? Commons.Border.flat(accent, FoamyStyle.borderWidth) : Commons.Border.controlSpec("hover-cursor", foreground, accent)) : current ? Commons.Border.controlSpec("selected", foreground, accent) : bordered ? Commons.Border.controlSpec("normal", foreground, accent) : Commons.Border.none()
+
+  // Anchored, so RTL puts it at the reading start (the right). A pill
+  // inset from the row's rounded ends.
+  Rectangle {
+    objectName: "foamyCurrentBar"
+    visible: root.current && root.currentBar
+    anchors.left: parent.left
+    anchors.verticalCenter: parent.verticalCenter
+    width: FoamyStyle.borderWidth * 3
+    height: Math.max(0, parent.height - FoamyStyle.gap * 2)
+    radius: width / 2
+    color: root.accent
+  }
 
   HoverHandler {
     cursorShape: root.cursorShape

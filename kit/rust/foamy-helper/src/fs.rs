@@ -1,4 +1,4 @@
-// foamy-kit 0.14.1 3c91ccd1b3ba865468cbb8c5f2a056acea7782c22b73e3a1149e3912a201fa0c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 3c91ccd1b3ba865468cbb8c5f2a056acea7782c22b73e3a1149e3912a201fa0c — do not edit; change foamy-kit and run sync
 //! Files: atomic writes with owner and type checks, private directories and
 //! bounded reads that refuse symlinks and special files.
 

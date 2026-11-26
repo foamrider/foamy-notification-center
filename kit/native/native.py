@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# foamy-kit 0.14.1 a4bc7f02a0306d8440f7c20b801f1ffd6318dc4d1bc252732b5840d559d11bf3 — do not edit; change foamy-kit and run sync
+# foamy-kit 0.15.1 a4bc7f02a0306d8440f7c20b801f1ffd6318dc4d1bc252732b5840d559d11bf3 — do not edit; change foamy-kit and run sync
 """Build and verify a foamy plugin's native helper, from the plugin alone.
 
 foamy-kit's FoamyNative component copies this file into every plugin that

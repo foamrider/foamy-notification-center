@@ -1,4 +1,4 @@
-// foamy-kit 0.14.1 e9b6a91b5308809f93fce754319135cbac17fa92ab9546fca6bd51691dd9d50e — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 3761a1732fc11bad464a0babf455a205aae1f6dc337d88c80f1d58d571ab3e79 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // One entry of a FoamyMenu (and of FoamyHeader/FoamyHeroBand `menuItems`).
@@ -14,7 +14,10 @@ import QtQuick
 //   FoamyMenuItem { separator: true }
 //
 // enabled: false shows it greyed out and skips it with the keyboard;
-// visible: false leaves it out. checked: true marks it with a check.
+// visible: false leaves it out. checked: true marks it with a check: the
+// current choice of a set (one entry), where a menu opened from the keys
+// starts (FoamyMenu.open(true)). A multi-select menu (labels) with exactly
+// one checked entry starts on it too, so there Enter unchecks it.
 QtObject {
   id: root
 

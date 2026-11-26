@@ -1,5 +1,5 @@
 .pragma library
-// foamy-kit 0.14.1 fd98aff70d15aba2958c2b382eae54f006a53d4c876e2de9389bd4e341c5265d — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 fd98aff70d15aba2958c2b382eae54f006a53d4c876e2de9389bd4e341c5265d — do not edit; change foamy-kit and run sync
 
 // Size bounds for text a plugin hands to a sink that has none of its own.
 //

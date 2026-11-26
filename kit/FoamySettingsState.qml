@@ -1,4 +1,4 @@
-// foamy-kit 0.14.1 dd3f3138f410fe1292c8a428aa594a618d41951892c811c2329791c45fcfb5f1 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 dd3f3138f410fe1292c8a428aa594a618d41951892c811c2329791c45fcfb5f1 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Whether a panel shows its settings page, with the one safe ordering.

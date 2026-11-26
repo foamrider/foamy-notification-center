@@ -1,4 +1,4 @@
-// foamy-kit 0.14.1 2c02a0d042dec810c1d9fa65e9e9d9a7ac4efcc613f1bfbd018056bf8f9a41e5 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 2c02a0d042dec810c1d9fa65e9e9d9a7ac4efcc613f1bfbd018056bf8f9a41e5 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // A free-text settings field that never fights the setting it shows: the
