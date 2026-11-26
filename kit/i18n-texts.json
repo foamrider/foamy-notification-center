@@ -1,0 +1,10 @@
+[
+  {"component": "FoamyClipboard", "text": "Clipboard paste timed out. Copy the text again.", "source": "FoamyClipboard.failed(message), SafeTextField.pasteError and SafeTextArea.pasteError, shown by FoamyNumberField, FoamyTextSettingField and FoamyScheduleDay"},
+  {"component": "FoamyClipboard", "text": "Clipboard text is too large or contains invalid characters.", "source": "FoamyClipboard.failed(message), SafeTextField.pasteError and SafeTextArea.pasteError, shown by FoamyNumberField, FoamyTextSettingField and FoamyScheduleDay"},
+  {"component": "FoamyClipboard", "text": "Could not paste clipboard text. Copy plain text and try again.", "source": "FoamyClipboard.failed(message), SafeTextField.pasteError and SafeTextArea.pasteError, shown by FoamyNumberField, FoamyTextSettingField and FoamyScheduleDay"},
+  {"component": "FoamyNative", "text": "This plugin's helper isn't available for this CPU.", "source": "FoamyNative.UNAVAILABLE_TEXT"},
+  {"component": "FoamyPrefs", "text": "That value isn't allowed.", "source": "FoamyPrefsQueue.error and failed(), FoamyPrefsQueue.storedProblems, FoamyPrefs.NOT_ALLOWED"},
+  {"component": "FoamyPrefs", "text": "Settings can't be saved: this widget has no bar entry.", "source": "FoamyPrefsQueue.error and failed(), FoamyPrefs.NO_ENTRY"},
+  {"component": "FoamyPrefs", "text": "The saved list in shell.json isn't valid, so it wasn't replaced.", "source": "FoamyPrefsQueue.error and failed(), FoamyPrefs.STORED_INVALID"},
+  {"component": "FoamyPrefs", "text": "Couldn't save the setting.", "source": "FoamyPrefsQueue.error and failed()"}
+]

@@ -1,4 +1,4 @@
-// foamy-kit 0.13.1 cf0b20d80e1ca52f5fef9b2474c3e9d7b7ddf43dafcd3535e9561c686ecfc7bc — do not edit; change foamy-kit and run sync
+// foamy-kit 0.14.0 9596fa6fae4438602442c80654aaddef2acb4018795ceaa53a1753d3bbaa8b02 — do not edit; change foamy-kit and run sync
 //! Website favicons from the local caches of Chromium-family browsers,
 //! **without any web request** (cargo feature `favicon`). A port of
 //! foamy-notifications' and foamy-notification-center's
@@ -58,6 +58,10 @@ pub const MAX_DATABASE_BYTES: u64 = 32 * 1024 * 1024;
 pub const LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 /// A cached icon younger than this is returned without a lookup.
 pub const CACHE_MAX_AGE: Duration = Duration::from_secs(86400);
+/// How far a cached icon's time may lie in the future and still count as
+/// written just now: a cache on a file system whose clock runs a little
+/// ahead of this one (NFS, SMB) dates every new icon slightly ahead.
+const CLOCK_AHEAD: Duration = Duration::from_secs(60);
 /// Icons kept in the cache directory (newest first).
 pub const CACHE_ENTRIES: usize = 256;
 
@@ -660,8 +664,9 @@ fn os_failure(error: io::Error) -> Failure {
 }
 
 /// A fresh cached icon at `target`: a regular file (not a symlink) younger
-/// than [`CACHE_MAX_AGE`] that is a [`valid_png`]. A file modified in the
-/// future (the clock was set back) is not fresh: its age is unknown.
+/// than [`CACHE_MAX_AGE`] that is a [`valid_png`]. A file modified up to
+/// [`CLOCK_AHEAD`] in the future counts as age 0; one further ahead (the
+/// clock was set back) is not fresh: its age is unknown.
 fn cached(target: &Path) -> bool {
     let fresh = fs::symlink_metadata(target).is_ok_and(|meta| {
         let modified = meta.mtime() as f64 + meta.mtime_nsec() as f64 / 1e9;
@@ -669,6 +674,11 @@ fn cached(target: &Path) -> bool {
             .duration_since(UNIX_EPOCH)
             .map_or(0.0, |d| d.as_secs_f64());
         let age = now - modified;
+        let age = if age < 0.0 && -age <= CLOCK_AHEAD.as_secs_f64() {
+            0.0
+        } else {
+            age
+        };
         meta.file_type().is_file() && (0.0..CACHE_MAX_AGE.as_secs_f64()).contains(&age)
     });
     fresh
