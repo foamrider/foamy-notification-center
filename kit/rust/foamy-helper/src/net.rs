@@ -1,4 +1,4 @@
-// foamy-kit 0.17.0 8cc6c7d05a7d5fc2795b19a3d3f2765f574272ea3ee097027293c3d5f5cccf5a — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.1 d69e33644ccf8d2deacbe064d1b6e0e73e78597bb8593223f1ed6efd7bf35bc6 — do not edit; change foamy-kit and run sync
 //! Network streams with an absolute deadline.
 //!
 //! A socket timeout (`set_read_timeout`) bounds each blocking call, not an
@@ -9,29 +9,27 @@
 //! (kind `TimedOut`) once the deadline has passed, so everything layered on
 //! top of it (rustls, an HTTP parser, `read_to_end`) is bounded as a whole.
 //!
-//! Only reads and writes: the stream exists once connected, so bound the
-//! connect yourself (`TcpStream::connect_timeout` with the time left), and
-//! name resolution too (`ToSocketAddrs` has no timeout: resolve before, or
-//! connect to an address).
+//! Use [`connect_addresses`] to try previously resolved addresses under the
+//! same deadline. Name resolution is the caller's responsibility.
 //!
 //! ```no_run
-//! use std::net::{SocketAddr, TcpStream};
+//! use std::net::SocketAddr;
 //! use std::time::{Duration, Instant};
-//! use foamy_helper::net::DeadlineStream;
+//! use foamy_helper::net::{connect_addresses, DeadlineStream};
 //! # fn main() -> std::io::Result<()> {
 //! let deadline = Instant::now() + Duration::from_secs(5);
 //! let address = SocketAddr::from(([127, 0, 0, 1], 8384));
-//! let left = deadline.saturating_duration_since(Instant::now());
-//! let tcp = TcpStream::connect_timeout(&address, left)?;
+//! let tcp = connect_addresses(&[address], deadline)?;
 //! let mut stream = DeadlineStream::new(tcp, deadline);
 //! // e.g. rustls::StreamOwned::new(connection, stream), then read and write.
 //! # Ok(()) }
 //! ```
 
+use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt;
 use std::io::{self, ErrorKind, Read, Write};
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
 
 /// The error inside an [`io::Error`] (kind `TimedOut`) when a
@@ -72,6 +70,41 @@ pub fn is_deadline(error: &io::Error) -> bool {
 
 fn exceeded() -> io::Error {
     io::Error::new(ErrorKind::TimedOut, DeadlineExceeded)
+}
+
+/// Connects to the resolved addresses by one deadline. Alternate families in
+/// resolver order so an unresponsive route cannot starve the other family.
+/// Earlier attempts get at most 2.5 seconds and half the remaining time. The
+/// final address gets the rest. Returns the last socket error, or a timeout
+/// if the deadline expired.
+pub fn connect_addresses(addresses: &[SocketAddr], deadline: Instant) -> io::Result<TcpStream> {
+    let first = addresses.first().ok_or(ErrorKind::InvalidInput)?;
+    let (mut next, mut other): (VecDeque<_>, VecDeque<_>) = addresses
+        .iter()
+        .partition(|addr| addr.is_ipv4() == first.is_ipv4());
+    let mut last = io::Error::from(ErrorKind::InvalidInput);
+    while let Some(addr) = next.pop_front() {
+        if !other.is_empty() {
+            std::mem::swap(&mut next, &mut other);
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        let timeout = if next.is_empty() {
+            left
+        } else {
+            (left / 2).min(Duration::from_millis(2500))
+        };
+        if timeout.is_zero() {
+            return Err(exceeded());
+        }
+        match TcpStream::connect_timeout(addr, timeout) {
+            Ok(stream) => return Ok(stream),
+            Err(error) => last = error,
+        }
+    }
+    if Instant::now() >= deadline {
+        return Err(exceeded());
+    }
+    Err(last)
 }
 
 /// A stream whose reads and writes all end by one absolute deadline.
@@ -192,6 +225,54 @@ mod tests {
     use std::io::{BufRead, BufReader};
     use std::net::TcpListener;
     use std::thread;
+
+    #[test]
+    fn a_silent_ipv6_route_leaves_time_for_ipv4() {
+        // A full accept queue drops further SYNs. Keep the queued connections
+        // alive so the IPv6 endpoint stays silent until the call finishes.
+        let silent = TcpListener::bind("[::1]:0").unwrap();
+        let v6 = silent.local_addr().unwrap();
+        let mut queued = Vec::new();
+        loop {
+            match TcpStream::connect_timeout(&v6, Duration::from_millis(150)) {
+                Ok(socket) => queued.push(socket),
+                Err(error) if is_deadline(&error) => break,
+                Err(error) => panic!("filling the IPv6 accept queue: {error}"),
+            }
+            assert!(queued.len() < 8192, "accept queue never filled");
+        }
+
+        let live = TcpListener::bind("127.0.0.1:0").unwrap();
+        let v4 = live.local_addr().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(6);
+        let connected =
+            connect_addresses(&[v6, v6, v6, v4], deadline).expect("IPv4 must be reachable");
+        assert_eq!(connected.peer_addr().unwrap(), v4);
+        assert!(
+            deadline.duration_since(Instant::now()) > Duration::from_secs(2),
+            "IPv4 fallback was late"
+        );
+
+        let deadline = Instant::now() + Duration::from_millis(200);
+        assert!(is_deadline(
+            &connect_addresses(&[v6, v6], deadline).unwrap_err()
+        ));
+        assert!(
+            deadline.elapsed() < Duration::from_millis(400),
+            "exceeded connect deadline"
+        );
+    }
+
+    #[test]
+    fn a_refused_connection_stays_a_network_error() {
+        let refused = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap();
+        let error = connect_addresses(&[refused, refused], Instant::now() + Duration::from_secs(2))
+            .unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::ConnectionRefused);
+    }
 
     /// A peer that sends one byte every `gap` for `count` bytes.
     fn trickler(count: usize, gap: Duration) -> (TcpStream, thread::JoinHandle<()>) {

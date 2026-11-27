@@ -1,5 +1,5 @@
 pragma ComponentBehavior: Bound
-// foamy-kit 0.17.0 b600b580cc64df6aa412d88e6525e857c0eb17514619d13b2c58348e36288d63 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.1 b600b580cc64df6aa412d88e6525e857c0eb17514619d13b2c58348e36288d63 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 

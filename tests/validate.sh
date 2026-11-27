@@ -1,5 +1,5 @@
 #!/bin/bash
-# foamy-kit 0.17.0 600483edb58f93da9e745500dac4efa7c5ef9fd23151a67fc2106ee1e07fbca9 — do not edit; change foamy-kit and run sync
+# foamy-kit 0.17.1 600483edb58f93da9e745500dac4efa7c5ef9fd23151a67fc2106ee1e07fbca9 — do not edit; change foamy-kit and run sync
 # The one validation command: kit checks, linters, formatters, native helper
 # tests and the repository's own tests (tests/suite.sh). Nonzero on failure.
 #   tests/validate.sh [--ci] [--fast] [--only|--skip CHECKS] [--update-baseline [CHECKS]] [--list]

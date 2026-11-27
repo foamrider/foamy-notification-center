@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.17.0 ef1cbd050ad9980e584bd165d7a6e3543cfb9da7de868e7a86f16159ff1ecd9d — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.1 ef1cbd050ad9980e584bd165d7a6e3543cfb9da7de868e7a86f16159ff1ecd9d — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 import "FoamyI18nText.js" as I18nText
