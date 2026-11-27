@@ -1,4 +1,4 @@
-// foamy-kit 0.15.1 2e3f8de7516e085d5146b3ae08577ef3eecec3cf6ca3cfa6a3da075fa9918e45 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.2 2e3f8de7516e085d5146b3ae08577ef3eecec3cf6ca3cfa6a3da075fa9918e45 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Foamy icon set: inline Lucide SVG paths (ISC, see LICENSE-LUCIDE), the

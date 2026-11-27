@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.15.1 ac985fdddb1be105d4ca5590c31fb7972e55cf5b05a792ef618a80afda25980f — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.2 ac985fdddb1be105d4ca5590c31fb7972e55cf5b05a792ef618a80afda25980f — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons
 

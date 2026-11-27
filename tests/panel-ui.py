@@ -17,7 +17,9 @@ after Esc in the search field and after a click beside it, opening search
 takes the cursor off More options, Up then stops at the first row, and an
 empty search field closes when it lets the keys go
 (not for its own right-click menu); a number setting whose save failed can
-be saved again with the same number.
+be saved again with the same number. The run's theme has a dim red: the
+error line and a critical stack's edge read at 4.5:1 on what they are
+drawn on; the edge case runs again in the kit's light theme.
 
 Runs through foamy-kit's preview/harness.py (isolated HOME, private bus, no
 host commands, offscreen screen) against the Omarchy 4.5 shell host."""
@@ -32,7 +34,7 @@ import harness  # foamy-kit's preview/harness.py
 
 PLUGIN = Path(__file__).resolve().parents[1]
 # Test functions in SHELL; QtTest's count at completion includes one entry of its own.
-CASES = 11
+CASES = 12
 
 SHELL = r"""
 import QtQuick
@@ -42,6 +44,7 @@ import qs.Commons
 import qs.Commons as Commons
 import "harness"
 import "plugin" as Plugin
+import "plugin/kit"
 
 ShellRoot {
   id: shell
@@ -288,6 +291,12 @@ ShellRoot {
         store.loadError = "Invalid notification history response."
         var error = findChild(panel.view, "notificationError")
         waitUntil(function() { return error.visible && error.text === "Invalid notification history response." }, "a failed read shows its error")
+        // The run's theme has a dim red (2.70:1 on the popup): the error
+        // line still reads at 4.5:1 on the popup's card it is drawn on.
+        var card = panel.popupPanel.cardItem
+        check(card !== null, "the popup's card is drawn")
+        check(FoamyPalette.contrastRatio(FoamyPalette.error, card.color) < 4.5, "the theme's red already reads; the check proves nothing")
+        check(FoamyPalette.contrastRatio(error.color, card.color) >= 4.5, "the error line " + error.color + " reads on " + card.color)
         check(!shows("Nothing has come in yet"), "a failed read does not also say the archive is empty")
         panel.filter = "zzz"
         store.entriesQuery = "zzz"
@@ -307,6 +316,53 @@ ShellRoot {
         store.entriesQuery = ""
         store.show(shell.entries(2, true))
         waitUntil(function() { return panel.rows.length > 0 && !shows("Nothing has come in yet") }, "rows replace the empty line")
+      }
+
+      // A critical stack's 3 px edge runs down its header and rows, each a
+      // StackFrame, and past the critical row's action buttons. As painted,
+      // it reads at 4.5:1 on every fill it crosses, in the run's dim red and
+      // in the light run, where the raw red fails on some of them.
+      function test_critical_edge_reads_on_each_fill() {
+        store.liveActions = ({"2000000-0": ["Join", "Later"]})
+        store.show([
+          {key: "2000000-0", timestamp: 1793350800000, app: "Calendar", appIcon: "", summary: "Team sync", body: "Starts in 10 minutes", urgency: 2},
+          {key: "1999999-1", timestamp: 1793350740000, app: "Calendar", appIcon: "", summary: "Lunch", body: "Starts at noon", urgency: 1}
+        ])
+        openPanel()
+        function frames(item, out) {
+          if (item.critical === true && item.leading !== undefined && item.visible)
+            out.push(item)
+          var kids = item.children || []
+          for (var i = 0; i < kids.length; i++)
+            frames(kids[i], out)
+          return out
+        }
+        waitUntil(function() { return panel.rows.length === 2 && frames(panel.list, []).length === 2 }, "the stack's header and its newest row show")
+        // Expanded, the stack also shows its row that is not critical.
+        panel.toggleGroup("Calendar")
+        waitUntil(function() { return frames(panel.list, []).length === 3 }, "the expanded stack shows both rows")
+        var found = frames(panel.list, [])
+        var fills = found.map(function(frame) { return frame.fill }).concat([panel.popupPanel.cardItem.color])
+        // The first action button lies against the edge; its fill, then hovered.
+        var button = findChild(panel.list, "notificationRowAction")
+        waitUntil(function() { return button !== null && button.visible && button.width > 0 }, "the critical row shows its actions")
+        fills.push(button.background.color)
+        mouseMove(button, button.width / 2, button.height / 2)
+        waitUntil(function() { return button.hovered }, "the pointer is over the action button")
+        fills.push(button.background.color)
+        check(fills.some(function(fill) { return FoamyPalette.contrastRatio(Commons.Color.urgent, fill) < 4.5 }),
+              "the theme's urgent colour already reads on every fill; the check proves nothing")
+        found.forEach(function(frame) {
+          // What the frame painted, halfway down its leading edge (QtTest's
+          // grabImage cannot grab the panel's own popup window).
+          var data = frame.context.getImageData(1, Math.round(frame.height / 2), 1, 1).data
+          var drawn = Qt.rgba(data[0] / 255, data[1] / 255, data[2] / 255, data[3] / 255)
+          fills.forEach(function(fill) {
+            check(FoamyPalette.contrastRatio(drawn, fill) >= 4.5, "the critical edge " + drawn + " reads on " + fill)
+          })
+        })
+        mouseMove(panel.view, 1, 1)
+        store.liveActions = ({})
       }
 
       function test_search_shows_what_the_store_found() {
@@ -517,28 +573,39 @@ FAKEBIN = {
     "omarchy-shell": "#!/bin/sh\nexit 1\n",
 }
 SAVE = "bar set foamy.notification-center keepDays 9 --json"
+DIM_RED = KIT / "tests/fixtures/themes/dim-red.toml"
+EDGE = "function test_critical_edge_reads_on_each_fill("
+assert SHELL.count("function test_") == CASES and EDGE in SHELL, "CASES no longer counts the test functions"
+# The light run has only the edge case: in the kit's light theme the critical
+# row, not the header, is the strictest fill.
+LIGHT_SHELL = SHELL.replace("function test_", "function off_").replace(EDGE.replace("test_", "off_"), EDGE)
+# Each run: its theme, its shell, its cases and the saves its cases make.
+RUNS = (("dim-red", DIM_RED, SHELL, CASES, [SAVE, SAVE]), ("light", "light", LIGHT_SHELL, 1, []))
 
 status = 0
 for host in harness.available_hosts(what="panel-ui"):
-    run = harness.Run(host, SHELL, plugin=PLUGIN, prefix=f"foamy-center-panel-{host}-", fakebin=FAKEBIN).run(
-        timeout=120
-    )
-    calls_log = run.out / "omarchy-calls.log"
-    saves = calls_log.read_text().splitlines() if calls_log.exists() else []
-    # Any QML warning from the plugin's own files fails the run too.
-    warnings = [
-        line for line in run.log.splitlines() if "WARN" in line and "/plugin/" in line and "/plugin/kit/" not in line
-    ]
-    summary = [line for line in run.log.splitlines() if "PANEL_UI" in line]
-    passed = f"PANEL_UI {CASES + 1} passed 0 failed" in run.log
-    if run.ok and passed and not warnings and not run.host_commands() and saves == [SAVE, SAVE]:
-        print(f"{host}: panel-ui passed ({summary[-1].split('PANEL_UI', 1)[1].strip()})")
-        run.cleanup()
-    else:
-        status = 1
-        print(run.log)
-        print("\n".join(warnings))
-        print("host commands ran:", *run.host_commands(), sep="\n  ")
-        print("omarchy calls:", *saves, sep="\n  ")
-        print(f"{host}: panel-ui FAILED; log at {run.base}/qs.log")
+    for label, theme, shell, cases, expected_saves in RUNS:
+        run = harness.Run(
+            host, shell, plugin=PLUGIN, prefix=f"foamy-center-panel-{host}-{label}-", fakebin=FAKEBIN, theme=theme
+        ).run(timeout=120)
+        calls_log = run.out / "omarchy-calls.log"
+        saves = calls_log.read_text().splitlines() if calls_log.exists() else []
+        # Any QML warning from the plugin's own files fails the run too.
+        warnings = [
+            line
+            for line in run.log.splitlines()
+            if "WARN" in line and "/plugin/" in line and "/plugin/kit/" not in line
+        ]
+        summary = [line for line in run.log.splitlines() if "PANEL_UI" in line]
+        passed = f"PANEL_UI {cases + 1} passed 0 failed" in run.log
+        if run.ok and passed and not warnings and not run.host_commands() and saves == expected_saves:
+            print(f"{host} ({label}): panel-ui passed ({summary[-1].split('PANEL_UI', 1)[1].strip()})")
+            run.cleanup()
+        else:
+            status = 1
+            print(run.log)
+            print("\n".join(warnings))
+            print("host commands ran:", *run.host_commands(), sep="\n  ")
+            print("omarchy calls:", *saves, sep="\n  ")
+            print(f"{host} ({label}): panel-ui FAILED; log at {run.base}/qs.log")
 sys.exit(status)

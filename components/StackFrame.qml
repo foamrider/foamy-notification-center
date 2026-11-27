@@ -13,10 +13,31 @@ Canvas {
   property bool first: false
   property bool last: false
   property bool critical: false
-  property color fill: Commons.Color.popups.background
   property color foreground: Commons.Color.foreground
+  // The fills of a stack's frames: its header, a critical row, another row
+  // (FoamyPalette.background is the popup's Commons.Color.popups.background),
+  // and a row's action buttons, which lie against the edge.
+  readonly property color headerFill: Qt.tint(FoamyPalette.background, Util.alpha(foreground, 0.055))
+  readonly property color criticalFill: Qt.tint(FoamyPalette.background, Util.alpha(Commons.Color.urgent, 0.09))
+  readonly property color rowFill: FoamyPalette.background
+  readonly property color actionFill: headerFill
+  readonly property color actionHoverFill: Qt.tint(FoamyPalette.background, Util.alpha(foreground, 0.10))
+  property color fill: rowFill
+  function actionFillFor(hovered) {
+    return hovered ? actionHoverFill : actionFill
+  }
   readonly property color outline: Util.alpha(foreground, 0.18)
-  readonly property color urgent: Commons.Color.urgent
+  // The critical edge runs down a whole stack, one frame per row: one
+  // colour for all of it, readable on the strictest fill it crosses.
+  readonly property color urgent: {
+    if (!critical)
+      return Commons.Color.urgent
+    var fills = [headerFill, criticalFill, rowFill, actionFill, actionHoverFill]
+    var strictest = fills.reduce(function (a, b) {
+      return FoamyPalette.contrastRatio(Commons.Color.urgent, a) <= FoamyPalette.contrastRatio(Commons.Color.urgent, b) ? a : b
+    })
+    return FoamyPalette.onSurface(Commons.Color.urgent, strictest)
+  }
   readonly property real corner: Math.min(FoamyStyle.radius, width / 2, height / 2)
   readonly property real leading: critical ? Style.space(3) : 1
 

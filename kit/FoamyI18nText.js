@@ -1,5 +1,5 @@
 .pragma library
-// foamy-kit 0.15.1 a541e98f164e6c2e83b493341e50b128ba539dc4f32cf2253fb688731a513c3c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.2 a541e98f164e6c2e83b493341e50b128ba539dc4f32cf2253fb688731a513c3c — do not edit; change foamy-kit and run sync
 
 // FoamyI18n's string work without the shell: value substitution, and t()/tn()
 // over plain catalogs for node unit tests. FoamyI18n.qml substitutes through

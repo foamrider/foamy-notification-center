@@ -78,11 +78,12 @@ Item {
         root.pointerUsed()
     }
     StackFrame {
+      id: frame
       anchors.fill: parent
       last: root.last
       critical: root.groupCritical
       foreground: root.foreground
-      fill: root.critical ? Qt.tint(Commons.Color.popups.background, Util.alpha(Commons.Color.urgent, 0.09)) : Commons.Color.popups.background
+      fill: root.critical ? frame.criticalFill : frame.rowFill
     }
     Rectangle {
       visible: !root.first
@@ -211,7 +212,7 @@ Item {
             root.actionRequested(index)
           }
           background: Rectangle {
-            color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, actionButton.hovered ? 0.10 : 0.055))
+            color: frame.actionFillFor(actionButton.hovered)
             Rectangle {
               anchors.top: parent.top
               width: parent.width

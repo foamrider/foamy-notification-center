@@ -941,7 +941,7 @@ Ui.Panel {
             textFormat: Text.PlainText
             text: keyCatcher.search.pasteError ? root.tr(keyCatcher.search.pasteError) : (root.store ? root.tr(root.store.snoozeError || root.store.dndError || (root.store.focusError || root.store.loadError || root.store.removalError)) : "")
             visible: text !== ""
-            color: Commons.Color.urgent
+            color: FoamyPalette.onSurface(FoamyPalette.error)
             font.family: root.fontFamily
             font.pixelSize: FoamyStyle.font.bodySmall
             wrapMode: Text.WordWrap
