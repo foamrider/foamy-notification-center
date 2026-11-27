@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 d7f1aa2f6b43aa170f5792de7e7648cdf75b7f8adf654e96d10558769bed6a43 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 d1edd2df4b165a60567d9e7a01cc2f2e5b80660c1c84ecafe01cf1380af11063 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
@@ -17,6 +17,10 @@ import "FoamyText.js" as FoamyText
 //
 // actionEnabled: false keeps the button visible with its tooltip but inert
 // (for "nothing to do right now"); enabled: false greys it out entirely.
+// `cursorByKeys: cursor.byKeys` draws the keys' cursor with a 1 px accent
+// border, also on an inert or disabled button (faded with it), so the keys'
+// place always shows; an inert one still has no hover fill and the plain
+// pointer.
 //
 // The tooltip is at most Style.space(320) wide and shows at most 3 lines of
 // 200 characters of tooltipText, cut with "…"; Accessible.name keeps it all.
@@ -49,7 +53,7 @@ Rectangle {
   radius: FoamyStyle.radius
   opacity: enabled ? (actionEnabled ? 1 : 0.7) : FoamyStyle.disabledOpacity
   color: active && (hasCursor || mouse.containsMouse || activeFocus) ? (destructive ? Qt.alpha(Commons.Color.urgent, 0.14) : FoamyPalette.hoverFill) : "transparent"
-  border.width: (activeFocus && focusable) || (active && hasCursor && cursorByKeys) ? 1 : 0
+  border.width: (activeFocus && focusable) || (hasCursor && cursorByKeys) ? 1 : 0
   border.color: Commons.Color.accent
   activeFocusOnTab: focusable && active
 
@@ -114,6 +118,19 @@ Rectangle {
     cursorShape: root.active ? Qt.PointingHandCursor : Qt.ArrowCursor
     onClicked: if (root.active)
       root.clicked()
+    // While the keys drew the cursor (`cursorByKeys`), a real pointer move
+    // inside reports the pointer again, as entering does, so the panel's
+    // hover handler takes the cursor back. In scene coordinates: Qt re-sends
+    // hover when items move under a resting pointer (a keys-driven scroll),
+    // which is no move.
+    property point scenePoint
+    onContainsMouseChanged: scenePoint = mapToItem(null, mouseX, mouseY)
+    onPositionChanged: function (event) {
+      const at = mapToItem(null, event.x, event.y)
+      if (containsMouse && root.cursorByKeys && Math.abs(at.x - scenePoint.x) + Math.abs(at.y - scenePoint.y) > 0.01)
+        root.hoveredChanged()
+      scenePoint = at
+    }
   }
 
   PanelToolTip {

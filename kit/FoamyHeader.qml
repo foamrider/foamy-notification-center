@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 49c955616edf180046cf8343245205f3b1e36980ca48ef34185b1ca79152c77d — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 5461cb517512709d0f19c5d3ca4009b7329d634c821b149c534deff515d8eaa4 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -35,7 +35,9 @@ import QtQuick.Layouts
 // to the PanelKeyCatcher's `blocked`; the menu takes the keys until it
 // closes (FoamyMenu). `shownTrailing` lists the actions still in the row, for
 // cursor stops. While Settings is in the menu, `settingsHasCursor` lights the
-// ⋯ button.
+// ⋯ button. `cursorByKeys: cursor.byKeys` gives the ⋯ and Settings buttons
+// the keys' accent border while they have the cursor (FoamyAction's
+// `cursorByKeys`; set your trailing actions' own).
 Item {
   id: root
 
@@ -49,6 +51,9 @@ Item {
   property string meta: ""
   property bool showSettings: true
   property bool settingsHasCursor: false
+  // The keys moved the cursor (FoamyCursor.byKeys): the ⋯ and Settings
+  // buttons draw the keys' border while they have it.
+  property bool cursorByKeys: false
   property color foreground: FoamyPalette.text
   // false hides the icon and the title/meta column (FoamyHeroBand `centered`
   // draws them itself); the buttons stay at the trailing end.
@@ -384,6 +389,7 @@ Item {
         foreground: FoamyPalette.secondaryText
         tooltipText: root.menuTooltip
         hasCursor: root.menuHasCursor || (root.settingsInMenu && root.settingsHasCursor) || overflowMenu.opened
+        cursorByKeys: root.cursorByKeys
         onClicked: root.toggleMenu(false)
         onHoveredChanged: root.menuHovered(hovered)
         onVisibleChanged: root._queueRelayout()
@@ -398,6 +404,7 @@ Item {
       foreground: FoamyPalette.secondaryText
       tooltipText: FoamyI18n.t("Settings")
       hasCursor: root.settingsHasCursor
+      cursorByKeys: root.cursorByKeys
       Layout.alignment: Qt.AlignVCenter
       onClicked: root.settingsClicked()
       onHoveredChanged: root.settingsHovered(hovered)

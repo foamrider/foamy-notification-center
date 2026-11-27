@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 c0b06867bfa1e08d7f7ba42acb6718cb9db71120664edb068455af5008280069 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 326e66008adddeaed46dc38dde6b126c3e202a30ab1bb486c85611053276dee4 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -24,7 +24,8 @@ import QtQuick.Layouts
 // open() / close(); don't bind it.
 //
 // Keyboard: in a settings form the (i) is `focusable` (Tab, Enter/Space);
-// in a PanelKeyCatcher panel set `buttonHasCursor` and route `buttonHovered`.
+// in a PanelKeyCatcher panel set `buttonHasCursor` and route `buttonHovered`,
+// and `cursorByKeys: cursor.byKeys` for the keys' accent border on the (i).
 // When it opens inside a scrolling FoamySettingsPage (or anything with an
 // `ensureVisible(item)` function above it) the note is scrolled into view.
 ColumnLayout {
@@ -36,6 +37,8 @@ ColumnLayout {
   property bool showHeader: true
   property bool focusable: true
   property bool buttonHasCursor: false
+  // The keys moved the cursor (FoamyCursor.byKeys): the (i)'s.
+  property bool cursorByKeys: false
   property string buttonTooltip: FoamyI18n.t("More information")
   readonly property alias infoButton: infoButton
   readonly property alias note: note
@@ -105,6 +108,7 @@ ColumnLayout {
         iconSize: FoamyStyle.iconSize - 2
         focusable: root.focusable
         hasCursor: root.buttonHasCursor
+        cursorByKeys: root.cursorByKeys
         foreground: root.expanded ? FoamyPalette.text : FoamyPalette.secondaryText
         color: active && (root.expanded || hasCursor || hovered || activeFocus) ? FoamyPalette.hoverFill : "transparent"
         tooltipText: ""

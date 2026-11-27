@@ -144,12 +144,18 @@ Item {
   }
   FoamyAction {
     id: dismiss
+    objectName: "notificationStackDismiss"
     anchors.right: parent.right
     anchors.rightMargin: Style.space(6)
     anchors.verticalCenter: parent.verticalCenter
     iconName: "x"
     foreground: root.foreground
     hasCursor: root.dismissHasCursor
+    // Only the keys put the cursor here (the pointer hides it): the keys' border.
+    cursorByKeys: true
+    // The pointer can reach the button without entering the header anew.
+    onHoveredChanged: if (hovered)
+      root.pointerUsed()
     opacity: hover.hovered || root.hasCursor ? 1 : 0
     tooltipText: FoamyI18n.t(root.group.entries.length === 1 ? "Dismiss 1 notification" : "Dismiss %1 notifications", root.group.entries.length)
     onClicked: {

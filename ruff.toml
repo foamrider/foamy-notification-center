@@ -1,4 +1,4 @@
-# foamy-kit 0.15.2 30062b8bc91b2af48aa4124370f8b9552b2077ad032173dbf5690de4526c7c0d — do not edit; change foamy-kit and run sync
+# foamy-kit 0.16.0 30062b8bc91b2af48aa4124370f8b9552b2077ad032173dbf5690de4526c7c0d — do not edit; change foamy-kit and run sync
 # Ruff configuration for foamy-kit and every Foamy plugin (synced; edit it in
 # foamy-kit). tests/validate.sh runs `ruff check` and `ruff format --check`
 # with the version mise.toml pins. A repository adds rules or ignores in its

@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 18a0d61fae84a6508627d702d3fda5c53cc61210d9926c4f7aab88a8909a17cb — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 18a0d61fae84a6508627d702d3fda5c53cc61210d9926c4f7aab88a8909a17cb — do not edit; change foamy-kit and run sync
 use super::*;
 use std::time::Duration;
 

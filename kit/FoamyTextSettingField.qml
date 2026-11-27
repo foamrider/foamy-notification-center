@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 2c02a0d042dec810c1d9fa65e9e9d9a7ac4efcc613f1bfbd018056bf8f9a41e5 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 7fb174d56c0a90bc309726a6d879daf71d93f06b67972ce98e17d6b77d0d8f2a — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // A free-text settings field that never fights the setting it shows: the
@@ -28,6 +28,9 @@ Item {
   property string placeholderText: ""
   property bool trim: true
   property bool hasCursor: false
+  // The keys moved the cursor here (FoamyCursor.byKeys): the field's
+  // border in the accent (SafeTextField.cursorByKeys).
+  property bool cursorByKeys: false
   // true, or false / a message for an invalid draft.
   property var validate: null
   property string invalidText: FoamyI18n.t("That value isn't allowed.")
@@ -147,6 +150,7 @@ Item {
       id: field
       width: parent.width
       hasCursor: root.hasCursor
+      cursorByKeys: root.cursorByKeys
       placeholderText: root.placeholderText
       translate: FoamyI18n.t
       horizontalAlignment: Text.AlignLeft

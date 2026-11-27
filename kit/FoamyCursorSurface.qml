@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 4a5d21c5eb5cf6c398dc3b36b083b47f8febddfd98fc98b900cf21fafb39a1db — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 0546feee2b2984ff0a6173802dd3812051c3188dd4209c70239b14b4580ec200 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
@@ -56,9 +56,23 @@ CursorSurface {
   }
 
   HoverHandler {
+    // While the keys drew the cursor (`byKeys`), a real pointer move inside
+    // reports the pointer again (`hovered`), as entering does, so the
+    // panel's cursor.hover(i) takes the cursor back. A scene position that
+    // changed: Qt re-sends hover when items move under a resting pointer (a
+    // keys-driven scroll), which is no move.
+    property point scenePoint
     cursorShape: root.cursorShape
-    onHoveredChanged: if (hovered)
+    onHoveredChanged: if (hovered) {
+      scenePoint = point.scenePosition
       root.hovered()
+    }
+    onPointChanged: {
+      const at = point.scenePosition
+      if (hovered && root.byKeys && (at.x !== scenePoint.x || at.y !== scenePoint.y))
+        root.hovered()
+      scenePoint = at
+    }
   }
   TapHandler {
     onTapped: root.clicked()
