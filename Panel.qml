@@ -862,8 +862,11 @@ Ui.Panel {
             fieldOrigin: searchAction
             fieldOpen: root.searching
             // The ⋯ button is the cursor stop above row 0 (Settings is in its menu).
+            // The keys own the cursor only while keyboardNavigation is on, so a
+            // pointer click that opens the menu keeps the pointer's look.
             menuHasCursor: root.keyboardNavigation && root.cursorOnSettings
             settingsHasCursor: root.keyboardNavigation && root.cursorOnSettings
+            cursorByKeys: root.keyboardNavigation
             onSettingsClicked: root.openSettings()
             onSettingsHovered: function (hovered) {
               if (hovered)

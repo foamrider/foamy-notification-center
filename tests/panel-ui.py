@@ -19,8 +19,9 @@ empty search field closes when it lets the keys go
 (not for its own right-click menu); the keys' cursor has the accent border
 on a stack header, a message and their dismiss buttons, and none once the
 pointer takes it, also on the dismiss button itself (which then stays and
-dismisses on a click) and on search and clear-all; Up to More options and
-back does not leave the cursor on a dismiss button; a number setting whose
+dismisses on a click) and on search and clear-all; More options has the
+keys' border from the keys, and none after a pointer click opens its menu;
+Up to More options and back does not leave the cursor on a dismiss button; a number setting whose
 save failed can be saved again with the same number. The run's theme has a dim red: the
 error line and a critical stack's edge read at 4.5:1 on what they are
 drawn on; the edge case runs again in the kit's light theme.
@@ -38,7 +39,7 @@ import harness  # foamy-kit's preview/harness.py
 
 PLUGIN = Path(__file__).resolve().parents[1]
 # Test functions in SHELL; QtTest's count at completion includes one entry of its own.
-CASES = 16
+CASES = 17
 
 SHELL = r"""
 import QtQuick
@@ -492,6 +493,27 @@ ShellRoot {
         check(panel.cursorIndex === 0 && !panel.cursorDismiss, "Down from More options lands on the stack header itself")
         keyClick(Qt.Key_Return)
         same(JSON.stringify(store.removed), "[]", "Enter after Down, Right, Up, Down removes nothing")
+      }
+
+      // More options shows the keys' border only while the keys have it:
+      // a pointer click that opens its menu keeps the pointer's look.
+      function test_more_options_has_the_keys_border_only_from_the_keys() {
+        openThreeStacks()
+        var more = findChild(panel.view, "foamyMenuButton")
+        check(more !== null && more.visible, "the band shows More options")
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Up)
+        check(panel.keyboardNavigation && panel.cursorOnSettings, "Down, Up puts the keys on More options")
+        var found = accentBorders(panel.view)
+        check(found.length === 1 && found[0] === more, "the keys' More options has the accent border, nothing else (" + found.length + ")")
+        mouseMove(more, more.width / 2, more.height / 2)
+        waitUntil(function() { return !panel.keyboardNavigation }, "the pointer on More options takes the cursor")
+        mouseClick(more, more.width / 2, more.height / 2)
+        waitUntil(function() { return findChild(panel.view, "notificationCenterHeader").menuOpen }, "a click opens the menu")
+        same(more.border.width, 0, "More options' border after a pointer click opened its menu")
+        keyClick(Qt.Key_Escape)
+        waitUntil(function() { return !findChild(panel.view, "notificationCenterHeader").menuOpen }, "Esc closes the menu")
+        mouseMove(panel.view, 1, 1)
       }
 
       function test_search_shows_what_the_store_found() {
