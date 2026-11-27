@@ -495,12 +495,14 @@ Ui.Panel {
     if (dy < 0 && cursorIndex <= 0 && !searching) {
       cursorOnSettings = true
       cursorIndex = -1
+      cursorDismiss = false
       return
     }
     if (cursorOnSettings) {
       if (dy > 0 && rows.length > 0) {
         cursorOnSettings = false
         cursorIndex = 0
+        cursorDismiss = false
       } else
         return
     } else if (rows.length === 0) {
@@ -878,6 +880,8 @@ Ui.Panel {
                 iconName: "search"
                 tooltipText: root.tr("Search notifications  ( / )")
                 foreground: FoamyPalette.secondaryText
+                onHoveredChanged: if (hovered)
+                  root.keyboardNavigation = false
                 onClicked: root.startSearch()
               },
               FoamyAction {
@@ -887,6 +891,8 @@ Ui.Panel {
                 tooltipText: root.tr("Clear all notifications")
                 foreground: FoamyPalette.secondaryText
                 actionEnabled: root.entries.length > 0
+                onHoveredChanged: if (hovered)
+                  root.keyboardNavigation = false
                 onClicked: root.clearAll()
               }
             ]

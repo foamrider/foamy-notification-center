@@ -17,9 +17,11 @@ after Esc in the search field and after a click beside it, opening search
 takes the cursor off More options, Up then stops at the first row, and an
 empty search field closes when it lets the keys go
 (not for its own right-click menu); the keys' cursor has the accent border
-on a row and on its dismiss button, and none once the pointer takes it; a
-number setting whose save failed can
-be saved again with the same number. The run's theme has a dim red: the
+on a stack header, a message and their dismiss buttons, and none once the
+pointer takes it, also on the dismiss button itself (which then stays and
+dismisses on a click) and on search and clear-all; Up to More options and
+back does not leave the cursor on a dismiss button; a number setting whose
+save failed can be saved again with the same number. The run's theme has a dim red: the
 error line and a critical stack's edge read at 4.5:1 on what they are
 drawn on; the edge case runs again in the kit's light theme.
 
@@ -36,7 +38,7 @@ import harness  # foamy-kit's preview/harness.py
 
 PLUGIN = Path(__file__).resolve().parents[1]
 # Test functions in SHELL; QtTest's count at completion includes one entry of its own.
-CASES = 13
+CASES = 16
 
 SHELL = r"""
 import QtQuick
@@ -101,8 +103,10 @@ ShellRoot {
     function load() {}
     // As in Service.qml: a page request starts a read.
     function loadMore() { pages++; listing = true }
-    function remove(key) {}
-    function removeMany(keys) {}
+    // The keys the panel asked to remove, in order.
+    property var removed: []
+    function remove(key) { removed = removed.concat([key]) }
+    function removeMany(keys) { removed = removed.concat(keys) }
     function clearAll() {}
     function toggleDnd() { dndToggles++ }
     function snoozeAll(minutes) {}
@@ -211,7 +215,7 @@ ShellRoot {
         store.unread = 0; store.unreadCapped = false; store.hasCriticalUnread = false
         store.doNotDisturb = false; store.loaded = true; store.loadError = ""
         store.hasMore = false; store.listing = false; store.pages = 0; store.dndToggles = 0
-        store.entriesQuery = ""; store.searchQuery = ""
+        store.entriesQuery = ""; store.searchQuery = ""; store.removed = []
         panel.settings = ({badge: "Dot"})
       }
       // Each case starts from a closed panel whose list was released (the
@@ -367,35 +371,127 @@ ShellRoot {
         store.liveActions = ({})
       }
 
-      function test_the_keys_cursor_has_the_accent_border() {
+      // The row or stack header the list shows at index i (its delegate's
+      // loaded item), or null while it is not built.
+      function rowItem(i) {
+        var delegate = panel.list.itemAtIndex(i)
+        var kids = delegate ? delegate.children : []
+        for (var k = 0; k < kids.length; k++)
+          if (kids[k].sourceComponent !== undefined)
+            return kids[k].item
+        return null
+      }
+      function inside(item, ancestor) {
+        for (var p = item; p; p = p.parent)
+          if (p === ancestor)
+            return true
+        return false
+      }
+      // Every accent border drawn in the list: a row's cursor frame or a
+      // FoamyAction's keys' border.
+      function accentBorders(item, out) {
+        out = out || []
+        if (item.visible && item.opacity > 0 && item.border !== undefined && item.border.width > 0 && Qt.colorEqual(item.border.color, Commons.Color.accent))
+          out.push(item)
+        var kids = item.children || []
+        for (var i = 0; i < kids.length; i++)
+          accentBorders(kids[i], out)
+        return out
+      }
+      // Three stacks of one message: header, message, header, message, …
+      function openThreeStacks() {
         store.show(shell.entries(3, true))
         openPanel()
-        waitUntil(function() { return panel.view.Window.active && panel.rows.length > 1 }, "the panel has the keys and its rows")
-        // Every accent border drawn in the list: a row's cursor frame or a
-        // FoamyAction's keys' border.
-        function borders(item, out) {
-          if (item.visible && item.opacity > 0 && item.border !== undefined && item.border.width > 0 && Qt.colorEqual(item.border.color, Commons.Color.accent))
-            out.push(item)
-          var kids = item.children || []
-          for (var i = 0; i < kids.length; i++)
-            borders(kids[i], out)
-          return out
-        }
+        waitUntil(function() { return panel.view.Window.active && panel.rows.length === 6 && rowItem(0) !== null && rowItem(3) !== null }, "the panel has the keys and its rows are built")
+      }
+
+      function test_the_keys_cursor_has_the_accent_border() {
+        openThreeStacks()
         keyClick(Qt.Key_Down)
-        check(panel.keyboardNavigation && panel.cursorIndex === 0, "Down puts the cursor on the first row")
-        var found = borders(panel.list, [])
-        check(found.length === 1 && found[0].cursorByKeys === undefined, "the keys' row has the accent border, nothing else (" + found.length + ")")
+        check(panel.keyboardNavigation && panel.cursorIndex === 0, "Down puts the cursor on the first stack header")
+        var found = accentBorders(panel.list)
+        check(found.length === 1 && found[0].iconName === undefined && inside(found[0], rowItem(0)), "the keys' stack header has its frame, nothing else (" + found.length + ")")
         keyClick(Qt.Key_Right)
-        check(panel.cursorDismiss, "Right puts the cursor on the row's dismiss button")
-        found = borders(panel.list, [])
-        check(found.length === 1 && found[0].cursorByKeys === true && found[0].iconName === "x", "the keys' dismiss button has the accent border, nothing else (" + found.length + ")")
+        check(panel.cursorDismiss, "Right puts the cursor on the stack's dismiss button")
+        found = accentBorders(panel.list)
+        check(found.length === 1 && found[0].objectName === "notificationStackDismiss" && inside(found[0], rowItem(0)), "the keys' stack dismiss button has the accent border, nothing else (" + found.length + ")")
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Right)
+        check(panel.cursorIndex === 1 && panel.cursorDismiss, "Down, Right puts the cursor on the message's dismiss button")
+        found = accentBorders(panel.list)
+        check(found.length === 1 && found[0].objectName === "notificationRowDismiss" && inside(found[0], rowItem(1)), "the keys' message dismiss button has the accent border, nothing else (" + found.length + ")")
         // The pointer on another row takes the cursor: no keys' border.
-        var rows = panel.list.contentItem.children.filter(function(row) { return row.height > 0 && row.visible })
-        var other = rows.filter(function(row) { return row.mapToItem(panel.list, 0, 0).y > panel.list.height / 4 })[0] || rows[rows.length - 1]
+        var other = rowItem(3)
         mouseMove(other, other.width / 2, other.height / 2)
         waitUntil(function() { return !panel.keyboardNavigation }, "the pointer on another row takes the cursor")
-        same(borders(panel.list, []).length, 0, "accent borders under the pointer")
+        same(accentBorders(panel.list).length, 0, "accent borders under the pointer")
         mouseMove(panel.view, 1, 1)
+      }
+
+      // The pointer can reach a dismiss button without entering its row
+      // anew: the button itself takes the cursor from the keys, stays under
+      // the pointer, and a click dismisses.
+      function test_the_pointer_on_the_keys_dismiss_button_takes_the_cursor() {
+        openThreeStacks()
+        // The stack header's button, with the pointer resting on the header.
+        var header = rowItem(0)
+        var headerButton = findChild(header, "notificationStackDismiss")
+        mouseMove(header, Style.space(20), header.height / 2)
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Right)
+        check(panel.keyboardNavigation && panel.cursorIndex === 0 && panel.cursorDismiss, "the keys reach the stack's dismiss button under the resting pointer")
+        var at = headerButton.mapToItem(header, headerButton.width / 2, headerButton.height / 2)
+        mouseMove(header, at.x, at.y)
+        waitUntil(function() { return !panel.keyboardNavigation }, "the pointer on the stack's dismiss button takes the cursor")
+        same(accentBorders(panel.list).length, 0, "accent borders with the pointer on the stack's dismiss button")
+        // A message's button, which a closed stack shows only for the keys.
+        var row = rowItem(1)
+        var button = findChild(row, "notificationRowDismiss")
+        check(button !== null && !button.visible, "a closed stack's message hides its dismiss button")
+        // The pointer rests inside the row, left of the button.
+        mouseMove(row, Style.space(20), row.height / 2)
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Right)
+        check(panel.keyboardNavigation && panel.cursorIndex === 1 && panel.cursorDismiss && button.visible, "the keys reach the message's dismiss button under the resting pointer")
+        same(accentBorders(panel.list).length, 1, "accent borders while the keys have the button")
+        var center = button.mapToItem(row, button.width / 2, button.height / 2)
+        mouseMove(row, center.x, center.y)
+        waitUntil(function() { return !panel.keyboardNavigation }, "the pointer on the dismiss button takes the cursor")
+        same(accentBorders(panel.list).length, 0, "accent borders with the pointer on the dismiss button")
+        check(button.visible, "the dismiss button stays under the pointer")
+        mouseClick(row, center.x, center.y)
+        same(JSON.stringify(store.removed), JSON.stringify([row.entry.key]), "a click on the button dismisses its message")
+        mouseMove(panel.view, 1, 1)
+      }
+
+      // The band's search and clear-all buttons take the cursor from the keys.
+      function test_the_pointer_on_search_or_clear_all_takes_the_cursor() {
+        openThreeStacks()
+        var buttons = [findChild(panel.view, "notificationSearchButton"), findChild(panel.view, "clearAllNotifications")]
+        for (var i = 0; i < buttons.length; i++) {
+          mouseMove(panel.view, 1, 1)
+          keyClick(Qt.Key_Down)
+          check(panel.keyboardNavigation && accentBorders(panel.list).length === 1, buttons[i].objectName + ": the keys' cursor is on a row")
+          mouseMove(buttons[i], buttons[i].width / 2, buttons[i].height / 2)
+          waitUntil(function() { return !panel.keyboardNavigation }, buttons[i].objectName + ": the pointer on it takes the cursor")
+          same(accentBorders(panel.list).length, 0, buttons[i].objectName + ": accent borders in the list with the pointer on it")
+        }
+        mouseMove(panel.view, 1, 1)
+      }
+
+      // Up to More options and back down starts on the row, not on the
+      // dismiss button the keys left: Enter there must not remove the stack.
+      function test_the_keys_leave_the_dismiss_button_through_more_options() {
+        openThreeStacks()
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Right)
+        check(panel.cursorDismiss, "Right puts the cursor on the stack's dismiss button")
+        keyClick(Qt.Key_Up)
+        check(panel.cursorOnSettings, "Up from the first row selects More options")
+        keyClick(Qt.Key_Down)
+        check(panel.cursorIndex === 0 && !panel.cursorDismiss, "Down from More options lands on the stack header itself")
+        keyClick(Qt.Key_Return)
+        same(JSON.stringify(store.removed), "[]", "Enter after Down, Right, Up, Down removes nothing")
       }
 
       function test_search_shows_what_the_store_found() {

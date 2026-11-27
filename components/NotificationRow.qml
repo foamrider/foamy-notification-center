@@ -259,7 +259,9 @@ Item {
       anchors.right: parent.right
       anchors.rightMargin: Style.space(8)
       y: root.verticalPadding - Style.space(3)
-      visible: root.expanded || root.dismissHasCursor
+      // Kept while hovered: the pointer hides the keys' cursor that showed
+      // it on a closed stack, and a click must still dismiss.
+      visible: root.expanded || root.dismissHasCursor || hovered
       opacity: hover.hovered || root.hasCursor ? 1 : 0
       iconName: "x"
       tooltipText: FoamyI18n.t("Dismiss notification")
@@ -267,6 +269,9 @@ Item {
       hasCursor: root.dismissHasCursor
       // Only the keys put the cursor here (the pointer hides it): the keys' border.
       cursorByKeys: true
+      // The pointer can reach the button without entering the row anew.
+      onHoveredChanged: if (hovered)
+        root.pointerUsed()
       onClicked: {
         root.pointerUsed()
         root.removeRequested()
