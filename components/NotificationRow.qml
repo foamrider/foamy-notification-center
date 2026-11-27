@@ -32,7 +32,11 @@ Item {
   signal clicked
   signal actionRequested(int index)
   signal removeRequested
+  // A click: the pointer takes the cursor from the keys.
   signal pointerUsed
+  // The pointer over the row, at `scenePosition` in the window; the panel
+  // decides whether it moved (see Panel.pointerHovered).
+  signal pointerHovered(point scenePosition)
 
   readonly property bool critical: Number(entry.urgency) === 2
   readonly property real verticalPadding: Style.space(compact ? 8 : 12)
@@ -75,7 +79,9 @@ Item {
     HoverHandler {
       id: hover
       onHoveredChanged: if (hovered)
-        root.pointerUsed()
+        root.pointerHovered(point.scenePosition)
+      onPointChanged: if (hovered)
+        root.pointerHovered(point.scenePosition)
     }
     StackFrame {
       id: frame
@@ -271,7 +277,7 @@ Item {
       cursorByKeys: true
       // The pointer can reach the button without entering the row anew.
       onHoveredChanged: if (hovered)
-        root.pointerUsed()
+        root.pointerHovered(hover.point.scenePosition)
       onClicked: {
         root.pointerUsed()
         root.removeRequested()

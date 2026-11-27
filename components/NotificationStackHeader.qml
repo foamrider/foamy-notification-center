@@ -20,7 +20,11 @@ Item {
   property string fontFamily: FoamyStyle.fontFamily
   signal toggleRequested
   signal removeRequested
+  // A click: the pointer takes the cursor from the keys.
   signal pointerUsed
+  // The pointer over the header, at `scenePosition` in the window; the
+  // panel decides whether it moved (see Panel.pointerHovered).
+  signal pointerHovered(point scenePosition)
 
   implicitHeight: Math.max(Style.space(root.compact ? 32 : 44), labels.implicitHeight + Style.space(root.compact ? 8 : 20))
   readonly property bool expandable: group.entries.length > 1
@@ -39,7 +43,9 @@ Item {
   HoverHandler {
     id: hover
     onHoveredChanged: if (hovered)
-      root.pointerUsed()
+      root.pointerHovered(point.scenePosition)
+    onPointChanged: if (hovered)
+      root.pointerHovered(point.scenePosition)
   }
   StackFrame {
     id: frame
@@ -155,7 +161,7 @@ Item {
     cursorByKeys: true
     // The pointer can reach the button without entering the header anew.
     onHoveredChanged: if (hovered)
-      root.pointerUsed()
+      root.pointerHovered(hover.point.scenePosition)
     opacity: hover.hovered || root.hasCursor ? 1 : 0
     tooltipText: FoamyI18n.t(root.group.entries.length === 1 ? "Dismiss 1 notification" : "Dismiss %1 notifications", root.group.entries.length)
     onClicked: {
