@@ -7,7 +7,7 @@ Item {
   id: preview
   required property QtObject bar
   required property Item anchorItem
-  property var previewStates: ["default", "menu", "snooze", "empty-menu", "settings", "search"]
+  property var previewStates: ["default", "menu", "snooze", "empty-menu", "settings", "search", "error"]
   property string previewState: "default"
   property int settleMs: 900
   property var popupRef: null
@@ -103,7 +103,8 @@ Item {
     property bool snoozeBusy: false
     property string snoozeError: ""
     property string focusError: ""
-    property string removalError: ""
+    // "error": a Clear all that failed, its line under the header.
+    property string removalError: preview.previewState === "error" ? "Could not clear notifications. Try again." : ""
     property double lastSeen: preview.now - 120000
     property string searchQuery: ""
     property string entriesQuery: preview.previewState === "search" ? "Ada" : ""
