@@ -42,6 +42,7 @@ import qs.Commons
 import qs.Commons as Commons
 import "harness"
 import "plugin" as Plugin
+import "plugin/kit"
 
 ShellRoot {
   id: shell
@@ -288,6 +289,10 @@ ShellRoot {
         store.loadError = "Invalid notification history response."
         var error = findChild(panel.view, "notificationError")
         waitUntil(function() { return error.visible && error.text === "Invalid notification history response." }, "a failed read shows its error")
+        // The run's theme has a dim red (2.70:1 on the popup): the error
+        // line still reads at 4.5:1 on the popup surface it is drawn on.
+        check(FoamyPalette.contrastRatio(FoamyPalette.error, FoamyPalette.background) < 4.5, "the theme's red already reads; the check proves nothing")
+        check(FoamyPalette.contrastRatio(error.color, FoamyPalette.background) >= 4.5, "the error line " + error.color + " reads on " + FoamyPalette.background)
         check(!shows("Nothing has come in yet"), "a failed read does not also say the archive is empty")
         panel.filter = "zzz"
         store.entriesQuery = "zzz"
@@ -517,12 +522,14 @@ FAKEBIN = {
     "omarchy-shell": "#!/bin/sh\nexit 1\n",
 }
 SAVE = "bar set foamy.notification-center keepDays 9 --json"
+DIM_RED = KIT / "tests/fixtures/themes/dim-red.toml"
 
 status = 0
 for host in harness.available_hosts(what="panel-ui"):
-    run = harness.Run(host, SHELL, plugin=PLUGIN, prefix=f"foamy-center-panel-{host}-", fakebin=FAKEBIN).run(
-        timeout=120
-    )
+    # The kit's dark theme with a dim red, for the error line's colour check.
+    run = harness.Run(
+        host, SHELL, plugin=PLUGIN, prefix=f"foamy-center-panel-{host}-", fakebin=FAKEBIN, theme=DIM_RED
+    ).run(timeout=120)
     calls_log = run.out / "omarchy-calls.log"
     saves = calls_log.read_text().splitlines() if calls_log.exists() else []
     # Any QML warning from the plugin's own files fails the run too.
