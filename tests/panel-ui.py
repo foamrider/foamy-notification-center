@@ -16,7 +16,9 @@ title row and the list stays where it is; the keys come back to the panel
 after Esc in the search field and after a click beside it, opening search
 takes the cursor off More options, Up then stops at the first row, and an
 empty search field closes when it lets the keys go
-(not for its own right-click menu); a number setting whose save failed can
+(not for its own right-click menu); the keys' cursor has the accent border
+on a row and on its dismiss button, and none once the pointer takes it; a
+number setting whose save failed can
 be saved again with the same number. The run's theme has a dim red: the
 error line and a critical stack's edge read at 4.5:1 on what they are
 drawn on; the edge case runs again in the kit's light theme.
@@ -34,7 +36,7 @@ import harness  # foamy-kit's preview/harness.py
 
 PLUGIN = Path(__file__).resolve().parents[1]
 # Test functions in SHELL; QtTest's count at completion includes one entry of its own.
-CASES = 12
+CASES = 13
 
 SHELL = r"""
 import QtQuick
@@ -363,6 +365,37 @@ ShellRoot {
         })
         mouseMove(panel.view, 1, 1)
         store.liveActions = ({})
+      }
+
+      function test_the_keys_cursor_has_the_accent_border() {
+        store.show(shell.entries(3, true))
+        openPanel()
+        waitUntil(function() { return panel.view.Window.active && panel.rows.length > 1 }, "the panel has the keys and its rows")
+        // Every accent border drawn in the list: a row's cursor frame or a
+        // FoamyAction's keys' border.
+        function borders(item, out) {
+          if (item.visible && item.opacity > 0 && item.border !== undefined && item.border.width > 0 && Qt.colorEqual(item.border.color, Commons.Color.accent))
+            out.push(item)
+          var kids = item.children || []
+          for (var i = 0; i < kids.length; i++)
+            borders(kids[i], out)
+          return out
+        }
+        keyClick(Qt.Key_Down)
+        check(panel.keyboardNavigation && panel.cursorIndex === 0, "Down puts the cursor on the first row")
+        var found = borders(panel.list, [])
+        check(found.length === 1 && found[0].cursorByKeys === undefined, "the keys' row has the accent border, nothing else (" + found.length + ")")
+        keyClick(Qt.Key_Right)
+        check(panel.cursorDismiss, "Right puts the cursor on the row's dismiss button")
+        found = borders(panel.list, [])
+        check(found.length === 1 && found[0].cursorByKeys === true && found[0].iconName === "x", "the keys' dismiss button has the accent border, nothing else (" + found.length + ")")
+        // The pointer on another row takes the cursor: no keys' border.
+        var rows = panel.list.contentItem.children.filter(function(row) { return row.height > 0 && row.visible })
+        var other = rows.filter(function(row) { return row.mapToItem(panel.list, 0, 0).y > panel.list.height / 4 })[0] || rows[rows.length - 1]
+        mouseMove(other, other.width / 2, other.height / 2)
+        waitUntil(function() { return !panel.keyboardNavigation }, "the pointer on another row takes the cursor")
+        same(borders(panel.list, []).length, 0, "accent borders under the pointer")
+        mouseMove(panel.view, 1, 1)
       }
 
       function test_search_shows_what_the_store_found() {

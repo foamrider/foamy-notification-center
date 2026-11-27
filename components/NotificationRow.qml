@@ -265,6 +265,8 @@ Item {
       tooltipText: FoamyI18n.t("Dismiss notification")
       foreground: root.foreground
       hasCursor: root.dismissHasCursor
+      // Only the keys put the cursor here (the pointer hides it): the keys' border.
+      cursorByKeys: true
       onClicked: {
         root.pointerUsed()
         root.removeRequested()

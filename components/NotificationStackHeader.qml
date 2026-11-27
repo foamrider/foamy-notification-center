@@ -150,6 +150,8 @@ Item {
     iconName: "x"
     foreground: root.foreground
     hasCursor: root.dismissHasCursor
+    // Only the keys put the cursor here (the pointer hides it): the keys' border.
+    cursorByKeys: true
     opacity: hover.hovered || root.hasCursor ? 1 : 0
     tooltipText: FoamyI18n.t(root.group.entries.length === 1 ? "Dismiss 1 notification" : "Dismiss %1 notifications", root.group.entries.length)
     onClicked: {
