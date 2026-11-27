@@ -1,4 +1,4 @@
-// foamy-kit 0.14.1 31371ef41d02ff56eb60557ef113a98f1f10dd6fd3881d2e0b8f9de55649dbf1 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 1604f2e9bb6c6e2b05a42d33486a69adbcdb32bf731528ec44ce7aeb2d1814e3 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // The panel's single cursor over a flat list of stops (rows, then buttons),
@@ -35,12 +35,19 @@ QtObject {
   function at(i) {
     return index === i
   }
+  // The keys moved the cursor last (move(); a panel that sets `index`
+  // from a key sets this too); the pointer clears it (hover()). Surfaces
+  // draw the keys' cursor with an accent border (FoamyCursorSurface.byKeys).
+  property bool byKeys: false
   function hover(i) {
-    if (i >= 0 && i < count)
+    if (i >= 0 && i < count) {
       index = i
+      byKeys = false
+    }
   }
   function reset() {
     index = -1
+    byKeys = false
   }
   // A letter shortcut with no Ctrl/Alt/Meta held (Shift is fine).
   function plain(modifiers) {
@@ -53,6 +60,7 @@ QtObject {
     catcher.textKey(text, modifiers === undefined ? Qt.NoModifier : modifiers)
   }
   function move(delta) {
+    byKeys = true
     if (count <= 0) {
       index = -1
       return

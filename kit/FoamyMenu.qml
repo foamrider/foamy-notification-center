@@ -1,5 +1,5 @@
 pragma ComponentBehavior: Bound
-// foamy-kit 0.14.1 d74ee65b3df0ace94e2b809f6d37099719307eae51642ca1741bc02ce2ad4268 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 399fff048da536c56732e31d87e4d4ebf2e4a442d87566f4cd773f58799e8705 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 
@@ -21,12 +21,14 @@ import qs.Commons as Commons
 // edge (right in LTR, left in RTL), kept inside the card; when the card has
 // no room below it opens above the button, and a long menu scrolls. Not
 // clipped by the hero band and drawn over the body. In a FoamyPopup or
-// FoamyPopupCard a short card grows while the menu is open so the menu fits
-// below its button (as far as the screen allows) and shrinks back after.
+// FoamyPopupCard, when the menu fits neither below nor above its button,
+// the card grows while it is open (by at most `maxGrowHeight` of menu, as
+// far as the screen allows; a longer menu scrolls) and shrinks back after.
 //
-// Keyboard (single cursor): open(true) from the keyboard selects the first
-// entry; open(false) from a click selects nothing until the pointer or a key
-// moves. Up/Down/j/k/Home/End move; a long menu then scrolls the least
+// Keyboard (single cursor): open(true) from the keyboard selects the
+// checked entry (the current choice; else the first), so Enter at once
+// keeps what is chosen; open(false) from a click selects nothing until the
+// pointer or a key moves. Up/Down/j/k/Home/End move; a long menu then scrolls the least
 // that shows the entry (the wheel and hover scroll and highlight freely).
 // Enter/Space/Right/l activate (Right opens a submenu), Left/h/Backspace
 // leave a submenu, Esc leaves a submenu or closes, Tab closes. While open the menu has the keys and the pointer
@@ -41,6 +43,8 @@ QtObject {
   property Item anchorItem: null
   default property list<QtObject> items
   property real menuWidth: FoamyStyle.menuWidth
+  // The most menu a card grows for; past it the menu scrolls.
+  property real maxGrowHeight: FoamyStyle.rowHeight * 9
   // Where the overlay lives; found from anchorItem (the popup card, else the
   // window's root item) when null.
   property Item host: null
@@ -62,6 +66,11 @@ QtObject {
   property var _parentEntry: null
   property Item _hostItem: null
   property Item _reserveHolder: null
+  // Whether the card grows for this open: decided when it opens and again
+  // when a submenu or another level shows (entries laid out first), and
+  // never taken back while open, so the card doesn't jump down and up.
+  property bool _grow: false
+  property real _reserved: 0
   property Item _restoreFocus: null
 
   readonly property var _entries: {
@@ -112,11 +121,30 @@ QtObject {
         _reserveHolder = item
         break
       }
+    _grow = false
+    _reserved = 0
+    overlay.decideGrowth()
     if (keyboard)
-      move(1)
+      _startOnChoice()
     _overlay.place()
     overlay.reveal()
     _overlay.forceActiveFocus()
+  }
+
+  // From the keys: the current choice (the one checked entry of a set),
+  // else the first entry. With several checked (toggles, labels) Enter
+  // would turn one off, so then the first.
+  function _startOnChoice() {
+    const checked = []
+    for (let i = 0; i < _entries.length; i++)
+      if (_entries[i].checked === true && selectable(i))
+        checked.push(i)
+    if (checked.length === 1)
+      _index = checked[0]
+    else {
+      _index = -1
+      move(1)
+    }
   }
 
   function close() {
@@ -128,6 +156,8 @@ QtObject {
     if (_reserveHolder)
       _reserveHolder.foamyMenuReserve = 0
     _reserveHolder = null
+    _grow = false
+    _reserved = 0
     var restore = _restoreFocus
     _restoreFocus = null
     if (restore && restore.visible)
@@ -201,8 +231,11 @@ QtObject {
     // A submenu opens in place on its first item (after the Back row).
     if (entry.hasSubmenu) {
       _parentEntry = entry
-      _index = 0
-      move(1)
+      overlay.decideGrowth()
+      _startOnChoice()
+      // Not the Back row: the submenu's own first entry or its choice.
+      if (_index === 0)
+        move(1)
       _overlay.place()
       overlay.reveal()
       return
@@ -215,17 +248,32 @@ QtObject {
     if (!_parentEntry)
       return false
     var from = _parentEntry
+    // No highlight while the level changes (else the old index lights a
+    // row of the new level for a frame).
+    _index = -1
     _parentEntry = null
     _index = _entries.indexOf(from)
+    overlay.decideGrowth()
     _overlay.place()
     overlay.reveal()
     return true
   }
 
+  // The card: the first bordered surface (a host BorderSurface) above the
+  // popup's body (the item that holds foamyMenuReserve), so a row's or a
+  // button's own surface between the anchor and the body is never taken
+  // for it. Outside a FoamyPopup or FoamyPopupCard: the first bordered
+  // surface above the anchor, else the window's root item.
   function _findHost() {
+    var inPopup = false
+    for (let at = anchorItem; at && !inPopup; at = at.parent)
+      inPopup = "foamyMenuReserve" in at
+    var passedBody = !inPopup
     var top = null
     for (var item = anchorItem; item; item = item.parent) {
-      if ("borderSpec" in item && "contentBottomInset" in item)
+      if ("foamyMenuReserve" in item)
+        passedBody = true
+      if (passedBody && "borderSpec" in item && "contentBottomInset" in item)
         return item
       top = item
     }
@@ -254,15 +302,36 @@ QtObject {
     property real menuY: 0
     property real menuHeight: 0
 
+    // Grow the card when the shown level, laid out now (its entries may
+    // have just changed), fits neither below nor above its button in the
+    // card as it is, and growing helps: the most it would grow for is more
+    // than the larger room. Once grown, it stays grown while open.
+    function decideGrowth() {
+      var host = root._hostItem
+      if (!root._reserveHolder || !host || !root.anchorItem || root._grow)
+        return
+      list.forceLayout()
+      var b = root.anchorItem.mapToItem(host, 0, 0)
+      var below = host.height - (b.y + root.anchorItem.height + FoamyStyle.gapSmall) - margin
+      var above = b.y - FoamyStyle.gapSmall - margin
+      root._grow = Math.min(naturalHeight, root.maxGrowHeight) > Math.max(below, above)
+    }
     function place() {
       if (!root._opened || !root.anchorItem || !parent)
         return
-      // In a FoamyPopup/FoamyPopupCard the card grows to fit the menu below
-      // its button (up to the screen); elsewhere a long menu scrolls.
+      // In a FoamyPopup/FoamyPopupCard the card grows for the menu below its
+      // button when decideGrowth() said so (by at most maxGrowHeight, up to
+      // the screen); otherwise, and elsewhere, a long menu scrolls.
+      // The card may still be shrinking from an earlier open: decide again
+      // as it changes (only ever towards growing).
+      decideGrowth()
       var holder = root._reserveHolder
-      if (holder) {
+      if (holder && root._grow) {
         var h0 = root.anchorItem.mapToItem(holder, 0, 0)
-        holder.foamyMenuReserve = h0.y + root.anchorItem.height + FoamyStyle.gapSmall + naturalHeight + margin
+        // Never less than this open asked for: a shorter level doesn't
+        // shrink the card under the menu.
+        root._reserved = Math.max(root._reserved, h0.y + root.anchorItem.height + FoamyStyle.gapSmall + Math.min(naturalHeight, root.maxGrowHeight) + margin)
+        holder.foamyMenuReserve = root._reserved
       }
       var b = root.anchorItem.mapToItem(overlay, 0, 0)
       var w = Math.max(0, Math.min(root.menuWidth, width - margin * 2))
@@ -301,7 +370,13 @@ QtObject {
         menuWheel.scrollTo(y, false)
     }
     onWidthChanged: place()
-    onHeightChanged: place()
+    // The card grows after a keyboard open: keep the entry in view (only
+    // while it grows for this menu, so a wheel scroll otherwise stays).
+    onHeightChanged: {
+      place()
+      if (root._grow)
+        reveal()
+    }
     onNaturalHeightChanged: place()
 
     Connections {
@@ -398,7 +473,7 @@ QtObject {
       radius: FoamyStyle.radius
       color: FoamyPalette.menuFill
       border.width: FoamyStyle.borderWidth
-      border.color: FoamyPalette.border
+      border.color: FoamyPalette.menuBorder
       clip: true
       Accessible.role: Accessible.PopupMenu
       Accessible.name: root._parentEntry ? root._parentEntry.text : ""
@@ -473,7 +548,7 @@ QtObject {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: FoamyStyle.rowPadding
                 opacity: row.usable || row.separator ? 1 : FoamyStyle.disabledOpacity
-                readonly property color tone: row.modelData.destructive && row.current ? FoamyPalette.onSurface(Commons.Color.urgent) : FoamyPalette.text
+                readonly property color tone: row.modelData.destructive && row.current ? FoamyPalette.onSurface(Commons.Color.urgent, Qt.tint(FoamyPalette.menuFill, Qt.alpha(Commons.Color.urgent, 0.14))) : FoamyPalette.text
                 FoamyIcon {
                   name: row.modelData.iconName || "settings"
                   visible: !!row.modelData.iconName

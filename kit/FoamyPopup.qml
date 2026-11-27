@@ -1,4 +1,4 @@
-// foamy-kit 0.14.1 16d82ed7113fdb973317a19874ad7d0358f287b2fe8c8e566eec69e01474bd4f — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.1 fc80b2184a8c65ad07a3d9a1d88a6a29d825265aed14e2b0779f2335c310cb1c — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
@@ -98,8 +98,9 @@ KeyboardPanel {
   padding: 0
   borderSpec: FoamyStyle.popupBorderSpec
   contentWidth: fittedContentWidth(wide ? FoamyStyle.popupWidthWide : FoamyStyle.popupWidth)
-  // An open FoamyMenu may ask for room below its button (foamyMenuReserve):
-  // the card grows while it is open instead of the menu scrolling.
+  // An open FoamyMenu may ask for room below its button (foamyMenuReserve)
+  // when it fits neither below nor above it: the card grows while it is
+  // open (FoamyMenu.maxGrowHeight of menu at most; past it the menu scrolls).
   contentHeight: fittedContentHeight(Math.max(bodyImplicitHeight, bodyLoader.foamyMenuReserve), maxHeight)
   focusTarget: bodyLoader
 
