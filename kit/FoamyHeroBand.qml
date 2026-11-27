@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 7d0b9afb3874ce7463c04cd3e87d3740d39be4b20c9a2befbe7a231719533a0f — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 eda5f7535af2fec435239f1a5fdb58022744302263b60c692196e74572859931 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -25,6 +25,9 @@ import QtQuick.Layouts
 //   FoamyHeroBand { compact: true; saving: …; onBack: … }
 // A sub-view built like it (an editor page) may add icon actions at the
 // trailing end: compactTrailing: [ FoamyAction { iconName: "external-link"; … } ]
+// and make its title a control (FoamySettingsHeader's title action):
+//   compactTitleAction: true; compactTitleIconName: "hash"
+//   onCompactTitleActivated: function (keyboard) { menu.anchorItem = band.compactTitleMenuAnchor; menu.open(keyboard) }
 //
 // Centred variant (a panel about one big value: clock, weather):
 //   FoamyHeroBand {
@@ -39,7 +42,9 @@ import QtQuick.Layouts
 //
 // Overflow: `menuItems`, `maxButtons`, `menuHasCursor`, `menuOpen`,
 // `openMenu(keyboard)`, `menuHovered` are FoamyHeader's (at most three
-// buttons top right; see FoamyHeader).
+// buttons top right; see FoamyHeader). So is `cursorByKeys: cursor.byKeys`:
+// the ⋯ and Settings buttons draw the keys' accent border while they have
+// the cursor (set your trailing actions' own).
 //
 // Background: the foamy wash by default (FoamyPalette.band*: accent-tinted
 // diagonal wash, a soft glow at the trailing top corner). A plugin may bring
@@ -107,6 +112,8 @@ Item {
   property string meta: ""
   property bool showSettings: true
   property bool settingsHasCursor: false
+  // The keys moved the cursor (FoamyCursor.byKeys): FoamyHeader's.
+  property bool cursorByKeys: false
   property alias trailing: header.trailing
   property alias settingsButton: header.settingsButton
   signal settingsClicked
@@ -213,12 +220,27 @@ Item {
   // --- compact settings form -------------------------------------------------------
   property bool compact: false
   property string compactTitle: FoamyI18n.t("Settings")
+  // The compact row's side padding (FoamySettingsHeader.horizontalPadding):
+  // a wide settings page sets it to its column's inset.
+  property real compactPadding: FoamyStyle.padding
   property bool saving: false
   property alias backButton: settingsHeader.backButton
   // Icon actions at the compact form's trailing end, after "Saving…" (a
   // sub-view's "Open in …"): FoamySettingsHeader.trailing.
   property alias compactTrailing: settingsHeader.trailing
+  // The compact title as a control (off by default): FoamySettingsHeader's
+  // title action, a FoamyTitleAction (titleAction, titleIconName,
+  // titleIconColor, titleAccessibleName, titleButton, titleMenuAnchor,
+  // titleActivated). The button and the anchor are null while it is off;
+  // turned off, the caller places the keys it had.
+  property bool compactTitleAction: false
+  property string compactTitleIconName: ""
+  property color compactTitleIconColor: FoamyPalette.secondaryText
+  property string compactTitleAccessibleName: compactTitle
+  readonly property alias compactTitleButton: settingsHeader.titleButton
+  readonly property alias compactTitleMenuAnchor: settingsHeader.titleMenuAnchor
   signal back
+  signal compactTitleActivated(bool keyboard)
 
   // --- hero slot -------------------------------------------------------------------
   default property alias hero: heroSlot.data
@@ -425,9 +447,17 @@ Item {
       width: parent.width
       topPadding: 0
       bottomPadding: 0
+      horizontalPadding: band.compactPadding
       title: band.compactTitle
       saving: band.saving
+      titleAction: band.compactTitleAction
+      titleIconName: band.compactTitleIconName
+      titleIconColor: band.compactTitleIconColor
+      titleAccessibleName: band.compactTitleAccessibleName
       onBack: band.back()
+      onTitleActivated: function (keyboard) {
+        band.compactTitleActivated(keyboard)
+      }
     }
 
     // A layout, so hero items align to the reading start in RTL too. Give
@@ -500,6 +530,7 @@ Item {
     showSettings: band.showSettings
     settingsHasCursor: band.settingsHasCursor && band.buttonsActive
     menuHasCursor: band.menuHasCursor && band.buttonsActive
+    cursorByKeys: band.cursorByKeys
     onSettingsClicked: band.settingsClicked()
     onSettingsHovered: function (hovered) {
       band.settingsHovered(hovered)

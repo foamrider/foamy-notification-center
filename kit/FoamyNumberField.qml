@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 78a78dba44e93b9e3e757749603f6ca3ec758020181811f1ba1ddce378618944 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 cafaa5756e1f001328ddccb77202af8a4f308471dbb55532c44c23df6df67bf9 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 
@@ -29,7 +29,8 @@ import QtQuick.Layouts
 //   FoamySettingsPage doesn't go back). Up/Down step the
 //   draft by stepSize within from..to.
 // - Accepts the language's digits and decimal mark (Danish "2,5", Arabic
-//   "٤٢"). RTL mirrors the row; set hasCursor from the panel's FoamyCursor.
+//   "٤٢"). RTL mirrors the row; set hasCursor from the panel's FoamyCursor
+//   (and `cursorByKeys: cursor.byKeys` for the keys' accent border).
 //
 // Compact form, for short values (a 2-digit percentage, a °C margin): the
 // label on the reading start, a narrow field sized to the longest value
@@ -59,6 +60,9 @@ Item {
   property real unitWidth: compact ? FoamyStyle.unitWidthCompact : FoamyStyle.unitWidth
   property bool reserveUnit: false
   property bool hasCursor: false
+  // The keys moved the cursor here (FoamyCursor.byKeys): the field's
+  // border in the accent (SafeTextField.cursorByKeys).
+  property bool cursorByKeys: false
   property bool compact: false
   // Characters the compact field is sized for (digits, sign, decimal mark).
   property int compactDigits: Math.max(format(Math.abs(to)).length + (to < 0 ? 1 : 0), format(Math.abs(from)).length + (from < 0 ? 1 : 0), 1)
@@ -282,6 +286,7 @@ Item {
         Layout.fillWidth: !root.compact
         Layout.preferredWidth: root.compact ? root.compactFieldWidth : -1
         hasCursor: root.hasCursor
+        cursorByKeys: root.cursorByKeys
         translate: FoamyI18n.t
         maximumLength: root.compact ? Math.max(root.compactDigits, 1) + 2 : 24
         horizontalAlignment: root.compact ? Text.AlignRight : Text.AlignLeft

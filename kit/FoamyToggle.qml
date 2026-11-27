@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 9b63ed99802e02ac04fa8494778838a8d3e5b9f265db99660287e2894a202eca — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 0a287d59fc91321f48f9e38510fa2a66323eedb23d37d3199a7797bd9cd3c075 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui
@@ -15,6 +15,8 @@ import qs.Ui
 // hasCursor, rounded, foreground, accent, fontFamily, titleSize,
 // descriptionSize, clicked(), hovered(bool). The row never flips `checked`
 // itself; bind it and save in onClicked.
+// `cursorByKeys: cursor.byKeys` draws the keys' cursor with the focus
+// ring's 1 px accent border on the row's fill, also on a disabled row.
 Item {
   id: root
 
@@ -22,6 +24,8 @@ Item {
   property string description: ""
   property bool checked: false
   property bool hasCursor: false
+  // The keys moved the cursor here (FoamyCursor.byKeys): an accent border.
+  property bool cursorByKeys: false
   property bool divider: false
   property bool rounded: FoamyStyle.rounded
   property color foreground: FoamyPalette.text
@@ -64,7 +68,7 @@ Item {
     height: parent.height
     radius: FoamyStyle.radius
     color: root.hot || root.activeFocus ? FoamyPalette.hoverFill : "transparent"
-    border.width: root.activeFocus ? 1 : 0
+    border.width: root.activeFocus || (root.hasCursor && root.cursorByKeys) ? 1 : 0
     border.color: root.accent
     Behavior on color {
       ColorAnimation {
@@ -131,6 +135,21 @@ Item {
     cursorShape: root.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
     onClicked: if (root.enabled)
       root.clicked()
-    onContainsMouseChanged: root.hovered(containsMouse)
+    // While the keys drew the cursor (`cursorByKeys`), a real pointer move
+    // inside reports the pointer again, as entering does, so the panel's
+    // hover handler takes the cursor back. In scene coordinates: Qt re-sends
+    // hover when items move under a resting pointer (a keys-driven scroll),
+    // which is no move.
+    property point scenePoint
+    onContainsMouseChanged: {
+      scenePoint = mapToItem(null, mouseX, mouseY)
+      root.hovered(containsMouse)
+    }
+    onPositionChanged: function (event) {
+      const at = mapToItem(null, event.x, event.y)
+      if (containsMouse && root.cursorByKeys && Math.abs(at.x - scenePoint.x) + Math.abs(at.y - scenePoint.y) > 0.01)
+        root.hovered(true)
+      scenePoint = at
+    }
   }
 }

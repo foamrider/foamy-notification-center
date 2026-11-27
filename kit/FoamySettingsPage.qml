@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 aebba3e5bd75c3aafcefe16a6ac48ac3712571e56a10c355b875ed11d8041cb4 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 53e09be4a9eaab40f3e5204b72797af67b236aa1013cd2d3cdbd90d88a21d0ca — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls as Controls
 
@@ -15,6 +15,12 @@ import QtQuick.Controls as Controls
 //     onRetry: root.retrySave()
 //     FoamySettingsSection { title: FoamyI18n.t("Bar"); … }
 //   }
+//
+// A page wider than a settings page (a Wide popup's) keeps one column:
+// set `columnWidth` (default: the page's width less its side paddings) and
+// the column stands centred, Back and the title on its start edge, the
+// error line with Retry and the sections in it; the band's surface still
+// runs to the card's edges. Sections take the body's width (parent.width).
 //
 // Esc goes back. Tab walks the form controls (focusable: true); the page
 // scrolls to keep the focused control visible (a SafeTextArea's box, not
@@ -42,6 +48,9 @@ FocusScope {
   property bool retryable: false
   property alias backTarget: header.backButton
   property real maxHeight: FoamyStyle.popupMaxHeight
+  property real columnWidth: width - FoamyStyle.padding * 2
+  // From each side of the page to the column (at least the padding).
+  readonly property real columnInset: Math.max(FoamyStyle.padding, (width - columnWidth) / 2)
   default property alias content: body.data
   // A click-away from one of the page's fields leaves the keys here (Esc
   // still goes back), not with the panel's key catcher (FoamyClickAway).
@@ -125,6 +134,7 @@ FocusScope {
     compact: true
     width: parent.width
     compactTitle: root.title
+    compactPadding: root.columnInset
     saving: root.saving
     onBack: root.back()
   }
@@ -153,21 +163,21 @@ FocusScope {
     Column {
       id: column
       width: scroll.width
-      leftPadding: FoamyStyle.padding
-      rightPadding: FoamyStyle.padding
+      leftPadding: root.columnInset
+      rightPadding: root.columnInset
       topPadding: FoamyStyle.sectionGap
       bottomPadding: FoamyStyle.padding
       spacing: FoamyStyle.sectionGap
 
       FoamySettingsError {
-        width: parent.width - FoamyStyle.padding * 2
+        width: parent.width - root.columnInset * 2
         text: root.error
         retryable: root.retryable
         onRetry: root.retry()
       }
       Column {
         id: body
-        width: parent.width - FoamyStyle.padding * 2
+        width: parent.width - root.columnInset * 2
         spacing: FoamyStyle.sectionGap
       }
     }

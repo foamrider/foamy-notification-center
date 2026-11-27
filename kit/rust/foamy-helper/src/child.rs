@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 5592404e3c4e7163e2f415b7a176ff06d9638d3fd2a0080079905c703395e9d1 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 5592404e3c4e7163e2f415b7a176ff06d9638d3fd2a0080079905c703395e9d1 — do not edit; change foamy-kit and run sync
 //! Bounded child processes: a deadline, a cap on captured output, a kill on
 //! either, and control over the environment, standard input, the process
 //! group or session, resource limits, CPU and I/O priority and death with

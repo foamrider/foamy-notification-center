@@ -1,4 +1,4 @@
-// foamy-kit 0.15.2 a486adf34e8569034bd7500f3cc4826b6c46195b76f7c255c61a2d18468e792d — do not edit; change foamy-kit and run sync
+// foamy-kit 0.16.0 f2def0b7d8366350cfe4eccd4ce1fbabad9fc02a8cd6d78e6c9207a43fdd16c5 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Controls as Controls
 import Quickshell.Io
@@ -26,7 +26,9 @@ import qs.Ui
 // Styled once (foamy radius, control fill and border); callers set size and
 // alignment, never background. `quiet: true` is for text edited in place
 // (an editor's title that reads as text): no fill or border at rest, the
-// usual field under the pointer or the cursor and with the focus. clipboardScript resolves relative to this
+// usual field under the pointer or the cursor and with the focus.
+// `cursorByKeys: cursor.byKeys` draws the panel's keys' cursor with the
+// border in the accent while the field has no text focus. clipboardScript resolves relative to this
 // file (kit/clipboard.sh by default) unless absolute. A field that hides
 // gives up the focus (keys never edit hidden text), which ends the edit:
 // editingFinished. If it had the keys, they go to the nearest key home that
@@ -106,9 +108,23 @@ Flickable {
   property real cornerRadius: FoamyStyle.radius
   property color selectionTint: Style.selectionFillFor(foreground, accent)
   property bool hasCursor: false
+  // The keys moved the panel's cursor here (FoamyCursor.byKeys) and the
+  // field has no text focus: its border in the accent, at the cursor
+  // border's width (the text never moves). With the focus, the caret shows
+  // where the keys are and the focus look stays.
+  property bool cursorByKeys: false
   readonly property bool _focused: editor.activeFocus
   readonly property bool _hot: editor.hovered || hasCursor
-  readonly property var _borderSpec: Border.controlSpec(_focused ? "focus" : (_hot ? "hover-cursor" : "normal"), foreground, accent)
+  readonly property var _borderSpec: !_focused && hasCursor && cursorByKeys ? _keysBorder : Border.controlSpec(_focused ? "focus" : (_hot ? "hover-cursor" : "normal"), foreground, accent)
+  readonly property var _keysBorder: ({
+      "color": accent,
+      "widths": Border.controlWidths("hover-cursor"),
+      "gradient": {
+        "colors": [],
+        "angle": 0,
+        "enabled": false
+      }
+    })
   // Quiet: text edited in place (a title that reads as text). At rest it
   // has no fill and no border; hover, the cursor or the focus show the
   // usual field. The border keeps its width, so the text never moves.
