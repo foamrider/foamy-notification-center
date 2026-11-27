@@ -78,11 +78,12 @@ Item {
         root.pointerUsed()
     }
     StackFrame {
+      id: frame
       anchors.fill: parent
       last: root.last
       critical: root.groupCritical
       foreground: root.foreground
-      fill: root.critical ? Qt.tint(Commons.Color.popups.background, Util.alpha(Commons.Color.urgent, 0.09)) : Commons.Color.popups.background
+      fill: root.critical ? frame.criticalFill : Commons.Color.popups.background
     }
     Rectangle {
       visible: !root.first

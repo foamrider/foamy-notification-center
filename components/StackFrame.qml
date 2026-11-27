@@ -13,10 +13,22 @@ Canvas {
   property bool first: false
   property bool last: false
   property bool critical: false
-  property color fill: Commons.Color.popups.background
   property color foreground: Commons.Color.foreground
+  // The fills of a stack's frames: its header, a critical row, another row
+  // (FoamyPalette.background is the popup's Commons.Color.popups.background).
+  readonly property color headerFill: Qt.tint(FoamyPalette.background, Util.alpha(foreground, 0.055))
+  readonly property color criticalFill: Qt.tint(FoamyPalette.background, Util.alpha(Commons.Color.urgent, 0.09))
+  property color fill: Commons.Color.popups.background
   readonly property color outline: Util.alpha(foreground, 0.18)
-  readonly property color urgent: Commons.Color.urgent
+  // The critical edge runs down a whole stack, one frame per row: one
+  // colour for all of it, readable on the strictest fill it crosses.
+  readonly property color urgent: {
+    var fills = [headerFill, criticalFill, FoamyPalette.background]
+    var strictest = fills.reduce(function (a, b) {
+      return FoamyPalette.contrastRatio(Commons.Color.urgent, a) <= FoamyPalette.contrastRatio(Commons.Color.urgent, b) ? a : b
+    })
+    return FoamyPalette.onSurface(Commons.Color.urgent, strictest)
+  }
   readonly property real corner: Math.min(FoamyStyle.radius, width / 2, height / 2)
   readonly property real leading: critical ? Style.space(3) : 1
 

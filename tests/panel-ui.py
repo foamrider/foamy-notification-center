@@ -17,7 +17,9 @@ after Esc in the search field and after a click beside it, opening search
 takes the cursor off More options, Up then stops at the first row, and an
 empty search field closes when it lets the keys go
 (not for its own right-click menu); a number setting whose save failed can
-be saved again with the same number.
+be saved again with the same number. The run's theme has a dim red: the
+error line and a critical stack's edge read at 4.5:1 on what they are
+drawn on.
 
 Runs through foamy-kit's preview/harness.py (isolated HOME, private bus, no
 host commands, offscreen screen) against the Omarchy 4.5 shell host."""
@@ -32,7 +34,7 @@ import harness  # foamy-kit's preview/harness.py
 
 PLUGIN = Path(__file__).resolve().parents[1]
 # Test functions in SHELL; QtTest's count at completion includes one entry of its own.
-CASES = 11
+CASES = 12
 
 SHELL = r"""
 import QtQuick
@@ -290,9 +292,11 @@ ShellRoot {
         var error = findChild(panel.view, "notificationError")
         waitUntil(function() { return error.visible && error.text === "Invalid notification history response." }, "a failed read shows its error")
         // The run's theme has a dim red (2.70:1 on the popup): the error
-        // line still reads at 4.5:1 on the popup surface it is drawn on.
-        check(FoamyPalette.contrastRatio(FoamyPalette.error, FoamyPalette.background) < 4.5, "the theme's red already reads; the check proves nothing")
-        check(FoamyPalette.contrastRatio(error.color, FoamyPalette.background) >= 4.5, "the error line " + error.color + " reads on " + FoamyPalette.background)
+        // line still reads at 4.5:1 on the popup's card it is drawn on.
+        var card = panel.popupPanel.cardItem
+        check(card !== null, "the popup's card is drawn")
+        check(FoamyPalette.contrastRatio(FoamyPalette.error, card.color) < 4.5, "the theme's red already reads; the check proves nothing")
+        check(FoamyPalette.contrastRatio(error.color, card.color) >= 4.5, "the error line " + error.color + " reads on " + card.color)
         check(!shows("Nothing has come in yet"), "a failed read does not also say the archive is empty")
         panel.filter = "zzz"
         store.entriesQuery = "zzz"
@@ -312,6 +316,43 @@ ShellRoot {
         store.entriesQuery = ""
         store.show(shell.entries(2, true))
         waitUntil(function() { return panel.rows.length > 0 && !shows("Nothing has come in yet") }, "rows replace the empty line")
+      }
+
+      // A critical stack's 3 px edge runs down its header and rows, each a
+      // StackFrame. As painted, it reads at 4.5:1 on every fill it crosses
+      // (in the run's dim red, which reads on none of them raw).
+      function test_critical_edge_reads_on_each_fill() {
+        store.show([
+          {key: "2000000-0", timestamp: 1793350800000, app: "Calendar", appIcon: "", summary: "Team sync", body: "Starts in 10 minutes", urgency: 2},
+          {key: "1999999-1", timestamp: 1793350740000, app: "Calendar", appIcon: "", summary: "Lunch", body: "Starts at noon", urgency: 1}
+        ])
+        openPanel()
+        function frames(item, out) {
+          if (item.critical === true && item.leading !== undefined && item.visible)
+            out.push(item)
+          var kids = item.children || []
+          for (var i = 0; i < kids.length; i++)
+            frames(kids[i], out)
+          return out
+        }
+        waitUntil(function() { return panel.rows.length === 2 && frames(panel.list, []).length === 2 }, "the stack's header and its newest row show")
+        // Expanded, the stack also shows its row that is not critical.
+        panel.toggleGroup("Calendar")
+        waitUntil(function() { return frames(panel.list, []).length === 3 }, "the expanded stack shows both rows")
+        var found = frames(panel.list, [])
+        var fills = found.map(function(frame) { return frame.fill }).concat([panel.popupPanel.cardItem.color])
+        fills.forEach(function(fill) {
+          check(FoamyPalette.contrastRatio(Commons.Color.urgent, fill) < 4.5, "the theme's urgent colour already reads on " + fill + "; the check proves nothing")
+        })
+        found.forEach(function(frame) {
+          // What the frame painted, halfway down its leading edge (QtTest's
+          // grabImage cannot grab the panel's own popup window).
+          var data = frame.context.getImageData(1, Math.round(frame.height / 2), 1, 1).data
+          var drawn = Qt.rgba(data[0] / 255, data[1] / 255, data[2] / 255, data[3] / 255)
+          fills.forEach(function(fill) {
+            check(FoamyPalette.contrastRatio(drawn, fill) >= 4.5, "the critical edge " + drawn + " reads on " + fill)
+          })
+        })
       }
 
       function test_search_shows_what_the_store_found() {

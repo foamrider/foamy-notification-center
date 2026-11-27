@@ -42,11 +42,12 @@ Item {
       root.pointerUsed()
   }
   StackFrame {
+    id: frame
     anchors.fill: parent
     first: true
     critical: root.group.critical
     foreground: root.foreground
-    fill: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, 0.055))
+    fill: frame.headerFill
   }
   Rectangle {
     anchors.fill: headingMouse
