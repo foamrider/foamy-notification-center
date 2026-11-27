@@ -83,7 +83,7 @@ Item {
       last: root.last
       critical: root.groupCritical
       foreground: root.foreground
-      fill: root.critical ? frame.criticalFill : Commons.Color.popups.background
+      fill: root.critical ? frame.criticalFill : frame.rowFill
     }
     Rectangle {
       visible: !root.first
@@ -212,7 +212,7 @@ Item {
             root.actionRequested(index)
           }
           background: Rectangle {
-            color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, actionButton.hovered ? 0.10 : 0.055))
+            color: frame.actionFillFor(actionButton.hovered)
             Rectangle {
               anchors.top: parent.top
               width: parent.width

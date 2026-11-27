@@ -49,13 +49,11 @@ components/NotificationList.qml: block-scope-var-declaration: var declaration in
 components/NotificationList.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var id = rows[target].id, found = -1
 components/NotificationRow.qml: missing-property: Member "background" not found on type "QObject" | color: Commons.Color.popups.background
 components/NotificationRow.qml: missing-property: Member "background" not found on type "QObject" | color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, 0.04))
-components/NotificationRow.qml: missing-property: Member "background" not found on type "QObject" | color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, actionButton.hovered ? 0.10 : 0.055))
-components/NotificationRow.qml: missing-property: Member "background" not found on type "QObject" | fill: root.critical ? frame.criticalFill : Commons.Color.popups.background
 components/NotificationRow.qml: unqualified: Unqualified access | Layout.columnSpan: index === root.actions.length - 1 && index % 2 === 0 ? footer.columns : 1
 components/NotificationRow.qml: unqualified: Unqualified access | Layout.columnSpan: index === root.actions.length - 1 && index % 2 === 0 ? footer.columns : 1
-components/NotificationRow.qml: unqualified: Unqualified access | color: Qt.tint(Commons.Color.popups.background, Util.alpha(root.foreground, actionButton.hovered ? 0.10 : 0.055))
 components/NotificationRow.qml: unqualified: Unqualified access | color: Util.alpha(root.foreground, 0.12)
 components/NotificationRow.qml: unqualified: Unqualified access | color: Util.alpha(root.foreground, 0.12)
+components/NotificationRow.qml: unqualified: Unqualified access | color: frame.actionFillFor(actionButton.hovered)
 components/NotificationRow.qml: unqualified: Unqualified access | color: root.foreground
 components/NotificationRow.qml: unqualified: Unqualified access | enabled: root.actionsEnabled
 components/NotificationRow.qml: unqualified: Unqualified access | font.family: root.fontFamily
@@ -69,7 +67,6 @@ components/StackFrame.qml: block-scope-var-declaration: var declaration in block
 components/StackFrame.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var inner = bottom + root.leading * Math.cos(angle)
 components/StackFrame.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var topAngle = -Math.PI + j * Math.PI / 48
 components/StackFrame.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var topInner = top + root.leading * Math.cos(topAngle)
-components/StackFrame.qml: missing-property: Member "background" not found on type "QObject" | property color fill: Commons.Color.popups.background
 preview/Before.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < kids.length; i++) {
 preview/Before.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | var hit = find(kids[i], name)
 preview/Preview.qml: block-scope-var-declaration: var declaration in block scope is hoisted to function scope | for (var i = 0; i < kids.length; i++) {
