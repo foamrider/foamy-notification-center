@@ -12,9 +12,9 @@ How the lists are made:
 
 ## `foamy-notification-center-helper`
 
-- `bin/aarch64/foamy-notification-center-helper`: sha256 `5ed78df37ae8028f3e7d48d2963c94771dc31f06a799e8701a9ca27495167aa8`
-- `bin/x86_64/foamy-notification-center-helper`: sha256 `4c5522fb681e832b328e96378695bb423ea5717d67f9369eaf256c84481afcb5`
-- `native/native.pin`: source `523db8013a1fe47a13586adf5baabbe97b6ee6eef75292c893da8644e04cbcbf`, toolchain 1.99.1
+- `bin/aarch64/foamy-notification-center-helper`: sha256 `722e788bc5f826afe32ff6a066fa852b7532953fbdae2ad877566becd7f4517c`
+- `bin/x86_64/foamy-notification-center-helper`: sha256 `b2ed8d7a6e5c0278bd9eae85b4d57495c592f92aff79ccb6eed6b5470f40890f`
+- `native/native.pin`: source `a31c72ed311f1bd65fed96b4bec20d043d4ed1de7e0bc03422b80fc41b2a4926`, toolchain 1.99.1
 
 ### Crates linked into `foamy-notification-center-helper`
 
@@ -43,7 +43,7 @@ First-party crates (not third-party code, listed for completeness):
 
 | Crate | Version | Source | License | Arches | Notices |
 |---|---|---|---|---|---|
-| foamy-helper | 0.1.2 | `kit/rust/foamy-helper/` (foamy-kit, vendored) | MIT | both | [N10](#n10) |
+| foamy-helper | 0.1.3 | `kit/rust/foamy-helper/` (foamy-kit, vendored) | MIT | both | [N10](#n10) |
 | foamy-notification-center-helper | 0.1.0 | `native/` (this plugin) | MIT | both | `LICENSE` |
 
 ### Toolchain code linked into `foamy-notification-center-helper`
@@ -688,7 +688,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### N10
 
-Shipped by: foamy-helper 0.1.2 (foamy-kit's LICENSE).
+Shipped by: foamy-helper 0.1.3 (foamy-kit's LICENSE).
 
 ```text
 MIT License
