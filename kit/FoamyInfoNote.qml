@@ -1,4 +1,4 @@
-// foamy-kit 0.15.1 c0b06867bfa1e08d7f7ba42acb6718cb9db71120664edb068455af5008280069 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.2 c0b06867bfa1e08d7f7ba42acb6718cb9db71120664edb068455af5008280069 — do not edit; change foamy-kit and run sync
 import QtQuick
 import QtQuick.Layouts
 

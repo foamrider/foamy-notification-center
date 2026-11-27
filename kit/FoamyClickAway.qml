@@ -1,4 +1,4 @@
-// foamy-kit 0.15.1 8dcfc8720fe0a2299a6c9c901be2f85bc2f9ba92170697e477d716be9cb9e8cf — do not edit; change foamy-kit and run sync
+// foamy-kit 0.15.2 8dcfc8720fe0a2299a6c9c901be2f85bc2f9ba92170697e477d716be9cb9e8cf — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Click-away: a click on space that does nothing takes the keys from a
