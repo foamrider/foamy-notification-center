@@ -1,5 +1,5 @@
 pragma Singleton
-// foamy-kit 0.16.0 ef4882d76a20b9a897c574e949d0a94292d57265201d15ec86bc93bdb15edc05 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.0 8fd27af6a5b949d666130774bebbde212929d7d1b8bce0f99dc4c9de5908700e — do not edit; change foamy-kit and run sync
 import QtQuick
 import Quickshell.Io
 import qs.Commons as Commons
@@ -39,6 +39,10 @@ QtObject {
   // draws there to set them apart).
   readonly property color menuFill: lightTheme ? Qt.tint(background, Qt.alpha("#ffffff", 0.7)) : Qt.tint(background, Qt.alpha(text, 0.035))
   readonly property color menuBorder: lightTheme ? Qt.alpha(text, 0.40) : border
+  // A raised menu (FoamyMenu `raised`, a list that hangs from a field over
+  // the rows): a clearer step above the card, with a FoamyShadow under it.
+  // Light themes keep menuFill, already lighter than the card.
+  readonly property color raisedMenuFill: lightTheme ? menuFill : Qt.tint(background, Qt.alpha(text, 0.07))
   // Inline help notes (FoamyInfoNote): a subtle surface under a heading.
   readonly property color noteFill: Qt.alpha(text, 0.045)
   // Text on an accent fill (FoamyButton primary): the popup's text or its
@@ -121,29 +125,63 @@ QtObject {
   }
 
   // Status colour readable on the popup surface, for text and thin marks
-  // (rings, icons). It darkens (light theme) or lightens (dark theme) in
-  // steps only until it reaches 4.5:1 on the popup background, so a colour
-  // that already reads keeps the theme's hue and a faint one (a yellow on
-  // white, a dim red on a dark fill) moves as far as it must. Large fills
-  // (bars) use the raw colour.
+  // (rings, icons). It darkens or lightens in steps only until it reaches
+  // 4.5:1 on the surface, so a colour that already reads keeps the theme's
+  // hue and a faint one (a yellow on white, a dim red on a dark fill) moves
+  // as far as it must. Large fills (bars) use the raw colour.
   // `surface`: what it is drawn on, when not the popup background (a tinted
   // fill: give the opaque colour as it shows).
   function onSurface(c, surface) {
     // A colour given as text ("#d20f39") is read as one first.
     const base = Qt.color(c)
     const under = surface === undefined ? background : Qt.color(surface)
-    let out = base
-    // Measured as drawn: rounded to 8 bits a channel (unrounded, a step
-    // can pass at 4.50 and draw at 4.49).
-    // At most 1.7 times darker or lighter: a very light colour (yellow on
-    // white) or a very dark one can stay under 4.5:1 there. Qt.lighter
-    // raises the HSV value and, once that is full, lowers the saturation,
-    // so a bright red stays red (Catppuccin #f38ba8 -> #ff92b0).
-    for (let step = 1; step <= 14 && contrastRatio(out, under) < 4.5; step++) {
-      const factor = 1 + step * 0.05
-      out = Qt.color((lightTheme ? Qt.darker(base, factor) : Qt.lighter(base, factor)).toString())
+    const reads = col => contrastRatio(col, under) >= 4.5
+    if (reads(base))
+      return base
+    // The direction comes from the surface, not the theme: toward white on
+    // a dark surface, toward black on a light one, whichever end has more
+    // contrast on it. That end reads at 4.58:1 at least, the other can stay
+    // under 4.5:1, so only this way always gets there (a light surface in
+    // a dark theme darkens the colour).
+    const lighten = contrastRatio(Qt.rgba(1, 1, 1, 1), under) >= contrastRatio(Qt.rgba(0, 0, 0, 1), under)
+    const end = lighten ? Qt.rgba(1, 1, 1, 1) : Qt.rgba(0, 0, 0, 1)
+    // Step n is Qt.lighter or Qt.darker by 1 + n * .05, measured as drawn:
+    // rounded to 8 bits a channel (unrounded, a step can pass at 4.50 and
+    // draw at 4.49). Qt.lighter raises the HSV value and, once that is
+    // full, lowers the saturation; Qt.darker lowers the value. Both keep
+    // the hue (Catppuccin #f38ba8 -> #ff92b0) until white or near black.
+    const at = n => Qt.color((lighten ? Qt.lighter(base, 1 + n * 0.05) : Qt.darker(base, 1 + n * 0.05)).toString())
+    // Each step moves the colour's luminance further toward `end`, so once
+    // a step reads every later one does (a colour on the other side of the
+    // surface's luminance reads at no step before it crosses it): the
+    // smallest step from 1 to `last` that reads is found by halving the
+    // range (about 10 measured, not up to 380); 0 when not even `last`
+    // reads.
+    const smallest = (last, colour) => {
+      if (!reads(colour(last)))
+        return 0
+      let low = 0, high = last
+      while (high - low > 1) {
+        const mid = (low + high) >> 1
+        if (reads(colour(mid)))
+          high = mid
+        else
+          low = mid
+      }
+      return high
     }
-    return out
+    // Step 380 is 20 times: white from an HSV value of about .1, and a
+    // twentieth of the value left when darkening.
+    const step = smallest(380, at)
+    if (step > 0)
+      return at(step)
+    // Still short at 20 times: a colour near black on a dark surface
+    // (Qt.lighter can't raise a value of 0), or a surface near the middle
+    // grey. It mixes toward `end` in steps of .01 until it reads; `end`
+    // itself does, so this always ends at 4.5:1.
+    const far = at(380)
+    const mixed = k => Qt.color(Qt.tint(far, Qt.alpha(end, k / 100)).toString())
+    return mixed(smallest(100, mixed))
   }
 
   property FileView colorsFile: FileView {

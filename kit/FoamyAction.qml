@@ -1,4 +1,4 @@
-// foamy-kit 0.16.0 d1edd2df4b165a60567d9e7a01cc2f2e5b80660c1c84ecafe01cf1380af11063 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.0 d1edd2df4b165a60567d9e7a01cc2f2e5b80660c1c84ecafe01cf1380af11063 — do not edit; change foamy-kit and run sync
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui

@@ -1,5 +1,5 @@
 .pragma library
-// foamy-kit 0.16.0 72e0502f9cd35ca638b6af1c5e3e5411738a161cff2ed18f5751e11e9365f48c — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.0 72e0502f9cd35ca638b6af1c5e3e5411738a161cff2ed18f5751e11e9365f48c — do not edit; change foamy-kit and run sync
 
 // Finds the shell's IpcRegistry (qs.Commons). A `.pragma library` file has
 // no QML imports of its own, so the lookup happens inside a throwaway object
