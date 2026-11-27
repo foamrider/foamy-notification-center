@@ -1,8 +1,8 @@
 # foamy-kit.lock: written by foamy-kit sync.sh; do not edit.
 # Hashes are of each file's body (the file without its stamp line);
 # notices, REVIEW.md and kit/i18n-texts.json are hashed whole. tests/kit-check.sh verifies them.
-version 0.17.0
-source 772a22949d3657af7740b48f2ed7dccaf9f3c110
+version 0.17.1
+source c4f7d2bc89b166e1979f15d77d1c8c6aed53bc7c
 components FoamyAction,FoamyClickAway,FoamyClipboard,FoamyCursor,FoamyDropdown,FoamyHeader,FoamyHeroBand,FoamyI18n,FoamyIcon,FoamyInfoNote,FoamyIpc,FoamyMenu,FoamyMotion,FoamyNative,FoamyNumberField,FoamyPalette,FoamyPeerIpc,FoamyPopup,FoamyPrefs,FoamySettings,FoamyShadow,FoamyStyle,FoamyText,FoamyTitleAction,FoamyWheelScroll,SafeTextField
 5079c3e4ecd2ca5399dff48f64327729d8e84916a4c73fbcb9e0491b16014990  .github/workflows/checks.yml
 98bd9e4430551129a6f4c309ee8ba59b66514db5ca1d4c5b7151ec308f6d632b  .github/workflows/verify-native.yml
@@ -52,10 +52,10 @@ f2def0b7d8366350cfe4eccd4ce1fbabad9fc02a8cd6d78e6c9207a43fdd16c5  kit/SafeTextFi
 2f585065dffcce41c2ad5712118ce3f4f1e19d8801c537025cb389a40f1b7ad5  kit/clipboard.sh
 4ca96fe007e5748a4510345e61d6ce86d38013d35714d466ea400d89aad8a49c  kit/i18n-texts.json
 31cd6228f43b6b189e993ba517cbf8f18c4ba2681a4e71be49b853a39d6114ba  kit/native/build-native.sh
-a4bc7f02a0306d8440f7c20b801f1ffd6318dc4d1bc252732b5840d559d11bf3  kit/native/native.py
+35e99a5c3fac1c4f170bdda15a0a6edc6a0cd4c6f1d180e7caf880f426cfe903  kit/native/native.py
 90b1a10f5f5005c94031f36fef0ad3d8e705cf4e13372dd8362ef4579e0a93df  kit/node-loader.cjs
 4d9993cf4dd51e24a1f73b83697fa57d74dd6f2c0f8dff4627e1267d055a174d  kit/qmldir
-3d657fb3ee8f6f57c5d15c125ffe6dee501b81e2b41cac673c7cc08c1e542ed4  kit/rust/foamy-helper/Cargo.toml
+5d0bb820c3fa3972f9ff144f6a3eeb93f6b45bb9a366ee1cfe9e220787cded2d  kit/rust/foamy-helper/Cargo.toml
 5592404e3c4e7163e2f415b7a176ff06d9638d3fd2a0080079905c703395e9d1  kit/rust/foamy-helper/src/child.rs
 9596fa6fae4438602442c80654aaddef2acb4018795ceaa53a1753d3bbaa8b02  kit/rust/foamy-helper/src/favicon.rs
 0d3c31eb230b7c49d9e0ae45886d6add219f6ba988a0337a719d926255149c03  kit/rust/foamy-helper/src/favicon/sqlite.rs
@@ -66,11 +66,11 @@ a4bc7f02a0306d8440f7c20b801f1ffd6318dc4d1bc252732b5840d559d11bf3  kit/native/nat
 2e913dfb3c53284abbb850d81be9b9cd690cd3f2567d676bf8b70ae314542cf6  kit/rust/foamy-helper/src/json.rs
 2031c896c17cb22f18bf68cedd06b6e6db13ddeea700850d743f7de891e80797  kit/rust/foamy-helper/src/lib.rs
 387ef6393870794e0ec529e45f91dc207ae9d38fb517ba711658df7298cb8e7f  kit/rust/foamy-helper/src/lock.rs
-8cc6c7d05a7d5fc2795b19a3d3f2765f574272ea3ee097027293c3d5f5cccf5a  kit/rust/foamy-helper/src/net.rs
+d69e33644ccf8d2deacbe064d1b6e0e73e78597bb8593223f1ed6efd7bf35bc6  kit/rust/foamy-helper/src/net.rs
 f33c8ff3e6f096dfbeb42f3bf5ddadd2834b7359f021da210ad8f0bea9c30cf3  kit/rust/foamy-helper/src/process.rs
 177670beb2ecd87d0f3dbcc74c67741990f779b2f1ccd15afce3f6f1893d318e  kit/rust/foamy-helper/src/sandbox.rs
 18a0d61fae84a6508627d702d3fda5c53cc61210d9926c4f7aab88a8909a17cb  kit/rust/foamy-helper/src/sandbox/tests.rs
-1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa  kit/rust/foamy-helper/src/tls.rs
+dd0546f3d8d9467e3d8704348ea6b9394c48bfc00ebd5bada3223d379e1a38ae  kit/rust/foamy-helper/src/tls.rs
 0aab5b4b47dd8c8530849b0c9540e4c945789e58661f12480d832348786aee6e  kit/rust/release.toml
 824921f5001a1e69101a6dd998f21bee83fe155c3d1ad82aa376aef6d6fbebb4  kit/tooling/validate.py
 4d8c9ad0403a76291a2c89eff71dcdd370281814bbb9055e9c7bf88961b7d6ac  mise.toml

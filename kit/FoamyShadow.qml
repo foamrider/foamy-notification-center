@@ -1,5 +1,5 @@
 pragma ComponentBehavior: Bound
-// foamy-kit 0.17.0 b09817c8b83b3e300ae23f9e7136c896c1363e0452b924cfc9f697cff4bbd17b — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.1 b09817c8b83b3e300ae23f9e7136c896c1363e0452b924cfc9f697cff4bbd17b — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // A soft drop shadow under a surface that floats over the card (a raised

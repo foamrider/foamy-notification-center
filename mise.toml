@@ -1,4 +1,4 @@
-# foamy-kit 0.17.0 4d8c9ad0403a76291a2c89eff71dcdd370281814bbb9055e9c7bf88961b7d6ac — do not edit; change foamy-kit and run sync
+# foamy-kit 0.17.1 4d8c9ad0403a76291a2c89eff71dcdd370281814bbb9055e9c7bf88961b7d6ac — do not edit; change foamy-kit and run sync
 # Pinned developer and CI tools for foamy-kit and every Foamy plugin.
 # `mise install` in the repository installs exactly these versions;
 # tests/validate.sh runs them through `mise env` and fails when one is missing

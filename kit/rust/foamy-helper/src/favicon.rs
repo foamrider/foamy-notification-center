@@ -1,4 +1,4 @@
-// foamy-kit 0.17.0 9596fa6fae4438602442c80654aaddef2acb4018795ceaa53a1753d3bbaa8b02 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.1 9596fa6fae4438602442c80654aaddef2acb4018795ceaa53a1753d3bbaa8b02 — do not edit; change foamy-kit and run sync
 //! Website favicons from the local caches of Chromium-family browsers,
 //! **without any web request** (cargo feature `favicon`). A port of
 //! foamy-notifications' and foamy-notification-center's

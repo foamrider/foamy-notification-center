@@ -1,4 +1,4 @@
-// foamy-kit 0.17.0 1f90a4df7260b1c57e6dd972ca68fc82191f94cc8a1e47082e4f26154c0e24aa — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.1 dd0546f3d8d9467e3d8704348ea6b9394c48bfc00ebd5bada3223d379e1a38ae — do not edit; change foamy-kit and run sync
 //! TLS for helpers that make HTTPS requests (feature `tls`): one crypto
 //! provider and one trust store for every foamy helper.
 //!
@@ -38,7 +38,10 @@
 //! ureq's `timeout_global` bounds each read by the time left, but its CONNECT
 //! proxy reply loop does not: put a deadline-capping transport in ureq's
 //! connector chain (foamy-train's `native/src/net.rs` `DeadlineConnector`), or
-//! use [`crate::net::DeadlineStream`] under your own HTTP code.
+//! use [`crate::net::DeadlineStream`] under your own HTTP code. For raw TCP,
+//! pass all approved addresses to [`crate::net::connect_addresses`] before
+//! TLS. For ureq, the TCP connector must alternate families and limit each
+//! attempt before passing its transport to the TLS connector.
 
 use std::fmt;
 use std::sync::{Arc, OnceLock};
