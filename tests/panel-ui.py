@@ -21,7 +21,10 @@ on a stack header, a message and their dismiss buttons, and none once the
 pointer takes it, also on the dismiss button itself (which then stays and
 dismisses on a click) and on search and clear-all; More options has the
 keys' border from the keys, and none after a pointer click opens its menu;
-Up to More options and back does not leave the cursor on a dismiss button; a number setting whose
+Up to More options and back does not leave the cursor on a dismiss button;
+20 Down presses through 30 stacks scroll the list under the resting pointer
+and the keys' cursor and border stay on the row the keys chose, until a real
+pointer move takes it; a number setting whose
 save failed can be saved again with the same number. The run's theme has a dim red: the
 error line and a critical stack's edge read at 4.5:1 on what they are
 drawn on; the edge case runs again in the kit's light theme.
@@ -39,7 +42,7 @@ import harness  # foamy-kit's preview/harness.py
 
 PLUGIN = Path(__file__).resolve().parents[1]
 # Test functions in SHELL; QtTest's count at completion includes one entry of its own.
-CASES = 17
+CASES = 18
 
 SHELL = r"""
 import QtQuick
@@ -513,6 +516,47 @@ ShellRoot {
         same(more.border.width, 0, "More options' border after a pointer click opened its menu")
         keyClick(Qt.Key_Escape)
         waitUntil(function() { return !findChild(panel.view, "notificationCenterHeader").menuOpen }, "Esc closes the menu")
+        mouseMove(panel.view, 1, 1)
+      }
+
+      // The keys scroll a long list under the resting pointer: Qt re-sends
+      // hover to the row that moves under the still pointer, which is no
+      // pointer move, so the keys keep the cursor and its border on the row
+      // they chose. A real move then takes it.
+      function test_the_keys_cursor_survives_a_scroll_under_the_resting_pointer() {
+        store.show(shell.entries(30, true))
+        openPanel()
+        waitUntil(function() { return panel.view.Window.active && panel.rows.length === 60 && rowItem(1) !== null }, "the panel has the keys and its 30 stacks are built")
+        // The pointer comes to rest on the second row: it takes the cursor
+        // from the keys once Qt has delivered it.
+        keyClick(Qt.Key_Down)
+        check(panel.keyboardNavigation, "Down gives the keys the cursor")
+        var rest = rowItem(1)
+        var at = rest.mapToItem(panel.view, rest.width / 2, rest.height / 2)
+        mouseMove(panel.view, at.x, at.y)
+        waitUntil(function() { return !panel.keyboardNavigation }, "the pointer resting on the list has the cursor")
+        var top = panel.list.contentY
+        var row = panel.cursorIndex
+        var kept = 0
+        for (var i = 0; i < 20; i++) {
+          keyClick(Qt.Key_Down)
+          row++
+          // Frames for the scroll and Qt's re-sent hover under the pointer.
+          wait(60)
+          var found = accentBorders(panel.list)
+          if (panel.keyboardNavigation && panel.cursorIndex === row && found.length === 1 && inside(found[0], rowItem(row)))
+            kept++
+          else
+            console.log("PANEL_UI_SCROLL Down " + (i + 1) + ": keys " + panel.keyboardNavigation + ", row " + panel.cursorIndex + " of " + row + ", borders " + found.length)
+        }
+        check(panel.list.contentY > top, "the keys scrolled the list under the pointer")
+        same(kept, 20, "Down presses after which the keys' cursor and border stay on the row the keys chose")
+        // A real pointer move takes the cursor from the keys. Down and
+        // right: offscreen, the popup reported a 3 px move to the side at
+        // the same scene position.
+        mouseMove(panel.view, at.x + 3, at.y + 3)
+        waitUntil(function() { return !panel.keyboardNavigation }, "a real pointer move takes the cursor")
+        same(accentBorders(panel.list).length, 0, "accent borders after the pointer moved")
         mouseMove(panel.view, 1, 1)
       }
 

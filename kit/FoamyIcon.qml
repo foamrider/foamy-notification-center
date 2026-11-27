@@ -1,4 +1,4 @@
-// foamy-kit 0.16.0 2e3f8de7516e085d5146b3ae08577ef3eecec3cf6ca3cfa6a3da075fa9918e45 — do not edit; change foamy-kit and run sync
+// foamy-kit 0.17.0 2b5ed7caccec6713750b1c4f2a28803ee5593c35cdac236550bf2d454f079a25 — do not edit; change foamy-kit and run sync
 import QtQuick
 
 // Foamy icon set: inline Lucide SVG paths (ISC, see LICENSE-LUCIDE), the
@@ -18,7 +18,8 @@ import QtQuick
 // https://github.com/simple-icons/simple-icons/blob/c37b20d397a710fdd402aae3cb643b820b142074/icons/todoist.svg
 // (source: https://doist.com/press). 0.13.0 adds calendar-range, flag,
 // target and text (Lucide 1.65.0), 0.14.2 mail and mail-open (Lucide
-// 1.65.0), 0.15.0 tag (Lucide 1.65.0). Brand marks are drawn filled (`filled`).
+// 1.65.0), 0.15.0 tag, 0.17.0 corner-down-left and arrow-big-up (Lucide
+// 1.65.0). Brand marks are drawn filled (`filled`).
 // Refresh with tools/update-icons.py.
 //
 //   FoamyIcon { name: "refresh-cw"; color: FoamyPalette.text; width: FoamyStyle.iconSize; height: width }
@@ -41,6 +42,7 @@ Image {
       "alarm-clock": "<circle cx=\"12\" cy=\"13\" r=\"8\"/><path d=\"M12 9v4l2 2\"/><path d=\"M5 3 2 6\"/><path d=\"m22 6-3-3\"/><path d=\"M6.38 18.7 4 21\"/><path d=\"M17.64 18.67 20 21\"/>",
       "alert": "<path d=\"M12 3 2 21h20Z M12 9v5M12 17h.01\"/>",
       "app-window": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"M2 8h20M6 4v4\"/>",
+      "arrow-big-up": "<path d=\"M9 19a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-6a1 1 0 0 1 1-1h3.293a.707.707 0 0 0 .5-1.207l-7.086-7.086a1 1 0 0 0-1.414 0l-7.086 7.086a.707.707 0 0 0 .5 1.207H8a1 1 0 0 1 1 1z\"/>",
       "arrow-down": "<path d=\"M12 5v14\"/><path d=\"m19 12-7 7-7-7\"/>",
       "arrow-down-to-line": "<path d=\"M12 17V3\"/><path d=\"m6 11 6 6 6-6\"/><path d=\"M19 21H5\"/>",
       "arrow-left": "<path d=\"m12 19-7-7 7-7M5 12h14\"/>",
@@ -80,6 +82,7 @@ Image {
       "cloud-rain-wind": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\"></path><path d=\"m9.2 22 3-7\"></path><path d=\"m9 13-3 7\"></path><path d=\"m17 13-3 7\"></path>",
       "cloud-snow": "<path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\"></path><path d=\"M8 15h.01\"></path><path d=\"M8 19h.01\"></path><path d=\"M12 17h.01\"></path><path d=\"M12 21h.01\"></path><path d=\"M16 15h.01\"></path><path d=\"M16 19h.01\"></path>",
       "cloud-sun": "<path d=\"M12 2v2\"></path><path d=\"m4.93 4.93 1.41 1.41\"></path><path d=\"M20 12h2\"></path><path d=\"m19.07 4.93-1.41 1.41\"></path><path d=\"M15.947 12.65a4 4 0 0 0-5.925-4.128\"></path><path d=\"M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z\"></path>",
+      "corner-down-left": "<path d=\"M20 4v7a4 4 0 0 1-4 4H4\"/><path d=\"m9 10-5 5 5 5\"/>",
       "cpu": "<rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"2\"/><rect x=\"9\" y=\"9\" width=\"6\" height=\"6\"/><path d=\"M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3\"/>",
       "devices": "<rect x=\"2\" y=\"3\" width=\"14\" height=\"12\" rx=\"1\"/><path d=\"M9 15v5M5 20h8\"/><rect x=\"17\" y=\"9\" width=\"5\" height=\"12\" rx=\"1\"/>",
       "disconnected": "<path d=\"m4 4 16 16M8 3v4m8-4v4M6 7h12v4a6 6 0 0 1-6 6v5M6 11a6 6 0 0 0 2 4\"/>",

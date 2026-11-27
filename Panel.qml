@@ -449,6 +449,16 @@ Ui.Panel {
   property bool cursorOnSettings: false
   property bool cursorDismiss: false
   property bool keyboardNavigation: false
+  // Where a row or header last saw the pointer, in the window. Qt re-sends
+  // hover when rows move under a still pointer (a keys-driven scroll), and
+  // the row that arrives there reports the same place: that is no move, so
+  // the keys keep the cursor. Only a changed place takes it.
+  property point pointerScene: Qt.point(-1, -1)
+  function pointerHovered(at) {
+    if (at.x !== pointerScene.x || at.y !== pointerScene.y)
+      keyboardNavigation = false
+    pointerScene = at
+  }
 
   function rebuild(forOpening) {
     // The archive and unread count stay live; display groups are needed only while open.
@@ -1079,6 +1089,9 @@ Ui.Panel {
                       hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
                       dismissHasCursor: hasCursor && root.cursorDismiss
                       onPointerUsed: root.keyboardNavigation = false
+                      onPointerHovered: function (scenePosition) {
+                        root.pointerHovered(scenePosition)
+                      }
                       onToggleRequested: root.toggleGroup(group.key)
                       onRemoveRequested: root.removeGroup(group)
                     }
@@ -1102,6 +1115,9 @@ Ui.Panel {
                       hasCursor: root.keyboardNavigation && root.cursorIndex === delegateRoot.index
                       dismissHasCursor: hasCursor && root.cursorDismiss
                       onPointerUsed: root.keyboardNavigation = false
+                      onPointerHovered: function (scenePosition) {
+                        root.pointerHovered(scenePosition)
+                      }
                       actions: root.store && root.store.liveActions[entry.key] ? root.store.liveActions[entry.key] : []
                       actionsEnabled: !!root.store && !root.store.pressingAction
                       onClicked: root.activate(entry)
